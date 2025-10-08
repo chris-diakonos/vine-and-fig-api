@@ -129,7 +129,7 @@ Modify environment variables in `docker-compose.yml`:
 environment:
   - HOST=0.0.0.0
   - PORT=8000
-  - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+  - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
   - TEMP_DIR=/app/temp
   - FILE_MAX_AGE=3600
 ```
@@ -139,7 +139,7 @@ Or create a `.env` file in the project root:
 ```env
 HOST=0.0.0.0
 PORT=8080
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
 TEMP_DIR=/app/temp
 FILE_MAX_AGE=3600
 ```

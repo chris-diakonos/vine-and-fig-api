@@ -8,17 +8,21 @@ from datetime import datetime
 
 class ModelResponse(BaseModel):
     """Response model for generated models and drawings."""
-    model_url: str = Field(..., description="URL to access the generated model or drawing")
-    gltf_url: Optional[str] = Field(None, description="URL to glTF 3D model (3D view only)")
-    image_url: Optional[str] = Field(None, description="URL to image/SVG (2D views only)")
+    model_url: str = Field(..., description="URL to access the generated model or drawing", alias="modelUrl")
+    gltf_url: Optional[str] = Field(None, description="URL to glTF 3D model (3D view only)", alias="gltfUrl")
+    image_url: Optional[str] = Field(None, description="URL to image/SVG (2D views only)", alias="imageUrl")
     view_mode: Literal["3d", "plan", "section", "elevation"] = Field(
-        ..., description="View mode that was rendered"
+        ..., description="View mode that was rendered", alias="viewMode"
     )
-    model_id: str = Field(..., description="Unique identifier for this model")
+    model_id: str = Field(..., description="Unique identifier for this model", alias="modelId")
     timestamp: datetime = Field(
         default_factory=datetime.utcnow,
         description="Timestamp when the model was generated"
     )
+    
+    class Config:
+        populate_by_name = True
+        by_alias = True
 
 
 class ErrorResponse(BaseModel):

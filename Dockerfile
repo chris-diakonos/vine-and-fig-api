@@ -7,7 +7,7 @@ WORKDIR /app
 # Install system dependencies required for CadQuery
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libgl1-mesa-glx \
+    libgl1 \
     libglu1-mesa \
     libxrender1 \
     libxext6 \
@@ -30,7 +30,7 @@ WORKDIR /app
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglu1-mesa \
     libxrender1 \
     libxext6 \
@@ -44,7 +44,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY ./src /app/src
-COPY .env.example /app/.env
+#COPY .env.example /app/.env
 
 # Create temp directories for generated files
 RUN mkdir -p /app/temp/models /app/temp/drawings && \

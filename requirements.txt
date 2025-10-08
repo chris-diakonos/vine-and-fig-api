@@ -10,7 +10,8 @@ pydantic[email]==2.5.3
 
 # CadQuery for 3D modeling
 cadquery==2.4.0
-# Note: CadQuery has many dependencies that will be automatically installed
+# Pin numpy to <2.0 for compatibility with nptyping (CadQuery dependency)
+numpy<2.0
 
 # Azure Storage
 azure-storage-blob==12.19.0

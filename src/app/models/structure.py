@@ -16,8 +16,8 @@ class Structure(BaseModel):
     foundation: Foundation = Field(..., description="Foundation specification")
     roof: Roof = Field(..., description="Roof specification")
     sheathing: Sheathing = Field(..., description="Exterior sheathing specification")
-    flooring: Flooring = Field(..., description="Flooring specification")
-    windows: List[Window] = Field(default_factory=list, description="Window specifications")
+    flooring: List[Flooring] = Field(default_factory=list, description="Flooring specifications (one per story + attic)")
+    windows: List[Window] = Field(default_factory=list, description="Window specifications (one per story + dormers)")
     doors: List[Door] = Field(default_factory=list, description="Door specifications")
 
 

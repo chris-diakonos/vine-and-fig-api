@@ -99,7 +99,7 @@ VITE_API_URL=http://api:8080
 Allow requests from frontend:
 
 ```yaml
-CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
 ```
 
 ## Storage Configuration
@@ -259,7 +259,7 @@ docker-compose -f docker-compose.fullstack.yml up -d
 2. **Check CORS settings:**
    Ensure backend allows frontend origin:
    ```yaml
-   CORS_ORIGINS=http://localhost:3000
+   CORS_ORIGINS=["http://localhost:3000"]
    ```
 
 3. **Check VITE_API_URL:**
@@ -300,7 +300,7 @@ The backend needs to allow the frontend origin:
 # In docker-compose.fullstack.yml
 api:
   environment:
-    - CORS_ORIGINS=http://localhost:3000
+    - CORS_ORIGINS=["http://localhost:3000"]
 ```
 
 ### Performance Issues
@@ -334,7 +334,7 @@ frontend:
 
 api:
   environment:
-    - CORS_ORIGINS=https://yourdomain.com
+    - CORS_ORIGINS=["https://yourdomain.com"]
 ```
 
 ### 3. Use Azure Storage

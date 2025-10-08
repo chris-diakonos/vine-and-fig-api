@@ -37,6 +37,9 @@ class Window(BaseModel):
     meeting_rail_width: float = Field(
         ..., ge=1.0, le=2.0, description="Meeting rail width in inches"
     )
+    bay_width: float = Field(
+        ..., ge=20, le=60, description="Calculated bay width in inches"
+    )
     # Location information (not in original schema, but useful for placement)
     wall: Optional[Literal["front", "rear", "left", "right"]] = None
     position: Optional[float] = Field(
@@ -76,6 +79,9 @@ class Door(BaseModel):
     )
     meeting_rail_width: float = Field(
         ..., ge=1.0, le=2.0, description="Meeting rail width in inches"
+    )
+    bay_width: float = Field(
+        ..., ge=20, le=60, description="Calculated bay width in inches"
     )
     # Location information (not in original schema, but useful for placement)
     wall: Optional[Literal["front", "rear", "left", "right"]] = None

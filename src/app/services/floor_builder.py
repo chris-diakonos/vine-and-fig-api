@@ -12,7 +12,7 @@ class FloorBuilder:
     
     @staticmethod
     def build(
-        flooring: Flooring,
+        flooring: List[Flooring],
         dimensions: Dimensions,
         stories: int,
         ceiling_heights: Optional[List[float]] = None,
@@ -22,7 +22,7 @@ class FloorBuilder:
         Build floor structures for all stories.
         
         Args:
-            flooring: Flooring specification
+            flooring: List of flooring specifications (one per story + attic)
             dimensions: Building dimensions
             stories: Number of stories
             ceiling_heights: Ceiling heights for each story
@@ -40,10 +40,27 @@ class FloorBuilder:
         floors = None
         current_z = 0  # Start at foundation level
         
+        # If flooring array is empty or insufficient, create default config
+        from app.models.building import Flooring as FlooringModel
+        default_flooring = FlooringModel(
+            flooring_type="tongue-and-groove",
+            flooring_species="pine",
+            flooring_thickness=1.0,
+            flooring_width=10.0,
+            flooring_exposure=9.25
+        )
+        
         # Build each floor
         for i in range(stories + 1):  # +1 for foundation floor
+            # Get the flooring config for this level
+            # Use the corresponding flooring config, or default if array is empty/short
+            if len(flooring) > 0:
+                flooring_config = flooring[i] if i < len(flooring) else flooring[0]
+            else:
+                flooring_config = default_flooring
+            
             # Create floor slab
-            floor_thickness = flooring.flooring_thickness
+            floor_thickness = flooring_config.flooring_thickness
             
             floor_slab = (
                 cq.Workplane("XY")

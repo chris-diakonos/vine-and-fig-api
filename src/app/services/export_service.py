@@ -24,6 +24,7 @@ class ExportService:
     def export_gltf(model: cq.Workplane, output_path: Path, upload_to_storage: bool = True) -> str:
         """
         Export model to glTF format for 3D visualization.
+        Note: CadQuery only supports glTF export for Assembly objects.
         
         Args:
             model: CadQuery Workplane object
@@ -37,20 +38,26 @@ class ExportService:
             RuntimeError: If export fails
         """
         try:
-            # Export to glTF locally first
-            exporters.export(model, str(output_path), exportType=exporters.ExportTypes.GLTF)
-            logger.info(f"Exported glTF to local path: {output_path}")
+            # CadQuery requires an Assembly for glTF export
+            # Wrap the workplane model in an assembly
+            assembly = cq.Assembly()
+            assembly.add(model, name="building", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
+            
+            # Export to glTF (use .gltf extension for text format, .glb for binary)
+            gltf_path = output_path.with_suffix('.gltf')
+            assembly.save(str(gltf_path), exportType='GLTF')
+            logger.info(f"Exported glTF to local path: {gltf_path}")
             
             if upload_to_storage:
                 # Determine blob name
-                blob_name = f"models/{output_path.name}"
+                blob_name = f"models/{gltf_path.name}"
                 # Upload to storage and get URL
-                url = FileManager.save_file(output_path, blob_name, content_type="model/gltf+json")
+                url = FileManager.save_file(gltf_path, blob_name, content_type="model/gltf+json")
                 return url
             
-            return str(output_path)
+            return str(gltf_path)
         except Exception as e:
-            logger.error(f"Failed to export to glTF: {str(e)}")
+            logger.error(f"Failed to export to glTF: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to export to glTF: {str(e)}")
     
     @staticmethod

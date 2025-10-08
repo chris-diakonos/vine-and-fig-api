@@ -19,7 +19,6 @@ class Spacing(BaseModel):
     stud_spacing: float = Field(..., ge=21, le=24, description="Stud spacing in inches")
     joist_spacing: float = Field(..., ge=21, le=24, description="Joist spacing in inches")
     rafter_spacing: float = Field(..., ge=21, le=24, description="Rafter spacing in inches")
-    bay_width: float = Field(..., ge=30, le=48, description="Bay width in inches")
     pile_width: float = Field(..., ge=192, le=240, description="Pile width in inches")
 
 

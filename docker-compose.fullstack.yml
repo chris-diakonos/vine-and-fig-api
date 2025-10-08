@@ -16,7 +16,7 @@ services:
       - PORT=8080
       
       # CORS Origins - Frontend URL
-      - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
+      - CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
       
       # Storage Type - "local" or "azure"
       - STORAGE_TYPE=local
