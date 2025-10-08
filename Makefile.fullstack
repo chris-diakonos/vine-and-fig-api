@@ -1,0 +1,59 @@
+# Makefile for Full-Stack Vine & Fig Docker operations
+
+.PHONY: help build up down logs restart clean dev rebuild health
+
+help: ## Show this help message
+	@echo "Vine & Fig Full-Stack - Docker Commands"
+	@echo ""
+	@echo "Usage: make -f Makefile.fullstack [target]"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
+
+build: ## Build both frontend and backend images
+	docker-compose -f docker-compose.fullstack.yml build
+
+up: ## Start full-stack in production mode
+	docker-compose -f docker-compose.fullstack.yml up -d
+	@echo "Frontend running at http://localhost:3000"
+	@echo "Backend API running at http://localhost:8080"
+	@echo "API docs at http://localhost:8080/docs"
+
+down: ## Stop and remove all containers
+	docker-compose -f docker-compose.fullstack.yml down
+
+logs: ## View logs for all services (real-time)
+	docker-compose -f docker-compose.fullstack.yml logs -f
+
+logs-api: ## View API logs only
+	docker-compose -f docker-compose.fullstack.yml logs -f api
+
+logs-frontend: ## View frontend logs only
+	docker-compose -f docker-compose.fullstack.yml logs -f frontend
+
+restart: ## Restart all services
+	docker-compose -f docker-compose.fullstack.yml restart
+
+clean: ## Stop containers and remove volumes
+	docker-compose -f docker-compose.fullstack.yml down -v
+
+dev: ## Start full-stack in development mode with hot-reload
+	docker-compose -f docker-compose.fullstack.dev.yml up
+
+dev-build: ## Build and start in development mode
+	docker-compose -f docker-compose.fullstack.dev.yml up --build
+
+rebuild: ## Rebuild without cache
+	docker-compose -f docker-compose.fullstack.yml build --no-cache
+
+health: ## Check health of all services
+	@echo "Checking API health..."
+	@curl -s http://localhost:8080/health | python -m json.tool
+	@echo "\nChecking Frontend health..."
+	@curl -s http://localhost:3000/health
+
+ps: ## Show running containers
+	docker-compose -f docker-compose.fullstack.yml ps
+
+prune: ## Clean up unused Docker resources
+	docker system prune -a

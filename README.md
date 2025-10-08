@@ -348,14 +348,23 @@ Ensure the application has write permissions for the temp directory.
 
 ## Docker Deployment
 
-The application includes Docker support for easy deployment:
+The application includes comprehensive Docker support:
+
+### Backend Only
 
 - **`Dockerfile`**: Multi-stage build for optimized images
 - **`docker-compose.yml`**: Production configuration
 - **`docker-compose.dev.yml`**: Development with hot-reload
 - **`DOCKER.md`**: Comprehensive Docker guide
 
-See [DOCKER.md](DOCKER.md) for detailed Docker usage, troubleshooting, and deployment strategies.
+### Full-Stack (Frontend + Backend)
+
+- **`docker-compose.fullstack.yml`**: Production full-stack
+- **`docker-compose.fullstack.dev.yml`**: Development full-stack with hot-reload
+- **`Makefile.fullstack`**: Convenient full-stack commands
+- **`FULLSTACK.md`**: Complete full-stack deployment guide
+
+See [DOCKER.md](DOCKER.md) for backend deployment and [FULLSTACK.md](FULLSTACK.md) for full-stack deployment.
 
 ## License
 
