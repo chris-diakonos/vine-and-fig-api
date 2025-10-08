@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files (will copy .env.example separately)
+.env
+.env.local
+
+# Temporary files
+temp/
+*.log
+*.tmp
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+tests/
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Example files
+backend-example.py
+example_request.json
+
+# Schema (already validated by models)
+schema.json

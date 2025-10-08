@@ -1,0 +1,156 @@
+{
+"$id": "https://vineandfig.homes/schema.json",
+"$schema": "https://json-schema.org/draft/2020-12/schema",
+"$defs": {
+    "customer": {
+        "$anchor": "CustomerSchema",
+        "type": "object",
+        "properties": {
+            "customer_id": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+            "customer_name": { "type": "string" },
+            "customer_email": { "type": "string" }
+        }
+    },
+    "order": {
+        "$anchor": "OrderSchema",
+        "type": "object",
+        "properties": {
+            "order_id": { "type": "string", "format": "uuid", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+            "order_date": { "type": "date" },
+            "requested_delivery_date": { "type": "date" },
+            "customer": { "$ref": "#CustomerSchema" },
+            "structure": { "$ref": "#StructureSchema" }
+        }
+    },
+    "floorplan": {
+        "$anchor": "FloorplanSchema",
+        "type": "object",
+        "properties": {
+            "floorplan_type": { "type": "string", "enum": ["center-hall", "side-hall"] },
+            "depth": { "type": "string", "enum": ["single-pile", "double-pile"] },
+            "stories": { "type": "integer", "minimum": 1, "maximum": 3 },
+            "hall_offset": { "type": "number", "minimum": -96, "maximum": 96 },
+            "hall_width": { "type": "number", "minimum": 72, "maximum": 120 },
+            "ceiling_heights": { "type": "array", "items": { "type": "number", "minimum": 96, "maximum": 144}},
+            "joist_heights": { "type": "array", "items": { "type": "number", "minimum": 6, "maximum": 12}},
+            "dimensions": {
+                "type": "object",
+                "properties": {
+                    "front": { "type": "number", "minimum": 240, "maximum": 528},
+                    "rear": { "type": "number", "minimum": 240, "maximum": 528},
+                    "left": { "type": "number", "minimum": 240, "maximum": 480},
+                    "right": { "type": "number", "minimum": 240, "maximum": 480},
+                    "building_height": { "type": "number", "minimum": 120, "maximum": 480}
+                }
+            },
+            "spacing": {
+                "type": "object",
+                "properties": {
+                    "stud_spacing": { "type": "number", "minimum": 21, "maximum": 24},
+                    "joist_spacing": { "type": "number", "minimum": 21, "maximum": 24},
+                    "rafter_spacing": { "type": "number", "minimum": 21, "maximum": 24},
+                    "bay_width": { "type": "number", "minimum": 30, "maximum": 48},
+                    "pile_width": { "type": "number", "minimum": 192, "maximum": 240}
+                }
+            },
+            "bays": {
+                "type": "object",
+                "properties": {
+                    "front": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 480}},
+                    "rear": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 480}},
+                    "left": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 480}},
+                    "right": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 480}}
+                }
+            }
+        }
+    },
+    "roof": {
+        "$anchor": "RoofSchema",
+        "type": "object",
+        "properties": {
+            "roof_pitch": { "type": "number", "minimum": 30, "maximum": 40 },
+            "roof_type": { "type": "string", "enum": ["side-gable", "front-gable", "hipped-gable"] },
+            "roof_panel_type": { "type": "string", "enum": ["cf-panel", "ag-panel", "pbr-panel"] },
+            "roof_panel_color": { "type": "string", "enum": ["light-gray", "ash-gray", "charcoal-gray", "steel-gray", "burnished-slate", "emerald-green", "colony-green", "rustic-red", "cocoa-brown"] },
+            "roof_panel_exposure": { "type": "integer", "minimum": 12, "maximum": 36 }
+        }
+    },
+    "sheathing": {
+        "$anchor": "SheathingSchema",
+        "type": "object",
+        "properties": {
+            "sheathing_species": { "type": "string", "enum": ["pine", "cypress"] },
+            "sheathing_exposure": { "type": "integer", "minimum": 5, "maximum": 8},
+            "sheathing_height": { "type": "number", "minimum": 7.25, "maximum": 10},
+            "sheathing_type": { "type": "string", "enum": ["beaded-weatherboard", "beveled-weatherboard"] }
+        }
+    },
+    "flooring": {
+        "$anchor": "FlooringSchema",
+        "type": "object",
+        "properties": {
+            "flooring_type": { "type": "string", "enum": ["tongue-and-groove", "butted-board"] },
+            "flooring_species": { "type": "string", "enum": ["pine", "cypress"] },
+            "flooring_thickness": { "type": "number", "minimum": 0.75, "maximum": 1.5},
+            "flooring_width": { "type": "number", "minimum": 9.25, "maximum": 12 },
+            "flooring_exposure": { "type": "number", "minimum": 8.75, "maximum": 12 }
+        }
+    },
+    "foundation": {
+        "$anchor": "FoundationSchema",
+        "type": "object",
+        "properties": {
+            "foundation_type": { "type": "string", "enum": ["limestone-block", "concrete-block", 
+            "brick"] },
+            "foundation_block_size": { "type": "array", "items": { "type": "number" }},
+            "foundation_courses": { "type": "integer", "minimum": 2, "maximum": 10},
+            "foundation_block_joint": { "type": "number", "minimum": 0.125, "maximum": 0.5 }
+        }
+    },
+    "windows": {
+        "$anchor": "WindowSchema",
+        "type": "object",
+        "properties": {
+            "configuration": { "type": "string", "enum": ["6/6", "6/9", "9/9"] },
+            "operation": { "type": "string", "enum": ["single-hung", "double-hung"] },
+            "window_species": { "type": "string", "enum": ["pine", "cypress"] },
+            "size": { "type": "string", "enum": ["8x10", "10x12", "11x14", "12x16", "14x18"] },
+            "profile": { "type": "string", "enum": ["ovolo"] },
+            "thickness": { "type": "number", "enum": [1.0, 1.375, 1.75]},
+            "stile_width": { "type": "number", "minimum": 2, "maximum": 2.5},
+            "rail_width": { "type": "number", "minimum": 3, "maximum": 4},
+            "muntin_width": { "type": "number", "minimum": 0.75, "maximum": 1.5},
+            "meeting_rail_width": { "type": "number", "minimum": 1.0, "maximum": 2.0}
+        }
+    },
+    "doors": {
+        "$anchor": "DoorSchema",
+        "type": "object",
+        "properties": {
+            "configuration": { "type": "string", "enum": ["four-panel", "six-panel"] },
+            "panel_type": { "type": "string", "enum": ["raised-panel", "flat-panel"] },
+            "operation": { "type": "string", "enum": ["right-outswing", "left-outswing", "right-inswing", "left-inswing"] },
+            "door_species": { "type": "string", "enum": ["pine"] },
+            "size": { "type": "string", "enum": ["30x96", "32x96", "30x80", "32x80"] },
+            "profile": { "type": "string", "enum": ["ovolo"] },
+            "thickness": { "type": "number", "enum": [1.0, 1.375, 1.75]},
+            "stile_width": { "type": "number", "minimum": 2, "maximum": 2.5},
+            "rail_width": { "type": "number", "minimum": 3, "maximum": 4},
+            "meeting_rail_width": { "type": "number", "minimum": 1.0, "maximum": 2.0}
+        }
+    },
+    "structure": {
+        "$anchor": "StructureSchema",
+        "type": "object",
+        "properties": {
+            "floorplan": { "$ref": "#FloorplanSchema" },
+            "foundation": { "$ref": "#FoundationSchema" },
+            "windows": { "type": "array", "items": { "$ref": "#WindowSchema" }},
+            "doors": { "type": "array", "items": { "$ref": "#DoorSchema" }},
+            "sheathing": { "$ref": "#SheathingSchema" },
+            "roof": { "$ref": "#RoofSchema" },
+            "flooring": { "$ref": "#FlooringSchema" }
+        }
+    }
+}
+}

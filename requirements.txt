@@ -1,0 +1,23 @@
+# FastAPI and web server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Data validation and settings
+pydantic==2.5.3
+pydantic-settings==2.1.0
+pydantic[email]==2.5.3
+
+# CadQuery for 3D modeling
+cadquery==2.4.0
+# Note: CadQuery has many dependencies that will be automatically installed
+
+# Azure Storage
+azure-storage-blob==12.19.0
+azure-core==1.29.5
+
+# CORS support
+python-dotenv==1.0.0
+
+# Additional utilities
+typing-extensions==4.9.0

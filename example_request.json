@@ -1,0 +1,113 @@
+{
+  "customer": {
+    "customer_name": "John Smith",
+    "customer_email": "john.smith@example.com"
+  },
+  "structure": {
+    "floorplan": {
+      "floorplan_type": "center-hall",
+      "depth": "double-pile",
+      "stories": 2,
+      "hall_offset": 0,
+      "hall_width": 96,
+      "ceiling_heights": [120, 108],
+      "joist_heights": [10, 10, 10],
+      "dimensions": {
+        "front": 480,
+        "rear": 480,
+        "left": 360,
+        "right": 360,
+        "building_height": 240
+      },
+      "spacing": {
+        "stud_spacing": 24,
+        "joist_spacing": 24,
+        "rafter_spacing": 24,
+        "bay_width": 48,
+        "pile_width": 192
+      },
+      "bays": {
+        "front": [96, 96, 96, 96, 96],
+        "rear": [96, 96, 96, 96, 96],
+        "left": [90, 90, 90, 90],
+        "right": [90, 90, 90, 90]
+      }
+    },
+    "foundation": {
+      "foundation_type": "limestone-block",
+      "foundation_block_size": [16, 8, 8],
+      "foundation_courses": 4,
+      "foundation_block_joint": 0.375
+    },
+    "roof": {
+      "roof_pitch": 36,
+      "roof_type": "side-gable",
+      "roof_panel_type": "cf-panel",
+      "roof_panel_color": "charcoal-gray",
+      "roof_panel_exposure": 16
+    },
+    "sheathing": {
+      "sheathing_species": "pine",
+      "sheathing_exposure": 6,
+      "sheathing_height": 8,
+      "sheathing_type": "beveled-weatherboard"
+    },
+    "flooring": {
+      "flooring_type": "tongue-and-groove",
+      "flooring_species": "pine",
+      "flooring_thickness": 1.0,
+      "flooring_width": 10,
+      "flooring_exposure": 9.5
+    },
+    "windows": [
+      {
+        "configuration": "6/6",
+        "operation": "double-hung",
+        "window_species": "pine",
+        "size": "12x16",
+        "profile": "ovolo",
+        "thickness": 1.375,
+        "stile_width": 2.25,
+        "rail_width": 3.5,
+        "muntin_width": 1.0,
+        "meeting_rail_width": 1.5,
+        "wall": "front",
+        "position": 120,
+        "floor": 1
+      },
+      {
+        "configuration": "6/6",
+        "operation": "double-hung",
+        "window_species": "pine",
+        "size": "12x16",
+        "profile": "ovolo",
+        "thickness": 1.375,
+        "stile_width": 2.25,
+        "rail_width": 3.5,
+        "muntin_width": 1.0,
+        "meeting_rail_width": 1.5,
+        "wall": "front",
+        "position": 360,
+        "floor": 1
+      }
+    ],
+    "doors": [
+      {
+        "configuration": "six-panel",
+        "panel_type": "raised-panel",
+        "operation": "right-inswing",
+        "door_species": "pine",
+        "size": "32x96",
+        "profile": "ovolo",
+        "thickness": 1.75,
+        "stile_width": 2.25,
+        "rail_width": 3.5,
+        "meeting_rail_width": 1.5,
+        "wall": "front",
+        "position": 240,
+        "floor": 1
+      }
+    ]
+  },
+  "view_mode": "3d"
+}

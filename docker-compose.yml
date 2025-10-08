@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vine-and-fig-api
+    ports:
+      - "8080:8080"
+    environment:
+      # Server Settings
+      - HOST=0.0.0.0
+      - PORT=8080
+      
+      # CORS Origins - Update these for your frontend URLs
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174
+      
+      # Storage Type - "local" or "azure"
+      - STORAGE_TYPE=local
+      
+      # Local File Storage (used when STORAGE_TYPE=local)
+      - TEMP_DIR=/app/temp
+      
+      # Azure Storage Settings (used when STORAGE_TYPE=azure)
+      # Uncomment and configure these when using Azure Storage:
+      # - AZURE_STORAGE_ACCOUNT_NAME=your-storage-account-name
+      # - AZURE_STORAGE_SAS_TOKEN=your-sas-token
+      # - AZURE_STORAGE_CONTAINER_NAME=vine-and-fig
+      
+      # File Cleanup (in seconds)
+      - FILE_MAX_AGE=3600
+      
+      # API Settings
+      - API_V1_PREFIX=/api
+    
+    volumes:
+      # Mount temp directory for persistent file storage (optional)
+      - ./temp:/app/temp
+      
+      # Mount source code for development (comment out for production)
+      # - ./src:/app/src
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    networks:
+      - vine-and-fig-network
+    
+    # Resource limits (optional - adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+
+networks:
+  vine-and-fig-network:
+    driver: bridge
+
+volumes:
+  temp:
+    driver: local
