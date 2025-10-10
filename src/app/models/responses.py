@@ -11,8 +11,8 @@ class ModelResponse(BaseModel):
     model_url: str = Field(..., description="URL to access the generated model or drawing", alias="modelUrl")
     gltf_url: Optional[str] = Field(None, description="URL to glTF 3D model (3D view only)", alias="gltfUrl")
     image_url: Optional[str] = Field(None, description="URL to image/SVG (2D views only)", alias="imageUrl")
-    view_mode: Literal["3d", "plan", "section", "elevation"] = Field(
-        ..., description="View mode that was rendered", alias="viewMode"
+    view_mode: str = Field(
+        ..., description="View mode that was rendered (3d, plan, section, elevation, or elevation-{face})", alias="viewMode"
     )
     model_id: str = Field(..., description="Unique identifier for this model", alias="modelId")
     timestamp: datetime = Field(

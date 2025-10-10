@@ -72,7 +72,8 @@
             "roof_type": { "type": "string", "enum": ["side-gable", "front-gable", "hipped-gable"] },
             "roof_panel_type": { "type": "string", "enum": ["cf-panel", "ag-panel", "pbr-panel"] },
             "roof_panel_color": { "type": "string", "enum": ["light-gray", "ash-gray", "charcoal-gray", "steel-gray", "burnished-slate", "emerald-green", "colony-green", "rustic-red", "cocoa-brown"] },
-            "roof_panel_exposure": { "type": "integer", "minimum": 12, "maximum": 36 }
+            "roof_panel_exposure": { "type": "integer", "minimum": 12, "maximum": 36 },
+            "roof_overhang": { "type": "number", "minimum": 6, "maximum": 18 }
         }
     },
     "sheathing": {

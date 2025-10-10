@@ -25,7 +25,16 @@ class BuildingRequest(BaseModel):
     """Request model for generating building models and drawings."""
     customer: Customer = Field(..., description="Customer information")
     structure: Structure = Field(..., description="Building structure specification")
-    view_mode: Literal["3d", "plan", "section", "elevation"] = Field(
+    view_mode: Literal[
+        "3d", 
+        "plan", 
+        "section", 
+        "elevation", 
+        "elevation-front", 
+        "elevation-rear", 
+        "elevation-left", 
+        "elevation-right"
+    ] = Field(
         default="3d",
-        description="View mode for the generated output"
+        description="View mode for the generated output (supports elevation faces: elevation-front, elevation-rear, elevation-left, elevation-right)"
     )
