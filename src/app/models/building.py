@@ -26,7 +26,7 @@ class Roof(BaseModel):
     roof_pitch: float = Field(
         ..., ge=30, le=40, description="Roof pitch (rise over 12 inches run)"
     )
-    roof_type: Literal["side-gable", "front-gable", "hipped-gable"] = Field(
+    roof_type: Literal["side-gable", "front-gable", "hipped-gable", "side-gable-with-shed"] = Field(
         ..., description="Type of roof configuration"
     )
     roof_panel_type: Literal["cf-panel", "ag-panel", "pbr-panel"] = Field(
@@ -42,6 +42,9 @@ class Roof(BaseModel):
     )
     roof_overhang: float = Field(
         ..., ge=6, le=24, description="Roof overhang beyond walls in inches"
+    )
+    roof_shed_length: float = Field(
+        ..., ge=0, le=192, description="Length of shed roof extension in inches (0 if no shed)"
     )
 
 

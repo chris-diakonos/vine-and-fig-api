@@ -26,6 +26,7 @@ class SectionViewGenerator:
         foundation_block_joint: float,
         roof_pitch: float,
         roof_type: str,
+        roof_shed_length: float = 0,
         floorplan_type: str = 'center-hall',
         hall_width: float = 60,
         hall_offset: float = 0,
@@ -261,6 +262,43 @@ class SectionViewGenerator:
             # Draw roof as triangle
             roof_points = f"{offset_x},{roof_base_y} {offset_x + building_width/2},{roof_peak_y} {offset_x + building_width},{roof_base_y}"
             svg_lines.append(f'  <polygon points="{roof_points}" fill="#e5e5e5" stroke="black" stroke-width="2"/>')
+        
+        elif roof_type == 'side-gable-with-shed':
+            # Side-gable-with-shed: normal side-gable in front, shed extension in rear
+            shed_length = roof_shed_length
+            gable_length = building_depth - shed_length
+            
+            # Calculate gable roof slope based on gable length
+            roof_run = gable_length / 2  # Half the gable length
+            roof_pitch_radians = math.radians(roof_pitch)
+            roof_rise = math.tan(roof_pitch_radians) * roof_run
+            roof_peak_y = roof_base_y - roof_rise
+            
+            # Calculate the position where gable ends and shed begins
+            gable_end_x = offset_x + gable_length
+            shed_start_x = gable_end_x
+            
+            logger.info(f"Side-gable-with-shed roof: pitch={roof_pitch}°, gable_length={gable_length}\", shed_length={shed_length}\", rise={roof_rise:.2f}\"")
+            logger.info(f"Gable ends at x={gable_end_x}, shed starts at x={shed_start_x}")
+            
+            # Draw gable portion (front) - triangular roof section
+            # Left wall to peak
+            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_base_y}" x2="{gable_end_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
+            # Peak to right wall (only up to where gable ends)
+            svg_lines.append(f'  <line x1="{gable_end_x}" y1="{roof_peak_y}" x2="{offset_x + building_width}" y2="{roof_base_y}" stroke="black" stroke-width="2"/>')
+            # Peak line (horizontal at peak level)
+            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_peak_y}" x2="{gable_end_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
+            
+            # Draw shed portion (rear) - flat slope extending from gable peak
+            if shed_length > 0:
+                # Shed has a lower pitch (typically 3:12 or 4:12)
+                shed_pitch_ratio = 0.25  # 3:12 pitch for shed
+                shed_rise = (shed_pitch_ratio * shed_length)
+                shed_peak_y = roof_peak_y - shed_rise
+                
+                # Shed roof lines (extending from gable peak to rear wall)
+                svg_lines.append(f'  <line x1="{gable_end_x}" y1="{roof_peak_y}" x2="{offset_x + building_width}" y2="{shed_peak_y}" stroke="black" stroke-width="2"/>')
+                svg_lines.append(f'  <line x1="{offset_x + building_width}" y1="{shed_peak_y}" x2="{offset_x + building_width}" y2="{roof_base_y}" stroke="black" stroke-width="2"/>')
         
         elif roof_type == 'hipped-gable':
             # Hipped-gable: combination, show as sloped lines

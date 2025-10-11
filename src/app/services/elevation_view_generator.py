@@ -44,6 +44,7 @@ class ElevationViewGenerator:
         roof_panel_exposure: int = 12,
         roof_panel_color: str = 'charcoal-gray',
         roof_overhang: float = 12,
+        roof_shed_length: float = 0,
         floorplan_type: str = 'center-hall',
         bays: Optional[dict] = None,
         windows: Optional[List] = None,
@@ -117,6 +118,12 @@ class ElevationViewGenerator:
             # Front-gable: gable end on front, ridge runs left-to-right
             # Front elevation shows gable triangle
             roof_run = building_width / 2
+            roof_rise = math.tan(roof_pitch_radians) * roof_run
+        elif roof_type == 'side-gable-with-shed':
+            # Side-gable-with-shed: ridge runs front-to-back
+            # Front elevation shows sloped roof lines
+            # Rise is based on depth (front-to-back dimension)
+            roof_run = (building_depth - roof_shed_length) / 2
             roof_rise = math.tan(roof_pitch_radians) * roof_run
         else:
             roof_rise = 0
@@ -443,6 +450,103 @@ class ElevationViewGenerator:
                 svg_lines.append(f'  <line x1="{roof_left_x}" y1="{roof_base_y}" x2="{roof_left_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
                 svg_lines.append(f'  <line x1="{roof_right_x}" y1="{roof_base_y}" x2="{roof_right_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
                 svg_lines.append(f'  <line x1="{roof_left_x}" y1="{roof_peak_y}" x2="{roof_right_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
+        
+        elif roof_type == 'side-gable-with-shed':
+            # Side-gable-with-shed: normal side-gable in front, shed extension in rear
+            # The shed reduces the length of the gable portion
+            shed_length = roof_shed_length
+            gable_length = building_depth - shed_length + roof_overhang
+            gable_run= gable_length / 2
+            gable_roof_pitch_radians = math.radians(roof_pitch)
+            gable_roof_rise = math.tan(gable_roof_pitch_radians) * gable_run
+            
+            if face in ['left', 'right']:
+                # Viewing gable end - show complex roof profile with gable + shed
+                roof_left_x = offset_x - roof_overhang
+                roof_right_x = offset_x + building_width + roof_overhang
+                
+                # Calculate the position where gable transitions to shed (based on building depth)
+                # For side-gable-with-shed, the gable portion is at the front, shed at rear
+                # In left/right elevation, we see the full building depth
+                gable_transition_x = roof_left_x + gable_length
+                
+                # Calculate gable peak position - peak should be centered over the gable portion
+                gable_peak_x = roof_left_x + (gable_length / 2)
+                
+                # Draw the complex roof profile
+                if shed_length > 0:
+                    # Combined gable + shed roof
+                    shed_pitch_ratio = 0.08333333333333333  # 1:12 pitch for shed
+                    shed_rise = (shed_pitch_ratio * shed_length)
+                    shed_peak_y = roof_base_y + shed_rise
+                    roof_rise = gable_roof_rise
+                    gable_roof_peak_y = roof_base_y - gable_roof_rise
+                    
+       
+                    # Roof slopes (extended by overhang)
+                    svg_lines.append(f'  <line x1="{roof_left_x}" y1="{roof_base_y}" x2="{gable_peak_x}" y2="{gable_roof_peak_y}" stroke="black" stroke-width="3"/>')
+                    svg_lines.append(f'  <line x1="{gable_peak_x}" y1="{gable_roof_peak_y}" x2="{gable_transition_x}" y2="{roof_base_y}" stroke="black" stroke-width="3"/>')
+                    svg_lines.append(f'  <line x1="{gable_transition_x}" y1="{roof_base_y}" x2="{roof_right_x}" y2="{shed_peak_y}" stroke="black" stroke-width="3"/>')
+                    
+                    
+                else:
+                    # No shed - just normal gable
+                    roof_points = f"{roof_left_x},{roof_base_y} {offset_x + building_width/2},{roof_peak_y} {roof_right_x},{roof_base_y}"
+                    svg_lines.append(f'  <polygon points="{roof_points}" fill="{roof_color}" stroke="black" stroke-width="2"/>')
+                    
+                    # Draw roof panel lines for full gable
+                    for i in range(int((building_width + 2*roof_overhang) / roof_panel_exposure) + 1):
+                        panel_x = roof_left_x + (i * roof_panel_exposure)
+                        if panel_x <= roof_right_x:
+                            # Calculate panel line height based on gable slope
+                            ratio = abs(panel_x - (offset_x + building_width/2)) / (building_width/2 + roof_overhang)
+                            panel_y = roof_base_y - (ratio * roof_rise)
+                            svg_lines.append(f'  <line x1="{panel_x}" y1="{roof_base_y}" x2="{panel_x}" y2="{panel_y}" stroke="black" stroke-width="0.5" opacity="0.7"/>')
+                    
+                    # Main roof outline
+                    svg_lines.append(f'  <line x1="{roof_left_x}" y1="{roof_base_y}" x2="{offset_x + building_width/2}" y2="{roof_peak_y}" stroke="black" stroke-width="3"/>')
+                    svg_lines.append(f'  <line x1="{offset_x + building_width/2}" y1="{roof_peak_y}" x2="{roof_right_x}" y2="{roof_base_y}" stroke="black" stroke-width="3"/>')
+            elif face == 'front':
+                # Viewing front - show normal gable roof lines
+                roof_left_x = offset_x - roof_overhang
+                roof_right_x = offset_x + building_width + roof_overhang
+                svg_lines.append(f'  <polygon points="{roof_left_x},{roof_base_y} {roof_left_x},{roof_peak_y} {roof_right_x},{roof_peak_y} {roof_right_x},{roof_base_y}" fill="{roof_color}"/>')
+                
+                # Vertical panel lines
+                roof_width_with_overhang = building_width + (2 * roof_overhang)
+                for i in range(int(roof_width_with_overhang / roof_panel_exposure) + 1):
+                    panel_x = roof_left_x + (i * roof_panel_exposure)
+                    if roof_left_x <= panel_x <= roof_right_x:
+                        svg_lines.append(f'  <line x1="{panel_x}" y1="{roof_base_y}" x2="{panel_x}" y2="{roof_peak_y}" stroke="black" stroke-width="0.5" opacity="0.7"/>')
+                
+                # Outline
+                svg_lines.append(f'  <line x1="{roof_left_x}" y1="{roof_base_y}" x2="{roof_left_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
+                svg_lines.append(f'  <line x1="{roof_right_x}" y1="{roof_base_y}" x2="{roof_right_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
+                svg_lines.append(f'  <line x1="{roof_left_x}" y1="{roof_peak_y}" x2="{roof_right_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
+            else:  # face == 'rear'
+                # Viewing rear - show shed roof (flat slope)
+                roof_left_x = offset_x - roof_overhang
+                roof_right_x = offset_x + building_width + roof_overhang
+                
+                # Shed roof has a lower pitch (typically 3:12 or 4:12)
+                shed_pitch_ratio = 0.25  # 3:12 pitch for shed
+                shed_rise = (shed_pitch_ratio * building_width)
+                shed_peak_y = roof_base_y - shed_rise
+                
+                # Draw shed roof
+                svg_lines.append(f'  <polygon points="{roof_left_x},{roof_base_y} {roof_left_x},{shed_peak_y} {roof_right_x},{shed_peak_y} {roof_right_x},{roof_base_y}" fill="{roof_color}"/>')
+                
+                # Vertical panel lines for shed
+                roof_width_with_overhang = building_width + (2 * roof_overhang)
+                for i in range(int(roof_width_with_overhang / roof_panel_exposure) + 1):
+                    panel_x = roof_left_x + (i * roof_panel_exposure)
+                    if roof_left_x <= panel_x <= roof_right_x:
+                        svg_lines.append(f'  <line x1="{panel_x}" y1="{roof_base_y}" x2="{panel_x}" y2="{shed_peak_y}" stroke="black" stroke-width="0.5" opacity="0.7"/>')
+                
+                # Outline
+                svg_lines.append(f'  <line x1="{roof_left_x}" y1="{roof_base_y}" x2="{roof_left_x}" y2="{shed_peak_y}" stroke="black" stroke-width="2"/>')
+                svg_lines.append(f'  <line x1="{roof_right_x}" y1="{roof_base_y}" x2="{roof_right_x}" y2="{shed_peak_y}" stroke="black" stroke-width="2"/>')
+                svg_lines.append(f'  <line x1="{roof_left_x}" y1="{shed_peak_y}" x2="{roof_right_x}" y2="{shed_peak_y}" stroke="black" stroke-width="2"/>')
         
         elif roof_type == 'hipped-gable':
             # Hipped-gable: gable on narrow ends, hip on long sides

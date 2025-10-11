@@ -265,7 +265,8 @@ class DrawingComponents:
         right_stile_width = stile_widths[2]
         
         left_stile_x = x
-        center_stile_x = x + left_stile_width + panel_widths[0]
+        # Center stile should be at the center of the door
+        center_stile_x = x + (width / 2) - (center_stile_width / 2)
         right_stile_x = x + width - right_stile_width
         
         # Draw left and right stiles (outer vertical members - full height)

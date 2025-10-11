@@ -69,11 +69,12 @@
         "type": "object",
         "properties": {
             "roof_pitch": { "type": "number", "minimum": 30, "maximum": 40 },
-            "roof_type": { "type": "string", "enum": ["side-gable", "front-gable", "hipped-gable"] },
+            "roof_type": { "type": "string", "enum": ["side-gable", "front-gable", "hipped-gable", "side-gable-with-shed"] },
             "roof_panel_type": { "type": "string", "enum": ["cf-panel", "ag-panel", "pbr-panel"] },
             "roof_panel_color": { "type": "string", "enum": ["light-gray", "ash-gray", "charcoal-gray", "steel-gray", "burnished-slate", "emerald-green", "colony-green", "rustic-red", "cocoa-brown"] },
             "roof_panel_exposure": { "type": "integer", "minimum": 12, "maximum": 36 },
-            "roof_overhang": { "type": "number", "minimum": 6, "maximum": 18 }
+            "roof_overhang": { "type": "number", "minimum": 6, "maximum": 18 },
+            "roof_shed_length": { "type": "number", "minimum": 0, "maximum": 192 }
         }
     },
     "sheathing": {
