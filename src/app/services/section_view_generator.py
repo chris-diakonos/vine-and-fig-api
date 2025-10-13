@@ -1,13 +1,14 @@
 """
 Section view generator for creating architectural-style 2D section drawings.
-Shows the building cut vertically to reveal interior structure.
+Uses CadQuery 2D for precise geometric drawings.
 """
 from pathlib import Path
 from typing import List, Optional
 import logging
 import math
+import cadquery as cq
 
-from app.services.drawing_components import DrawingComponents
+from app.services.cadquery_drawing_components import CadQueryDrawingComponents
 
 logger = logging.getLogger(__name__)
 
@@ -76,25 +77,26 @@ class SectionViewGenerator:
         offset_x = margin
         offset_y = margin + 40  # Extra top margin for roof
         
-        # SVG setup
-        svg_lines = []
-        svg_lines.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{view_width}" height="{view_height}" viewBox="0 0 {view_width} {view_height}">')
-        svg_lines.append(f'  <!-- Generated Section View -->')
-        
-        # Background
-        svg_lines.append(f'  <rect width="{view_width}" height="{view_height}" fill="#f8f8f0"/>')
+        # Start with a 2D workplane
+        wp = cq.Workplane("XY")
         
         # Ground line
         ground_y = offset_y + total_height + foundation_height
-        svg_lines.append(f'  <line x1="0" y1="{ground_y}" x2="{view_width}" y2="{ground_y}" stroke="#8b7355" stroke-width="2"/>')
+        ground_line = cq.Workplane("XY").line((0, ground_y), (view_width, ground_y))
+        wp = wp.union(ground_line)
         
         # === FOUNDATION ===
-        svg_lines.append(f'  <!-- Foundation -->')
         foundation_y = offset_y + total_height
-        svg_lines.append(f'  <rect x="{offset_x}" y="{foundation_y}" width="{building_width}" height="{foundation_height}" fill="black"/>')
+        foundation = CadQueryDrawingComponents.create_wall_2d(
+            x=offset_x,
+            y=foundation_y,
+            width=building_width,
+            height=foundation_height,
+            wall_thickness=4.0
+        )
+        wp = wp.union(foundation)
         
         # === FLOOR LEVELS ===
-        svg_lines.append(f'  <!-- Floor Levels and Joists -->')
         
         current_z = 0  # Start from bottom of first floor
         floor_positions = []
@@ -105,7 +107,14 @@ class SectionViewGenerator:
             
             # Floor joist (thick line)
             joist_height = joist_heights[i] if i < len(joist_heights) else 10
-            svg_lines.append(f'  <rect x="{offset_x}" y="{floor_y - joist_height}" width="{building_width}" height="{joist_height}" fill="black"/>')
+            floor_joist = CadQueryDrawingComponents.create_floor_joists_2d(
+                x=offset_x,
+                y=floor_y - joist_height,
+                width=building_width,
+                height=joist_height,
+                joist_spacing=16
+            )
+            wp = wp.union(floor_joist)
             
             # Move up by joist height + ceiling height
             current_z += joist_height + ceiling_heights[i]
@@ -113,19 +122,38 @@ class SectionViewGenerator:
         # Add ceiling joists at top
         ceiling_joist_y = offset_y + total_height - current_z
         ceiling_joist_height = joist_heights[-1] if len(joist_heights) > stories else 8
-        svg_lines.append(f'  <rect x="{offset_x}" y="{ceiling_joist_y - ceiling_joist_height}" width="{building_width}" height="{ceiling_joist_height}" fill="black"/>')
+        ceiling_joist = CadQueryDrawingComponents.create_floor_joists_2d(
+            x=offset_x,
+            y=ceiling_joist_y - ceiling_joist_height,
+            width=building_width,
+            height=ceiling_joist_height,
+            joist_spacing=16
+        )
+        wp = wp.union(ceiling_joist)
         
         # === EXTERIOR WALLS ===
-        svg_lines.append(f'  <!-- Exterior Walls -->')
         
         # Left wall
-        svg_lines.append(f'  <rect x="{offset_x}" y="{offset_y}" width="{wall_thickness}" height="{total_height}" fill="black"/>')
+        left_wall = CadQueryDrawingComponents.create_wall_2d(
+            x=offset_x,
+            y=offset_y,
+            width=wall_thickness,
+            height=total_height,
+            wall_thickness=wall_thickness
+        )
+        wp = wp.union(left_wall)
         
         # Right wall
-        svg_lines.append(f'  <rect x="{offset_x + building_width - wall_thickness}" y="{offset_y}" width="{wall_thickness}" height="{total_height}" fill="black"/>')
+        right_wall = CadQueryDrawingComponents.create_wall_2d(
+            x=offset_x + building_width - wall_thickness,
+            y=offset_y,
+            width=wall_thickness,
+            height=total_height,
+            wall_thickness=wall_thickness
+        )
+        wp = wp.union(right_wall)
         
         # === INTERIOR WALLS (HALL) ===
-        svg_lines.append(f'  <!-- Interior Hall Walls -->')
         
         if floorplan_type == 'center-hall':
             # Calculate hall positions (same as plan view)
@@ -148,10 +176,24 @@ class SectionViewGenerator:
                     wall_top_y = wall_bottom_y - wall_height
                     
                     # Left hall wall
-                    svg_lines.append(f'  <rect x="{offset_x + hall_left_x}" y="{wall_top_y}" width="{wall_thickness}" height="{wall_height}" fill="black"/>')
+                    left_hall_wall = CadQueryDrawingComponents.create_wall_2d(
+                        x=offset_x + hall_left_x,
+                        y=wall_top_y,
+                        width=wall_thickness,
+                        height=wall_height,
+                        wall_thickness=wall_thickness
+                    )
+                    wp = wp.union(left_hall_wall)
                     
                     # Right hall wall
-                    svg_lines.append(f'  <rect x="{offset_x + hall_right_x - wall_thickness}" y="{wall_top_y}" width="{wall_thickness}" height="{wall_height}" fill="black"/>')
+                    right_hall_wall = CadQueryDrawingComponents.create_wall_2d(
+                        x=offset_x + hall_right_x - wall_thickness,
+                        y=wall_top_y,
+                        width=wall_thickness,
+                        height=wall_height,
+                        wall_thickness=wall_thickness
+                    )
+                    wp = wp.union(right_hall_wall)
         
         elif floorplan_type == 'side-hall':
             # Side hall wall position
@@ -169,10 +211,16 @@ class SectionViewGenerator:
                     wall_top_y = floor_y - wall_height
                     
                     # Hall dividing wall
-                    svg_lines.append(f'  <rect x="{offset_x + hall_wall_x}" y="{wall_top_y}" width="{wall_thickness}" height="{wall_height}" fill="black"/>')
+                    hall_wall = CadQueryDrawingComponents.create_wall_2d(
+                        x=offset_x + hall_wall_x,
+                        y=wall_top_y,
+                        width=wall_thickness,
+                        height=wall_height,
+                        wall_thickness=wall_thickness
+                    )
+                    wp = wp.union(hall_wall)
         
         # === WINDOWS ===
-        svg_lines.append(f'  <!-- Windows -->')
         
         logger.info(f"Drawing windows: stories={stories}, windows_available={len(windows) if windows else 0}")
         logger.info(f"Floor positions: {floor_positions}")
@@ -202,7 +250,7 @@ class SectionViewGenerator:
                     
                     # Left wall window (in section, window shows as wall thickness)
                     window_x_left = offset_x
-                    window_svg_left = DrawingComponents.draw_window_section(
+                    window_left = CadQueryDrawingComponents.create_window_section_2d(
                         x=window_x_left,
                         y=window_y,
                         width=wall_thickness,
@@ -210,12 +258,12 @@ class SectionViewGenerator:
                         operation=operation,
                         configuration=configuration
                     )
-                    svg_lines.append(window_svg_left)
+                    wp = wp.union(window_left)
                     logger.info(f"Drew left window at x={window_x_left}, y={window_y}")
                     
                     # Right wall window
                     window_x_right = offset_x + building_width - wall_thickness
-                    window_svg_right = DrawingComponents.draw_window_section(
+                    window_right = CadQueryDrawingComponents.create_window_section_2d(
                         x=window_x_right,
                         y=window_y,
                         width=wall_thickness,
@@ -223,127 +271,42 @@ class SectionViewGenerator:
                         operation=operation,
                         configuration=configuration
                     )
-                    svg_lines.append(window_svg_right)
+                    wp = wp.union(window_right)
         
         # === ROOF ===
-        svg_lines.append(f'  <!-- Roof -->')
         
         roof_base_y = offset_y
         
-        if roof_type == 'side-gable':
-            # Side-gable: gable ends on sides, ridge runs front-to-back
-            # Section through the front shows sloped roof lines (not a triangle)
-            # Calculate roof slope based on building depth
-            roof_run = building_depth / 2  # Use depth, not width
-            roof_pitch_radians = math.radians(roof_pitch)
-            roof_rise = math.tan(roof_pitch_radians) * roof_run
-            roof_peak_y = roof_base_y - roof_rise
-            
-            logger.info(f"Side-gable roof: pitch={roof_pitch}°, run={roof_run}\" (depth/2), rise={roof_rise:.2f}\"")
-            
-            # Draw sloped roof lines from left and right walls up to peak (off-screen center)
-            # Left slope
-            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_base_y}" x2="{offset_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
-            # Right slope  
-            svg_lines.append(f'  <line x1="{offset_x + building_width}" y1="{roof_base_y}" x2="{offset_x + building_width}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
-            # Peak line (connecting the two slopes)
-            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_peak_y}" x2="{offset_x + building_width}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
+        # Create roof using CadQuery
+        roof_2d = CadQueryDrawingComponents.create_roof_2d(
+            x=offset_x,
+            y=roof_base_y,
+            width=building_width,
+            roof_type=roof_type,
+            roof_pitch=roof_pitch,
+            roof_overhang=0,  # No overhang in section view
+            roof_shed_length=roof_shed_length
+        )
+        wp = wp.union(roof_2d)
         
-        elif roof_type == 'front-gable':
-            # Front-gable: gable end on front, ridge runs left-to-right
-            # Section through the front shows the gable triangle
-            roof_run = building_width / 2
-            roof_pitch_radians = math.radians(roof_pitch)
-            roof_rise = math.tan(roof_pitch_radians) * roof_run
-            roof_peak_y = roof_base_y - roof_rise
-            
-            logger.info(f"Front-gable roof: pitch={roof_pitch}°, run={roof_run}\" (width/2), rise={roof_rise:.2f}\"")
-            
-            # Draw roof as triangle
-            roof_points = f"{offset_x},{roof_base_y} {offset_x + building_width/2},{roof_peak_y} {offset_x + building_width},{roof_base_y}"
-            svg_lines.append(f'  <polygon points="{roof_points}" fill="#e5e5e5" stroke="black" stroke-width="2"/>')
+        # Export to SVG
+        svg_content = CadQueryDrawingComponents.export_to_svg(wp, str(output_path) if output_path else None)
         
-        elif roof_type == 'side-gable-with-shed':
-            # Side-gable-with-shed: normal side-gable in front, shed extension in rear
-            shed_length = roof_shed_length
-            gable_length = building_depth - shed_length
-            
-            # Calculate gable roof slope based on gable length
-            roof_run = gable_length / 2  # Half the gable length
-            roof_pitch_radians = math.radians(roof_pitch)
-            roof_rise = math.tan(roof_pitch_radians) * roof_run
-            roof_peak_y = roof_base_y - roof_rise
-            
-            # Calculate the position where gable ends and shed begins
-            gable_end_x = offset_x + gable_length
-            shed_start_x = gable_end_x
-            
-            logger.info(f"Side-gable-with-shed roof: pitch={roof_pitch}°, gable_length={gable_length}\", shed_length={shed_length}\", rise={roof_rise:.2f}\"")
-            logger.info(f"Gable ends at x={gable_end_x}, shed starts at x={shed_start_x}")
-            
-            # Draw gable portion (front) - triangular roof section
-            # Left wall to peak
-            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_base_y}" x2="{gable_end_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
-            # Peak to right wall (only up to where gable ends)
-            svg_lines.append(f'  <line x1="{gable_end_x}" y1="{roof_peak_y}" x2="{offset_x + building_width}" y2="{roof_base_y}" stroke="black" stroke-width="2"/>')
-            # Peak line (horizontal at peak level)
-            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_peak_y}" x2="{gable_end_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
-            
-            # Draw shed portion (rear) - flat slope extending from gable peak
-            if shed_length > 0:
-                # Shed has a lower pitch (typically 3:12 or 4:12)
-                shed_pitch_ratio = 0.25  # 3:12 pitch for shed
-                shed_rise = (shed_pitch_ratio * shed_length)
-                shed_peak_y = roof_peak_y - shed_rise
-                
-                # Shed roof lines (extending from gable peak to rear wall)
-                svg_lines.append(f'  <line x1="{gable_end_x}" y1="{roof_peak_y}" x2="{offset_x + building_width}" y2="{shed_peak_y}" stroke="black" stroke-width="2"/>')
-                svg_lines.append(f'  <line x1="{offset_x + building_width}" y1="{shed_peak_y}" x2="{offset_x + building_width}" y2="{roof_base_y}" stroke="black" stroke-width="2"/>')
-        
-        elif roof_type == 'hipped-gable':
-            # Hipped-gable: combination, show as sloped lines
-            roof_run = building_depth / 2
-            roof_pitch_radians = math.radians(roof_pitch)
-            roof_rise = math.tan(roof_pitch_radians) * roof_run
-            roof_peak_y = roof_base_y - roof_rise
-            
-            # Similar to side-gable
-            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_base_y}" x2="{offset_x}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
-            svg_lines.append(f'  <line x1="{offset_x + building_width}" y1="{roof_base_y}" x2="{offset_x + building_width}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
-            svg_lines.append(f'  <line x1="{offset_x}" y1="{roof_peak_y}" x2="{offset_x + building_width}" y2="{roof_peak_y}" stroke="black" stroke-width="2"/>')
-        
-        # === LABELS ===
-        svg_lines.append(f'  <!-- Labels -->')
-        svg_lines.append(f'  <text x="{view_width / 2}" y="{view_height - 10}" text-anchor="middle" font-family="serif" font-size="12" fill="black">')
-        svg_lines.append(f'    Section View - {stories} Story Building')
-        svg_lines.append(f'  </text>')
-        
-        # Story labels
-        current_z = 0
-        for i in range(stories):
-            floor_y = offset_y + total_height - current_z
-            ceiling_height = ceiling_heights[i]
-            mid_floor_y = floor_y - ceiling_height / 2
-            
-            svg_lines.append(f'  <text x="20" y="{mid_floor_y}" text-anchor="start" font-family="sans-serif" font-size="10" fill="#666">')
-            svg_lines.append(f'    Story {i + 1}')
-            svg_lines.append(f'  </text>')
-            svg_lines.append(f'  <text x="20" y="{mid_floor_y + 12}" text-anchor="start" font-family="sans-serif" font-size="9" fill="#999">')
-            svg_lines.append(f'    {ceiling_height / 12:.1f}\'')
-            svg_lines.append(f'  </text>')
-            
-            joist_height = joist_heights[i] if i < len(joist_heights) else 10
-            current_z += joist_height + ceiling_height
-        
-        # Close SVG
-        svg_lines.append('</svg>')
-        
-        svg_content = '\n'.join(svg_lines)
+        # Add SVG wrapper with proper dimensions and background
+        svg_wrapper = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{view_width}" height="{view_height}" viewBox="0 0 {view_width} {view_height}">
+  <!-- Generated Section View -->
+  <rect width="{view_width}" height="{view_height}" fill="#f8f8f0"/>
+  {svg_content}
+  <!-- Labels -->
+  <text x="{view_width / 2}" y="{view_height - 10}" text-anchor="middle" font-family="serif" font-size="12" fill="black">
+    Section View - {stories} Story Building
+  </text>
+</svg>'''
         
         # Save to file if path provided
         if output_path:
-            output_path.write_text(svg_content, encoding='utf-8')
+            output_path.write_text(svg_wrapper, encoding='utf-8')
             logger.info(f"Generated section view SVG: {output_path}")
         
-        return svg_content
+        return svg_wrapper
 
