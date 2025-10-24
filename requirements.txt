@@ -1,3 +1,6 @@
+# CadQuery dependencies
+ezdxf==1.4.2
+
 # FastAPI and web server
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
@@ -7,11 +10,6 @@ python-multipart==0.0.6
 pydantic==2.5.3
 pydantic-settings==2.1.0
 pydantic[email]==2.5.3
-
-# CadQuery for 3D modeling
-cadquery==2.4.0
-# Pin numpy to <2.0 for compatibility with nptyping (CadQuery dependency)
-numpy<2.0
 
 # Azure Storage
 azure-storage-blob==12.19.0

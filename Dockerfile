@@ -1,46 +1,47 @@
-# Multi-stage build for Vine & Fig Building Designer API
-FROM python:3.11-slim as builder
+FROM continuumio/miniconda3:main
 
-# Set working directory
-WORKDIR /app
+# Install required packages
+RUN apt-get -qq update && \
+    apt-get -qq install --yes --no-install-recommends libffi-dev libgl1 libglx-mesa0 libglu1-mesa libxrender1 libsm6 libice6 libxext6 libxrender-dev gettext-base less unzip git > /dev/null && \
+    apt-get -qq purge && \
+    apt-get -qq clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install system dependencies required for CadQuery
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libgl1 \
-    libglu1-mesa \
-    libxrender1 \
-    libxext6 \
-    libsm6 \
-    libice6 \
-    && rm -rf /var/lib/apt/lists/*
+# Update conda
+RUN conda update -n base -c defaults conda
+
+# Create a new conda environment
+RUN conda create --name cadquery python=3.12
+
+# Activate the new environment
+SHELL ["/bin/bash", "--login", "-c"]
+RUN conda init bash
+RUN conda activate cadquery
+
+# Accept conda terms of service
+ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true
+
+# Conda config
+RUN conda config --add channels conda-forge
+RUN conda config --set channel_priority strict
+
+# Install pip via conda
+RUN conda install -c conda-forge pip python=3.12
+
+# Install pip setup tools and cython
+RUN pip install setuptools wheel cython 
+
+# Install remaining packages using conda
+RUN conda install -c conda-forge -c cadquery cadquery=2.4.0 ocp=7.7.2 python=3.12
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Production stage
-FROM python:3.11-slim
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Set working directory
 WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libglu1-mesa \
-    libxrender1 \
-    libxext6 \
-    libsm6 \
-    libice6 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy Python packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY ./src /app/src
