@@ -20,4 +20,5 @@ class Order(BaseModel):
     order_date: Optional[date] = Field(None, description="Date order was placed")
     requested_delivery_date: Optional[date] = Field(None, description="Requested delivery date")
     customer: Customer = Field(..., description="Customer information")
+    structure_hash: Optional[str] = Field(None, description="SHA-256 hash of the structure data")
     # structure will be referenced from structure.py to avoid circular imports

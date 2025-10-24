@@ -1,11 +1,16 @@
 """
 Model generation endpoints.
 """
+import json
+import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.models.structure import BuildingRequest
 from app.models.responses import ModelResponse, ErrorResponse
 from app.services.model_generator import ModelGenerator
 from app.utils.file_manager import FileManager
+from app.utils.hash_utils import validate_structure_hash
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -56,10 +61,28 @@ async def generate_model(
     - `500`: Model generation failed
     """
     try:
+        # Validate structure hash if provided
+        if request.structure_hash:
+            if not validate_structure_hash(request.structure_hash, request.structure.dict()):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Structure hash validation failed. The provided hash does not match the structure data."
+                )
+            
+            # Save structure data to file using the structure_hash as filename
+            # Only save if the file doesn't already exist
+            if not FileManager.structure_data_exists(request.structure_hash):
+                structure_data = request.structure.dict()
+                FileManager.save_structure_data(request.structure_hash, structure_data)
+                logger.info(f"Saved structure data for hash: {request.structure_hash}")
+            else:
+                logger.info(f"Structure data already exists for hash: {request.structure_hash}")
+        
         # Generate the model
         response = ModelGenerator.generate(
             structure=request.structure,
-            view_mode=request.view_mode
+            view_mode=request.view_mode,
+            structure_hash=request.structure_hash
         )
         
         # Schedule cleanup of old files in the background
@@ -132,3 +155,41 @@ async def get_model_info(model_id: str):
         status_code=404,
         detail=f"Model {model_id} not found or has been cleaned up"
     )
+
+
+@router.get("/structures/{structure_hash}")
+async def get_structure_data(structure_hash: str):
+    """
+    Get structure data by hash.
+    
+    Args:
+        structure_hash: SHA-256 hash of the structure data
+        
+    Returns:
+        Structure data as JSON
+    """
+    # Check if structure data file exists
+    if not FileManager.structure_data_exists(structure_hash):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Structure data with hash {structure_hash} not found"
+        )
+    
+    try:
+        # Read the structure data file
+        file_path = FileManager.get_structure_data_path(structure_hash)
+        with open(file_path, 'r', encoding='utf-8') as f:
+            structure_data = json.load(f)
+        
+        return {
+            "structure_hash": structure_hash,
+            "structure_data": structure_data,
+            "file_path": str(file_path)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to read structure data file {file_path}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read structure data: {str(e)}"
+        )

@@ -2,7 +2,7 @@
 Main structure and request models.
 """
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from app.models.customer import Customer
 from app.models.floorplan import Floorplan
@@ -25,6 +25,7 @@ class BuildingRequest(BaseModel):
     """Request model for generating building models and drawings."""
     customer: Customer = Field(..., description="Customer information")
     structure: Structure = Field(..., description="Building structure specification")
+    structure_hash: Optional[str] = Field(None, description="SHA-256 hash of the structure data")
     view_mode: Literal["3d", "plan", "section", "elevation"] = Field(
         default="3d",
         description="View mode for the generated output"

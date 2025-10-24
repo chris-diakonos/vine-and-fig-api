@@ -19,6 +19,7 @@
             "order_date": { "type": "date" },
             "requested_delivery_date": { "type": "date" },
             "customer": { "$ref": "#CustomerSchema" },
+            "structure_hash": { "type": "string", "format": "sha256" },
             "structure": { "$ref": "#StructureSchema" }
         }
     },

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     temp_dir: Path = Path(os.getenv("TEMP_DIR", os.path.join(os.path.dirname(__file__), "../../temp")))
     models_dir: Path = temp_dir / "models"
     drawings_dir: Path = temp_dir / "drawings"
+    structures_dir: Path = temp_dir / "structures"
     
     # Azure Storage settings
     azure_storage_account_name: str = os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
@@ -47,6 +48,9 @@ class Settings(BaseSettings):
     # File cleanup settings (in seconds)
     file_max_age: int = 3600  # 1 hour
     
+    # Structure hash behavior settings
+    regenerate_existing_hashed_files: bool = os.getenv("REGENERATE_EXISTING_HASHED_FILES", "false").lower() == "true"
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
@@ -57,6 +61,7 @@ class Settings(BaseSettings):
             self.temp_dir.mkdir(parents=True, exist_ok=True)
             self.models_dir.mkdir(parents=True, exist_ok=True)
             self.drawings_dir.mkdir(parents=True, exist_ok=True)
+            self.structures_dir.mkdir(parents=True, exist_ok=True)
     
     def is_azure_storage_enabled(self) -> bool:
         """Check if Azure Storage is properly configured."""

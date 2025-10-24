@@ -18,7 +18,8 @@ class ModelGenerator:
     @staticmethod
     def generate(
         structure: Structure,
-        view_mode: Literal["3d", "plan", "section", "elevation"]
+        view_mode: Literal["3d", "plan", "section", "elevation"],
+        structure_hash: str = None
     ) -> ModelResponse:
         """
         Generate a building model or drawing based on the structure specification.
@@ -26,6 +27,7 @@ class ModelGenerator:
         Args:
             structure: Complete building structure specification
             view_mode: View mode for output (3d, plan, section, elevation)
+            structure_hash: Optional structure hash for filename generation
             
         Returns:
             ModelResponse with URLs to the generated files
@@ -33,6 +35,31 @@ class ModelGenerator:
         Raises:
             RuntimeError: If generation or export fails
         """
+        # Check if we should use existing hashed files
+        if structure_hash:
+            if view_mode == "3d":
+                if FileManager.hashed_model_exists(structure_hash) and not FileManager.should_regenerate_hashed_file(structure_hash):
+                    # Return existing model
+                    model_url = FileManager.get_model_url("", "gltf", structure_hash)
+                    return ModelResponse(
+                        model_url=model_url,
+                        gltf_url=model_url,
+                        image_url=None,
+                        view_mode="3d",
+                        model_id=structure_hash
+                    )
+            else:
+                if FileManager.hashed_drawing_exists(structure_hash, view_mode) and not FileManager.should_regenerate_hashed_file(structure_hash):
+                    # Return existing drawing
+                    drawing_url = FileManager.get_drawing_url("", view_mode, "svg", structure_hash)
+                    return ModelResponse(
+                        model_url=drawing_url,
+                        gltf_url=None,
+                        image_url=drawing_url,
+                        view_mode=view_mode,
+                        model_id=structure_hash
+                    )
+        
         # Generate unique model ID
         model_id = FileManager.generate_model_id()
         
@@ -44,12 +71,12 @@ class ModelGenerator:
         
         # Export based on view mode
         if view_mode == "3d":
-            return ModelGenerator._generate_3d(building_model, model_id)
+            return ModelGenerator._generate_3d(building_model, model_id, structure_hash)
         else:
-            return ModelGenerator._generate_2d(building_model, model_id, view_mode)
+            return ModelGenerator._generate_2d(building_model, model_id, view_mode, structure_hash)
     
     @staticmethod
-    def _generate_3d(building_model, model_id: str) -> ModelResponse:
+    def _generate_3d(building_model, model_id: str, structure_hash: str = None) -> ModelResponse:
         """
         Generate 3D model output in glTF format.
         
@@ -61,7 +88,7 @@ class ModelGenerator:
             ModelResponse with 3D model URLs
         """
         # Get output path
-        output_path = FileManager.get_model_path(model_id, "gltf")
+        output_path = FileManager.get_model_path(model_id, "gltf", structure_hash)
         
         # Export to glTF and upload to storage
         try:
@@ -74,14 +101,15 @@ class ModelGenerator:
             gltf_url=model_url,
             image_url=None,
             view_mode="3d",
-            model_id=model_id
+            model_id=structure_hash if structure_hash else model_id
         )
     
     @staticmethod
     def _generate_2d(
         building_model,
         model_id: str,
-        view_mode: Literal["plan", "section", "elevation"]
+        view_mode: Literal["plan", "section", "elevation"],
+        structure_hash: str = None
     ) -> ModelResponse:
         """
         Generate 2D drawing output in SVG format.
@@ -98,7 +126,7 @@ class ModelGenerator:
         projection = get_projection_settings(view_mode)
         
         # Get output path
-        output_path = FileManager.get_drawing_path(model_id, view_mode, "svg")
+        output_path = FileManager.get_drawing_path(model_id, view_mode, "svg", structure_hash)
         
         try:
             if view_mode == "plan" and structure:
@@ -238,10 +266,13 @@ class ModelGenerator:
         except Exception as e:
             raise RuntimeError(f"Failed to export 2D drawing: {str(e)}")
         
+        # Generate the drawing URL
+        drawing_url = FileManager.get_drawing_url(model_id, view_mode, "svg", structure_hash)
+        
         return ModelResponse(
             model_url=drawing_url,
             gltf_url=None,
             image_url=drawing_url,
             view_mode=view_mode,
-            model_id=model_id
+            model_id=structure_hash if structure_hash else model_id
         )
