@@ -5,7 +5,7 @@ services:
   # Backend API
   api:
     build:
-      context: .
+      context: https://dev.azure.com/diakonos-analytics/vine-and-fig-api/_git/vine-and-fig-api#master
       dockerfile: Dockerfile
     container_name: vine-and-fig-api
     ports:
@@ -19,15 +19,15 @@ services:
       - CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
       
       # Storage Type - "local" or "azure"
-      - STORAGE_TYPE=local
+      - STORAGE_TYPE=azure
       
       # Local File Storage
       - TEMP_DIR=/app/temp
       
       # Azure Storage Settings (uncomment when using Azure)
-      # - AZURE_STORAGE_ACCOUNT_NAME=your-storage-account-name
-      # - AZURE_STORAGE_SAS_TOKEN=your-sas-token
-      # - AZURE_STORAGE_CONTAINER_NAME=vine-and-fig
+      - AZURE_STORAGE_ACCOUNT_NAME=savineandfig
+      - AZURE_STORAGE_SAS_TOKEN=sv=2024-11-04&ss=b&srt=sco&sp=rwdlac&se=2026-12-31T12:18:56Z&st=2025-10-02T03:03:56Z&spr=https&sig=WNvT6YeDz12%2B70KHrI1g2u%2FlMl2%2Fek6BWbaiICRpxA8%3D
+      - AZURE_STORAGE_CONTAINER_NAME=data
       
       # File Cleanup
       - FILE_MAX_AGE=3600
@@ -62,7 +62,7 @@ services:
   # Frontend
   frontend:
     build:
-      context: ../vine-and-fig
+      context: https://dev.azure.com/diakonos-analytics/vine-and-fig/_git/vine-and-fig#master
       dockerfile: Dockerfile
     container_name: vine-and-fig-frontend
     ports:
