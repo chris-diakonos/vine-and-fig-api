@@ -5,7 +5,7 @@ services:
   # Backend API
   api:
     build:
-      context: https://dev.azure.com/diakonos-analytics/vine-and-fig-api/_git/vine-and-fig-api#master
+      context: https://diakonos-analytics@dev.azure.com/diakonos-analytics/vine-and-fig-api/_git/vine-and-fig-api#master
       dockerfile: Dockerfile
     container_name: vine-and-fig-api
     ports:
@@ -62,7 +62,7 @@ services:
   # Frontend
   frontend:
     build:
-      context: https://dev.azure.com/diakonos-analytics/vine-and-fig/_git/vine-and-fig#master
+      context: https://diakonos-analytics@dev.azure.com/diakonos-analytics/vine-and-fig/_git/vine-and-fig#master
       dockerfile: Dockerfile
     container_name: vine-and-fig-frontend
     ports:
