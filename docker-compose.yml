@@ -17,16 +17,15 @@ services:
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173","http://localhost:5174"]
       
       # Storage Type - "local" or "azure"
-      - STORAGE_TYPE=local
+      - STORAGE_TYPE=azure
       
-      # Local File Storage (used when STORAGE_TYPE=local)
+      # Local File Storage
       - TEMP_DIR=/app/temp
       
-      # Azure Storage Settings (used when STORAGE_TYPE=azure)
-      # Uncomment and configure these when using Azure Storage:
-      # - AZURE_STORAGE_ACCOUNT_NAME=your-storage-account-name
-      # - AZURE_STORAGE_SAS_TOKEN=your-sas-token
-      # - AZURE_STORAGE_CONTAINER_NAME=vine-and-fig
+      # Azure Storage Settings (uncomment when using Azure)
+      - AZURE_STORAGE_ACCOUNT_NAME=savineandfig
+      - AZURE_STORAGE_SAS_TOKEN=sv=2024-11-04&ss=b&srt=sco&sp=rwdlac&se=2026-12-31T12:18:56Z&st=2025-10-02T03:03:56Z&spr=https&sig=WNvT6YeDz12%2B70KHrI1g2u%2FlMl2%2Fek6BWbaiICRpxA8%3D
+      - AZURE_STORAGE_CONTAINER_NAME=data
       
       # File Cleanup (in seconds)
       - FILE_MAX_AGE=3600
