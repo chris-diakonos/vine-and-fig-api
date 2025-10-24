@@ -40,12 +40,6 @@ class Roof(BaseModel):
     roof_panel_exposure: int = Field(
         ..., ge=12, le=36, description="Panel exposure width in inches"
     )
-    roof_overhang: float = Field(
-        ..., ge=6, le=24, description="Roof overhang beyond walls in inches"
-    )
-    roof_shed_length: float = Field(
-        ..., ge=0, le=192, description="Length of shed roof extension in inches (0 if no shed)"
-    )
 
 
 class Sheathing(BaseModel):

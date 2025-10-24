@@ -8,9 +8,6 @@ from app.models.structure import Structure
 from app.models.responses import ModelResponse
 from app.services.building_builder import BuildingBuilder
 from app.services.export_service import ExportService
-from app.services.plan_view_generator import PlanViewGenerator
-from app.services.section_view_generator import SectionViewGenerator
-from app.services.elevation_view_generator import ElevationViewGenerator
 from app.utils.file_manager import FileManager
 from app.utils.view_projections import get_projection_settings
 
@@ -21,7 +18,7 @@ class ModelGenerator:
     @staticmethod
     def generate(
         structure: Structure,
-        view_mode: str  # Can be "3d", "plan", "section", "elevation", or "elevation-{face}"
+        view_mode: Literal["3d", "plan", "section", "elevation"]
     ) -> ModelResponse:
         """
         Generate a building model or drawing based on the structure specification.
@@ -49,7 +46,7 @@ class ModelGenerator:
         if view_mode == "3d":
             return ModelGenerator._generate_3d(building_model, model_id)
         else:
-            return ModelGenerator._generate_2d(building_model, model_id, view_mode, structure)
+            return ModelGenerator._generate_2d(building_model, model_id, view_mode)
     
     @staticmethod
     def _generate_3d(building_model, model_id: str) -> ModelResponse:
@@ -84,8 +81,7 @@ class ModelGenerator:
     def _generate_2d(
         building_model,
         model_id: str,
-        view_mode: Literal["plan", "section", "elevation"],
-        structure: Structure = None
+        view_mode: Literal["plan", "section", "elevation"]
     ) -> ModelResponse:
         """
         Generate 2D drawing output in SVG format.
@@ -94,11 +90,13 @@ class ModelGenerator:
             building_model: CadQuery Workplane with building geometry
             model_id: Unique identifier for this model
             view_mode: View mode (plan, section, elevation)
-            structure: Structure data (needed for plan view generation)
             
         Returns:
             ModelResponse with 2D drawing URLs
         """
+        # Get projection settings
+        projection = get_projection_settings(view_mode)
+        
         # Get output path
         output_path = FileManager.get_drawing_path(model_id, view_mode, "svg")
         
@@ -235,13 +233,8 @@ class ModelGenerator:
                 building_model,
                 output_path,
                 projection_dir=projection.direction,
-                    upload_to_storage=False  # We'll handle storage upload separately
+                upload_to_storage=True
             )
-            
-            # Upload to storage and get URL
-            blob_name = f"drawings/{output_path.name}"
-            drawing_url = FileManager.save_file(output_path, blob_name, content_type="image/svg+xml")
-            
         except Exception as e:
             raise RuntimeError(f"Failed to export 2D drawing: {str(e)}")
         
