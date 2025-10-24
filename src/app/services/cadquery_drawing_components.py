@@ -90,8 +90,8 @@ class CadQueryDrawingComponents:
             frame = frame.union(meeting_rail)
         
         elif operation == 'casement':
-            # Casement window - single opening pane with diagonal line
-            diagonal = wp.line((x, y), (x + width, y + height))
+            # Casement window - single opening pane with diagonal line (as thin rectangle)
+            diagonal = wp.rect(width, 0.5).translate((x + width/2, y + height/2))
             frame = frame.union(diagonal)
         
         elif operation == 'fixed':
@@ -482,7 +482,7 @@ class CadQueryDrawingComponents:
             roof_rise = math.tan(roof_pitch_radians) * roof_run
             roof_peak_y = y - roof_rise
             
-            # Draw roof as triangle
+            # Draw roof as triangle using polygon
             roof_points = [
                 (x - roof_overhang, y),
                 (x + width/2, roof_peak_y),
@@ -496,7 +496,7 @@ class CadQueryDrawingComponents:
             roof_rise = math.tan(roof_pitch_radians) * roof_run
             roof_peak_y = y - roof_rise
             
-            # Draw roof as triangle
+            # Draw roof as triangle using polygon
             roof_points = [
                 (x - roof_overhang, y),
                 (x + width/2, roof_peak_y),
@@ -520,7 +520,7 @@ class CadQueryDrawingComponents:
                 shed_rise = (shed_pitch_ratio * shed_length)
                 shed_peak_y = roof_peak_y - shed_rise
                 
-                # Draw complex roof profile
+                # Draw complex roof profile using polygon
                 roof_points = [
                     (x - roof_overhang, y),
                     (x + gable_length/2, roof_peak_y),
