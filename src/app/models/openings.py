@@ -2,7 +2,7 @@
 Window and door models.
 """
 from pydantic import BaseModel, Field
-from typing import Literal, Optional
+from typing import Literal, Optional, List
 
 
 class Window(BaseModel):
@@ -71,14 +71,14 @@ class Door(BaseModel):
     thickness: Literal[1.0, 1.375, 1.75] = Field(
         ..., description="Door thickness in inches"
     )
-    stile_width: float = Field(
-        ..., ge=2, le=2.5, description="Stile width in inches"
+    stile_widths: List[float] = Field(
+        ..., min_length=3, max_length=3, description="Stile widths [left, center, right] in inches"
     )
-    rail_width: float = Field(
-        ..., ge=3, le=4, description="Rail width in inches"
+    rail_widths: List[float] = Field(
+        ..., min_length=3, max_length=4, description="Rail widths [top to bottom] in inches"
     )
-    meeting_rail_width: float = Field(
-        ..., ge=1.0, le=2.0, description="Meeting rail width in inches"
+    panel_widths: List[float] = Field(
+        ..., min_length=2, max_length=2, description="Panel widths [left, right] in inches"
     )
     bay_width: float = Field(
         ..., ge=20, le=60, description="Calculated bay width in inches"
