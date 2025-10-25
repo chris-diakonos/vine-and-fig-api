@@ -20,7 +20,27 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:5174",
+        "http://vine-and-fig:3000",
+        "http://vine-and-fig",
+        "http://vine-and-fig-frontend:3000",
+        "http://vine-and-fig-frontend",
+        "http://192.168.1.221:3000",
+        "http://192.168.1.221:5173",
+        "http://192.168.1.221:5174",
     ]
+    
+    # Allow CORS origins to be overridden by environment variable
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Override CORS origins if provided via environment variable
+        cors_origins_env = os.getenv("CORS_ORIGINS")
+        if cors_origins_env:
+            import json
+            try:
+                self.cors_origins = json.loads(cors_origins_env)
+            except json.JSONDecodeError:
+                # If not valid JSON, treat as comma-separated string
+                self.cors_origins = [origin.strip() for origin in cors_origins_env.split(",")]
     
     # Server Settings
     host: str = "0.0.0.0"
