@@ -64,7 +64,8 @@ def get_projection_settings(view_mode: str) -> ViewProjection:
     Get the projection settings for a given view mode.
     
     Args:
-        view_mode: One of 'plan', 'section', 'elevation'
+        view_mode: One of 'plan', 'section', 'elevation', 'elevation-front', 
+                   'elevation-rear', 'elevation-left', 'elevation-right'
         
     Returns:
         ViewProjection settings
@@ -72,6 +73,20 @@ def get_projection_settings(view_mode: str) -> ViewProjection:
     Raises:
         ValueError: If view_mode is not recognized
     """
+    # Normalize view_mode for elevation variants
+    normalized_mode = view_mode
+    if view_mode.startswith("elevation-"):
+        # Extract the face from "elevation-front", "elevation-rear", etc.
+        face = view_mode.split("-", 1)[1]
+        if face == "front":
+            normalized_mode = "elevation"
+        elif face == "rear":
+            normalized_mode = "rear"
+        elif face in ["left", "right"]:
+            normalized_mode = "side"
+        else:
+            normalized_mode = "elevation"  # Default to front elevation
+    
     projections = {
         "plan": PLAN_VIEW,
         "section": SECTION_VIEW,
@@ -81,10 +96,10 @@ def get_projection_settings(view_mode: str) -> ViewProjection:
         "isometric": ISOMETRIC_VIEW,
     }
     
-    if view_mode not in projections:
+    if normalized_mode not in projections:
         raise ValueError(
-            f"Invalid view_mode: {view_mode}. "
+            f"Invalid view_mode: {view_mode} (normalized: {normalized_mode}). "
             f"Must be one of: {', '.join(projections.keys())}"
         )
     
-    return projections[view_mode]
+    return projections[normalized_mode]

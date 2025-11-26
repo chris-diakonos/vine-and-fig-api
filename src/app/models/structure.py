@@ -26,7 +26,16 @@ class BuildingRequest(BaseModel):
     customer: Customer = Field(..., description="Customer information")
     structure: Structure = Field(..., description="Building structure specification")
     structure_hash: Optional[str] = Field(None, description="SHA-256 hash of the structure data")
-    view_mode: Literal["3d", "plan", "section", "elevation"] = Field(
+    view_mode: Literal[
+        "3d", 
+        "plan", 
+        "section", 
+        "elevation",
+        "elevation-front",
+        "elevation-rear",
+        "elevation-left",
+        "elevation-right"
+    ] = Field(
         default="3d",
         description="View mode for the generated output"
     )

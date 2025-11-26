@@ -24,7 +24,16 @@ class ModelGenerator:
     @staticmethod
     def generate(
         structure: Structure,
-        view_mode: Literal["3d", "plan", "section", "elevation"],
+        view_mode: Literal[
+            "3d", 
+            "plan", 
+            "section", 
+            "elevation",
+            "elevation-front",
+            "elevation-rear",
+            "elevation-left",
+            "elevation-right"
+        ],
         structure_hash: str = None
     ) -> ModelResponse:
         """
@@ -124,7 +133,15 @@ class ModelGenerator:
     def _generate_2d(
         building_model,
         model_id: str,
-        view_mode: Literal["plan", "section", "elevation"],
+        view_mode: Literal[
+            "plan", 
+            "section", 
+            "elevation",
+            "elevation-front",
+            "elevation-rear",
+            "elevation-left",
+            "elevation-right"
+        ],
         structure_hash: str = None,
         structure: Structure = None
     ) -> ModelResponse:

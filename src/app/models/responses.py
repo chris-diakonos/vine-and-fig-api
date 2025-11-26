@@ -17,7 +17,16 @@ class ModelResponse(BaseModel):
     model_url: str = Field(..., description="URL to access the generated model or drawing", alias="modelUrl")
     gltf_url: Optional[str] = Field(None, description="URL to glTF 3D model (3D view only)", alias="gltfUrl")
     image_url: Optional[str] = Field(None, description="URL to image/SVG (2D views only)", alias="imageUrl")
-    view_mode: Literal["3d", "plan", "section", "elevation"] = Field(
+    view_mode: Literal[
+        "3d", 
+        "plan", 
+        "section", 
+        "elevation",
+        "elevation-front",
+        "elevation-rear",
+        "elevation-left",
+        "elevation-right"
+    ] = Field(
         ..., description="View mode that was rendered", alias="viewMode"
     )
     model_id: str = Field(..., description="Unique identifier for this model", alias="modelId")
