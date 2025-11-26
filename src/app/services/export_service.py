@@ -47,10 +47,86 @@ class ExportService:
                 assembly = cq.Assembly()
                 assembly.add(model, name="building", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
             
+            # Convert from inches to meters for glTF export
+            # 1 inch = 0.0254 meters
+            INCHES_TO_METERS = 0.0254
+            
+            # Debug: Log original assembly info
+            original_components = list(assembly.traverse())
+            logger.info(f"Exporting glTF: Original assembly has {len(original_components)} components")
+            
+            # Create a scaled assembly for export
+            scaled_assembly = cq.Assembly()
+            workplane_count = 0
+            solid_count = 0
+            empty_count = 0
+            
+            for name, obj_data in assembly.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    obj = obj_data.obj
+                    
+                    # Debug: Check object type and geometry
+                    if isinstance(obj, cq.Workplane):
+                        workplane_count += 1
+                        # Check if workplane has geometry
+                        try:
+                            val = obj.val()
+                            if val is not None:
+                                # Try to get bounding box
+                                try:
+                                    bb = val.BoundingBox()
+                                    logger.debug(f"Component '{name}': Workplane with bounding box: "
+                                               f"X=[{bb.xmin:.2f}, {bb.xmax:.2f}], "
+                                               f"Y=[{bb.ymin:.2f}, {bb.ymax:.2f}], "
+                                               f"Z=[{bb.zmin:.2f}, {bb.zmax:.2f}] (inches)")
+                                except:
+                                    logger.debug(f"Component '{name}': Workplane with geometry (no bounding box)")
+                                
+                                # Count solids
+                                try:
+                                    solids = val.Solids() if hasattr(val, 'Solids') else []
+                                    if solids:
+                                        solid_count += len(solids)
+                                        logger.debug(f"Component '{name}': Contains {len(solids)} solid(s)")
+                                except:
+                                    pass
+                            else:
+                                empty_count += 1
+                                logger.warning(f"Component '{name}': Empty workplane")
+                        except Exception as e:
+                            logger.warning(f"Component '{name}': Error checking workplane geometry: {e}")
+                        
+                        # Scale the object
+                        scaled_obj = obj.scale(INCHES_TO_METERS)
+                    else:
+                        logger.debug(f"Component '{name}': Non-Workplane object type: {type(obj)}")
+                        scaled_obj = obj
+                    
+                    # Get color from original if available
+                    color = obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.55, 0.45, 0.33)
+                    scaled_assembly.add(scaled_obj, name=name, color=color)
+                else:
+                    logger.warning(f"Component '{name}': No object data found")
+            
+            # Debug: Log summary
+            logger.info(f"glTF Export Summary: {workplane_count} workplanes, {solid_count} total solids, {empty_count} empty components")
+            
             # Export to glTF (use .gltf extension for text format, .glb for binary)
             gltf_path = output_path.with_suffix('.gltf')
-            assembly.save(str(gltf_path), exportType='GLTF')
+            
+            # Log scaled assembly info
+            scaled_components = list(scaled_assembly.traverse())
+            logger.info(f"Scaled assembly has {len(scaled_components)} components (converted from inches to meters)")
+            
+            scaled_assembly.save(str(gltf_path), exportType='GLTF')
             logger.info(f"Exported glTF to local path: {gltf_path}")
+            
+            # Debug: Check file size
+            if gltf_path.exists():
+                file_size = gltf_path.stat().st_size
+                logger.info(f"glTF file size: {file_size} bytes")
+            else:
+                logger.error(f"glTF file was not created at {gltf_path}")
             
             if upload_to_storage:
                 # Determine blob name
@@ -102,33 +178,78 @@ class ExportService:
             URL to the exported file
         """
         try:
-            # If model is an Assembly, convert to workplane for SVG export
-            # SVG export typically works better with workplanes
+            # If model is an Assembly, extract workplanes and union them for SVG export
             if isinstance(model, cq.Assembly):
-                # Extract all solids from assembly and combine into workplane
-                all_solids = []
+                # Collect all workplanes from the assembly
+                all_workplanes = []
+                component_details = []
+                
                 for name, obj_data in model.traverse():
                     if hasattr(obj_data, 'obj') and obj_data.obj is not None:
                         obj = obj_data.obj
-                        if isinstance(obj, cq.Workplane) and obj.objects:
-                            for wp_obj in obj.objects:
-                                if hasattr(wp_obj, 'Solids'):
-                                    all_solids.extend(wp_obj.Solids())
-                                elif hasattr(wp_obj, 'isValid') and wp_obj.isValid():
-                                    all_solids.append(wp_obj)
-                        elif hasattr(obj, 'Solids'):
-                            all_solids.extend(obj.Solids())
-                        elif hasattr(obj, 'isValid') and obj.isValid():
-                            all_solids.append(obj)
+                        if isinstance(obj, cq.Workplane):
+                            try:
+                                val = obj.val()
+                                if val is not None:
+                                    all_workplanes.append(obj)
+                                    # Debug: Get bounding box info
+                                    try:
+                                        bb = val.BoundingBox()
+                                        component_details.append({
+                                            'name': name,
+                                            'bbox': {
+                                                'x': [bb.xmin, bb.xmax],
+                                                'y': [bb.ymin, bb.ymax],
+                                                'z': [bb.zmin, bb.zmax]
+                                            }
+                                        })
+                                        logger.debug(f"SVG Component '{name}': "
+                                                   f"X=[{bb.xmin:.2f}, {bb.xmax:.2f}], "
+                                                   f"Y=[{bb.ymin:.2f}, {bb.ymax:.2f}], "
+                                                   f"Z=[{bb.zmin:.2f}, {bb.zmax:.2f}] (inches)")
+                                    except Exception as e:
+                                        logger.debug(f"SVG Component '{name}': Has geometry but no bounding box: {e}")
+                                        component_details.append({'name': name, 'bbox': None})
+                                else:
+                                    logger.warning(f"SVG Component '{name}': Empty workplane")
+                            except Exception as e:
+                                logger.warning(f"SVG Component '{name}': Error checking workplane: {e}")
+                        else:
+                            logger.debug(f"SVG Component '{name}': Non-Workplane type: {type(obj)}")
                 
-                if all_solids:
-                    # Create a single workplane containing all solids (no need to union them)
-                    # The SVG exporter can handle multiple objects in a workplane
-                    model = cq.Workplane("XY")
-                    # Add all solids to the workplane's objects list
-                    model.objects = all_solids
+                if all_workplanes:
+                    logger.info(f"SVG Export: Found {len(all_workplanes)} workplanes in Assembly")
+                    
+                    # Calculate overall bounding box
+                    if component_details:
+                        all_x = []
+                        all_y = []
+                        all_z = []
+                        for detail in component_details:
+                            if detail['bbox']:
+                                all_x.extend(detail['bbox']['x'])
+                                all_y.extend(detail['bbox']['y'])
+                                all_z.extend(detail['bbox']['z'])
+                        
+                        if all_x and all_y and all_z:
+                            logger.info(f"SVG Export: Overall bounding box - "
+                                      f"X=[{min(all_x):.2f}, {max(all_x):.2f}], "
+                                      f"Y=[{min(all_y):.2f}, {max(all_y):.2f}], "
+                                      f"Z=[{min(all_z):.2f}, {max(all_z):.2f}] (inches)")
+                    
+                    # Start with first workplane
+                    model = all_workplanes[0]
+                    # Union remaining workplanes
+                    for i, wp in enumerate(all_workplanes[1:], 1):
+                        try:
+                            model = model.union(wp)
+                            logger.debug(f"SVG Export: Unioned workplane {i+1}/{len(all_workplanes)}")
+                        except Exception as e:
+                            logger.warning(f"SVG Export: Failed to union workplane {i+1}: {e}")
                 else:
+                    # No workplanes found, create empty workplane
                     model = cq.Workplane("XY")
+                    logger.warning("SVG Export: No workplanes found in Assembly - creating empty workplane")
             
             # Configure SVG export options
             svg_opts = {
@@ -144,8 +265,34 @@ class ExportService:
                 "showHidden": True,
             }
             
+            # Debug: Check final model before export
+            try:
+                val = model.val()
+                if val is not None:
+                    try:
+                        bb = val.BoundingBox()
+                        logger.info(f"SVG Export: Final model bounding box - "
+                                  f"X=[{bb.xmin:.2f}, {bb.xmax:.2f}], "
+                                  f"Y=[{bb.ymin:.2f}, {bb.ymax:.2f}], "
+                                  f"Z=[{bb.zmin:.2f}, {bb.zmax:.2f}] (inches)")
+                    except:
+                        logger.debug("SVG Export: Final model has geometry but no bounding box")
+                else:
+                    logger.warning("SVG Export: Final model has no geometry!")
+            except Exception as e:
+                logger.warning(f"SVG Export: Error checking final model: {e}")
+            
             exporters.export(model, str(output_path), opt=svg_opts)
             logger.info(f"Exported SVG to local path: {output_path}")
+            
+            # Debug: Check file size
+            if output_path.exists():
+                file_size = output_path.stat().st_size
+                logger.info(f"SVG file size: {file_size} bytes")
+                if file_size < 1000:
+                    logger.warning(f"SVG file is very small ({file_size} bytes) - may be empty or invalid")
+            else:
+                logger.error(f"SVG file was not created at {output_path}")
             
             if upload_to_storage:
                 # Determine blob name
