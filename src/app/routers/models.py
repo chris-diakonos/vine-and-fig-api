@@ -63,13 +63,20 @@ async def generate_model(
     - `500`: Model generation failed
     """
     try:
-        # Validate structure hash if provided
+        # Validate structure hash if provided (log warning but don't block request)
         if request.structure_hash:
+            from app.utils.hash_utils import calculate_structure_hash
+            calculated_hash = calculate_structure_hash(request.structure.dict())
+            
             if not validate_structure_hash(request.structure_hash, request.structure.dict()):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Structure hash validation failed. The provided hash does not match the structure data."
+                logger.warning(
+                    f"Structure hash validation failed. "
+                    f"Provided hash: {request.structure_hash}, "
+                    f"Calculated hash: {calculated_hash}. "
+                    f"Continuing with request anyway."
                 )
+            else:
+                logger.debug(f"Structure hash validation passed: {request.structure_hash}")
             
             # Save structure data to file using the structure_hash as filename
             # Only save if the file doesn't already exist
