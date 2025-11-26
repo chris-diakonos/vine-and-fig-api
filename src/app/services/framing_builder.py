@@ -135,7 +135,7 @@ class FramingBuilder:
         # Build per story
         for story in range(1, self.floorplan.stories + 2):
 
-            self._add_joists(assembly, story, y_offset, x_offset)
+            self._add_joists(assembly, story, -y_offset, x_offset)
 
             if story in (1, self.floorplan.stories):
                 self._add_braces(assembly, story, x_offset, y_offset)
@@ -321,7 +321,7 @@ class FramingBuilder:
         # along Y in pre-rotation space becomes spacing along X in post-rotation space!
         for q in range(quantity):
             # X position: fixed at depth center (matches original, but seems wrong)
-            new_x = x_offset + (joist_length/2)
+            new_x = x_offset - (joist_length/2)
             # Y position: spaced - this becomes X spacing after rotation!
             new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
             new_z = joist_z
