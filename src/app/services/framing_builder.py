@@ -321,7 +321,7 @@ class FramingBuilder:
         # along Y in pre-rotation space becomes spacing along X in post-rotation space!
         for q in range(quantity):
             # X position: fixed at depth center (matches original, but seems wrong)
-            new_x = x_offset
+            new_x = x_offset + (joist_length/2)
             # Y position: spaced - this becomes X spacing after rotation!
             new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
             new_z = joist_z
