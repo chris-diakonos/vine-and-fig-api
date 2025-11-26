@@ -134,7 +134,7 @@ class FramingBuilder:
         
         # Build per story
         for story in range(1, self.floorplan.stories + 1):
-            self._add_joists(assembly, story, 0, 0)
+            self._add_joists(assembly, story, -y_offset, -x_offset)
             self._add_braces(assembly, story, x_offset, y_offset)
             self._add_bays(assembly, story, x_offset, y_offset)
             self._add_studs(assembly, story, x_offset, y_offset)
