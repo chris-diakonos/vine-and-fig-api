@@ -1,13 +1,19 @@
 """
 Response models for API endpoints.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Literal
 from datetime import datetime
 
 
 class ModelResponse(BaseModel):
     """Response model for generated models and drawings."""
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        populate_by_name=True,
+        by_alias=True
+    )
+    
     model_url: str = Field(..., description="URL to access the generated model or drawing", alias="modelUrl")
     gltf_url: Optional[str] = Field(None, description="URL to glTF 3D model (3D view only)", alias="gltfUrl")
     image_url: Optional[str] = Field(None, description="URL to image/SVG (2D views only)", alias="imageUrl")
@@ -19,10 +25,6 @@ class ModelResponse(BaseModel):
         default_factory=datetime.utcnow,
         description="Timestamp when the model was generated"
     )
-    
-    class Config:
-        populate_by_name = True
-        by_alias = True
 
 
 class ErrorResponse(BaseModel):
