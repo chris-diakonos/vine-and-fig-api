@@ -186,13 +186,19 @@ class FramingBuilder:
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
-                    new_x = (right_dimension / 2) * sill_counter + x_offset
-                    new_y = 0 + y_offset
+                    # Left sills run along Y axis (front to rear)
+                    # X position: fixed at left wall (x=0)
+                    # Y position: spaced along depth (right_dimension), similar to front/rear spacing
+                    new_x = 0 + x_offset
+                    new_y = (right_dimension / quantity) * sill_counter - 120 + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 elif face == "right":
-                    new_x = (right_dimension / 2) * sill_counter + x_offset
-                    new_y = front_dimension + y_offset
+                    # Right sills run along Y axis (front to rear)
+                    # X position: fixed at right wall (x=front_dimension)
+                    # Y position: spaced along depth (right_dimension), similar to front/rear spacing
+                    new_x = front_dimension + x_offset
+                    new_y = (right_dimension / quantity) * sill_counter - 120 + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
@@ -253,6 +259,10 @@ class FramingBuilder:
         joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
         member_type = "joist"
         
+        # Sill dimensions (matching _add_sills)
+        sill_depth = 10
+        sill_z_offset = sill_depth / 2  # Sill bottom at z=0, top at z=10
+        
         # Calculate previous ceiling height
         previous_ceiling_height = 0
         if story > 1:
@@ -268,12 +278,29 @@ class FramingBuilder:
         else:
             joist_length = right_dimension
         
+        # For first story, joists sit on top of sills (level with top of sill at z=10)
+        # Since joist box is centered, we need to add half joist height to position bottom at z=10
+        if story == 1:
+            # First floor joists: bottom at top of sill (z = sill_depth = 10)
+            # Box is centered, so center is at z = 10 + (joist_height / 2)
+            joist_z = sill_depth + (joist_height / 2)
+        else:
+            # Upper story joists: use previous_ceiling_height calculation
+            # Box is centered, so we need to add half joist height
+            joist_z = previous_ceiling_height + (joist_height / 2)
+        
         quantity = math.ceil(front_dimension / self.joist_spacing)
         
+        # Joists run front to rear (along Y axis), so they need to be:
+        # - Centered in Y (depth direction): -right_dimension / 2
+        # - Spaced along X (width direction): (q * joist_spacing) + joist_spacing
         for q in range(quantity):
-            new_x = right_dimension / 2 + x_offset
-            new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
-            new_z = previous_ceiling_height
+            # X position: spaced along building width (front dimension)
+            new_x = (q * self.joist_spacing) + self.joist_spacing + x_offset
+            # Y position: centered in building depth (right dimension)
+            # Joists run from front (y=0) to rear (y=-right_dimension), so center is at -right_dimension/2
+            new_y = -right_dimension / 2 + y_offset
+            new_z = joist_z
             joist = cq.Workplane('XY').box(joist_length, joist_width, joist_height).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
             assembly.add(joist)
         
@@ -760,13 +787,19 @@ class FramingBuilder:
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
-                    new_x = (right_dimension / 2) * girt_counter + x_offset
-                    new_y = 0 + y_offset
+                    # Left girts run along Y axis (front to rear)
+                    # X position: fixed at left wall (x=0)
+                    # Y position: spaced along depth (right_dimension), similar to front/rear spacing
+                    new_x = 0 + x_offset
+                    new_y = (right_dimension / quantity) * girt_counter - (girt_length / 2) + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 elif face == "right":
-                    new_x = (right_dimension / 2) * girt_counter + x_offset
-                    new_y = front_dimension + y_offset
+                    # Right girts run along Y axis (front to rear)
+                    # X position: fixed at right wall (x=front_dimension)
+                    # Y position: spaced along depth (right_dimension), similar to front/rear spacing
+                    new_x = front_dimension + x_offset
+                    new_y = (right_dimension / quantity) * girt_counter - (girt_length / 2) + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
