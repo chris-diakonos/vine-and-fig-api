@@ -693,18 +693,49 @@ class CadQueryDrawingComponents:
             SVG content as string
         """
         try:
-            # Export to SVG
-            svg_content = workplane.val().exportSvg()
+            # Import CadQuery exporters
+            from cadquery import exporters
             
-            # Save to file if path provided
+            # Use temporary file if no output path provided
+            import tempfile
+            import os
+            
             if output_path:
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(svg_content)
+                temp_file = output_path
+            else:
+                temp_fd, temp_file = tempfile.mkstemp(suffix='.svg')
+                os.close(temp_fd)
+            
+            # Configure SVG export options
+            svg_opts = {
+                "width": 800,
+                "height": 600,
+                "marginLeft": 50,
+                "marginTop": 50,
+                "showAxes": False,
+                "projectionDir": (0, 0, 1),  # Top-down view
+                "strokeWidth": 0.5,
+                "strokeColor": (0, 0, 0),
+                "hiddenColor": (160, 160, 160),
+                "showHidden": True,
+            }
+            
+            # Export to SVG using exporters
+            exporters.export(workplane, temp_file, opt=svg_opts)
+            
+            # Read the SVG content
+            with open(temp_file, 'r', encoding='utf-8') as f:
+                svg_content = f.read()
+            
+            # Clean up temp file if we created it
+            if not output_path:
+                os.unlink(temp_file)
+            else:
                 logger.info(f"Exported SVG to: {output_path}")
             
             return svg_content
             
         except Exception as e:
-            logger.error(f"Failed to export SVG: {str(e)}")
+            logger.error(f"Failed to export SVG: {str(e)}", exc_info=True)
             # Fallback to basic SVG
             return f'<svg xmlns="http://www.w3.org/2000/svg"><text x="10" y="20">Export Error: {str(e)}</text></svg>'

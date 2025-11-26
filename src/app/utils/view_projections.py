@@ -39,10 +39,16 @@ ELEVATION_VIEW = ViewProjection(
 )
 
 # Alternative elevation views
-SIDE_ELEVATION_VIEW = ViewProjection(
+LEFT_ELEVATION_VIEW = ViewProjection(
     direction=(0, 1, 0),
-    name="Side Elevation View",
-    description="Side elevation (looking along Y-axis)"
+    name="Left Elevation View",
+    description="Left elevation (looking along Y-axis, positive direction)"
+)
+
+RIGHT_ELEVATION_VIEW = ViewProjection(
+    direction=(0, -1, 0),
+    name="Right Elevation View",
+    description="Right elevation (looking along Y-axis, negative direction)"
 )
 
 REAR_ELEVATION_VIEW = ViewProjection(
@@ -82,8 +88,10 @@ def get_projection_settings(view_mode: str) -> ViewProjection:
             normalized_mode = "elevation"
         elif face == "rear":
             normalized_mode = "rear"
-        elif face in ["left", "right"]:
-            normalized_mode = "side"
+        elif face == "left":
+            normalized_mode = "left"
+        elif face == "right":
+            normalized_mode = "right"
         else:
             normalized_mode = "elevation"  # Default to front elevation
     
@@ -91,7 +99,8 @@ def get_projection_settings(view_mode: str) -> ViewProjection:
         "plan": PLAN_VIEW,
         "section": SECTION_VIEW,
         "elevation": ELEVATION_VIEW,
-        "side": SIDE_ELEVATION_VIEW,
+        "left": LEFT_ELEVATION_VIEW,
+        "right": RIGHT_ELEVATION_VIEW,
         "rear": REAR_ELEVATION_VIEW,
         "isometric": ISOMETRIC_VIEW,
     }
