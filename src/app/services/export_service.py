@@ -122,13 +122,15 @@ class ExportService:
                             all_solids.append(obj)
                 
                 if all_solids:
-                    if len(all_solids) == 1:
-                        model = cq.Workplane("XY").new([all_solids[0]])
-                    else:
-                        combined = all_solids[0]
+                    # Create a workplane with all solids, then union them using Workplane methods
+                    # Start with first solid
+                    wp = cq.Workplane("XY").new([all_solids[0]])
+                    
+                    # Add remaining solids and union them
+                    if len(all_solids) > 1:
                         for solid in all_solids[1:]:
-                            combined = combined.union(solid)
-                        model = cq.Workplane("XY").new([combined])
+                            wp = wp.union(cq.Workplane("XY").new([solid]))
+                    model = wp
                 else:
                     model = cq.Workplane("XY")
             
