@@ -205,16 +205,16 @@ class FramingBuilder:
                     # Left sills run along Y axis (front to rear)
                     # X position: fixed at left wall (x=0)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = 0 + y_offset
-                    new_y = (sill_length/2) - x_offset
+                    new_x = 0 + x_offset
+                    new_y = (sill_length/2) + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 0, 1), 90)
                 elif face == "right":
                     # Right sills run along Y axis (front to rear)
                     # X position: fixed at right wall (x=front_dimension)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = front_dimension + y_offset
-                    new_y = (sill_length/2) - x_offset
+                    new_x = front_dimension + x_offset
+                    new_y = (sill_length/2) + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 0, 1), 90)
                 
