@@ -96,8 +96,55 @@ class ExportService:
                         except Exception as e:
                             logger.warning(f"Component '{name}': Error checking workplane geometry: {e}")
                         
-                        # Scale the object
-                        scaled_obj = obj.scale(INCHES_TO_METERS)
+                        # Scale the workplane by scaling its underlying geometry
+                        # Workplane doesn't have scale(), so we use transformGeometry on the underlying shape
+                        try:
+                            val = obj.val()
+                            if val is not None:
+                                # Use transformGeometry with a uniform scale
+                                # Create a scale transformation (uniform scale in all directions)
+                                try:
+                                    # Import OCP (OpenCASCADE) for transformation
+                                    from OCP.gp import gp_Trsf, gp_XYZ
+                                    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+                                    
+                                    # Create transformation
+                                    trsf = gp_Trsf()
+                                    trsf.SetScale(gp_XYZ(0, 0, 0), INCHES_TO_METERS)
+                                    
+                                    # Apply transformation
+                                    transform = BRepBuilderAPI_Transform(val.wrapped, trsf)
+                                    scaled_shape = transform.Shape()
+                                    
+                                    # Create new workplane with scaled geometry
+                                    scaled_obj = cq.Workplane("XY")
+                                    scaled_obj.objects = [scaled_shape]
+                                except ImportError:
+                                    # OCP not available, try alternative method
+                                    logger.debug(f"Component '{name}': OCP not available, trying Matrix transform")
+                                    try:
+                                        from cadquery import Matrix
+                                        scale_matrix = Matrix([
+                                            [INCHES_TO_METERS, 0, 0, 0],
+                                            [0, INCHES_TO_METERS, 0, 0],
+                                            [0, 0, INCHES_TO_METERS, 0],
+                                            [0, 0, 0, 1]
+                                        ])
+                                        scaled_val = val.transformGeometry(scale_matrix)
+                                        scaled_obj = cq.Workplane("XY")
+                                        scaled_obj.objects = [scaled_val]
+                                    except Exception as matrix_error:
+                                        logger.warning(f"Component '{name}': Matrix transform failed: {matrix_error}, using original")
+                                        scaled_obj = obj
+                                except Exception as transform_error:
+                                    logger.warning(f"Component '{name}': Transform failed: {transform_error}, using original")
+                                    scaled_obj = obj
+                            else:
+                                # Empty workplane, just copy it
+                                scaled_obj = obj
+                        except Exception as e:
+                            logger.warning(f"Component '{name}': Failed to scale workplane, using original: {e}")
+                            scaled_obj = obj
                     else:
                         logger.debug(f"Component '{name}': Non-Workplane object type: {type(obj)}")
                         scaled_obj = obj
