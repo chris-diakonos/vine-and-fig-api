@@ -208,7 +208,7 @@ class FramingBuilder:
                     new_x = 0
                     new_y = (sill_length/2) - x_offset
                     new_z = sill_z_offset
-                    sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
+                    sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 0, 1), 90)
                 elif face == "right":
                     # Right sills run along Y axis (front to rear)
                     # X position: fixed at right wall (x=front_dimension)
@@ -216,7 +216,7 @@ class FramingBuilder:
                     new_x = front_dimension
                     new_y = (sill_length/2) - x_offset
                     new_z = sill_z_offset
-                    sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
+                    sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 0, 1), 90)
                 
                 # Add sill with descriptive name including member_type and face
                 assembly.add(sill, name=f"{member_type}_{face}_{sill_counter}")
