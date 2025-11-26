@@ -177,39 +177,49 @@ class FramingBuilder:
         
         for face in self.faces:
             dimension = self.faces[face]
-            quantity = int(dimension / 240)
+
+            if dimension <= 240:
+                quantity = 1
+                sill_length = dimension
+            elif dimension >= 240:
+                quantity = math.ceil(dimension / 240)
+                sill_length = dimension / quantity
+            else:
+                quantity = 1
+                sill_length = 240
             
             for q in range(quantity):
                 sill_counter = q + 1
                 
                 if face == "front":
-                    new_x = (dimension / quantity) * sill_counter - 120 + x_offset
+                    new_x = sill_length * sill_counter - (sill_length/2) + x_offset
                     new_y = 0 + y_offset
                     new_z = sill_z_offset
-                    sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z))
+                    sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
-                    new_x = (dimension / quantity) * sill_counter - 120 + x_offset
+                    new_x = (dimension / quantity) * sill_counter - (sill_length/2) + x_offset
                     new_y = -right_dimension + y_offset
                     new_z = sill_z_offset
-                    sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z))
+                    sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
                     # Left sills run along Y axis (front to rear)
                     # X position: fixed at left wall (x=0)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = 0 + x_offset
-                    new_y = (right_dimension / quantity) * sill_counter - 120 + y_offset
+                    new_x = 0 + y_offset
+                    new_y = (sill_length * sill_counter) - (sill_length/2) - x_offset
                     new_z = sill_z_offset
-                    sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
+                    sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 elif face == "right":
                     # Right sills run along Y axis (front to rear)
                     # X position: fixed at right wall (x=front_dimension)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = front_dimension + x_offset
-                    new_y = (right_dimension / quantity) * sill_counter - 120 + y_offset
+                    new_x = front_dimension + y_offset
+                    new_y = (sill_length * sill_counter) - (sill_length/2) - x_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
-                assembly.add(sill)
+                # Add sill with descriptive name including member_type and face
+                assembly.add(sill, name=f"{member_type}_{face}_{sill_counter}")
                 total_quantity += 1
         
         # Add BOM tracking
@@ -242,10 +252,11 @@ class FramingBuilder:
         front_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension + x_offset, 0 + y_offset, right_offset))
         rear_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension + x_offset, -right_dimension + y_offset, right_offset))
         
-        assembly.add(front_left_post)
-        assembly.add(rear_left_post)
-        assembly.add(front_right_post)
-        assembly.add(rear_right_post)
+        # Add posts with descriptive names
+        assembly.add(front_left_post, name=f"{member_type}_front_left")
+        assembly.add(rear_left_post, name=f"{member_type}_rear_left")
+        assembly.add(front_right_post, name=f"{member_type}_front_right")
+        assembly.add(rear_right_post, name=f"{member_type}_rear_right")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
@@ -290,7 +301,7 @@ class FramingBuilder:
         if story == 1:
             # First floor joists: bottom at top of sill (z = sill_depth = 10)
             # Box is centered, so center is at z = 10 + (joist_height / 2)
-            joist_z = sill_depth + (joist_height / 2)
+            joist_z = sill_z_offset
         else:
             # Upper story joists: use previous_ceiling_height calculation
             # Box is centered, so we need to add half joist height
@@ -326,7 +337,8 @@ class FramingBuilder:
             new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
             new_z = joist_z
             joist = cq.Workplane('XY').box(joist_length, joist_width, joist_height).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
-            assembly.add(joist)
+            # Add joist with descriptive name including member_type, story, and position
+            assembly.add(joist, name=f"{member_type}_story{story}_{q+1}")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
@@ -451,11 +463,11 @@ class FramingBuilder:
                 alt_y = -right_dimension + (alt_brace_centerline / 2) + y_offset
                 alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
             
-            # Add braces to assembly
+            # Add braces to assembly with descriptive names
             brace = cq.Workplane('XY').box(brace_width, brace_depth, brace_length).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0), brace_angle)
             alt_brace = cq.Workplane('XY').box(brace_width, brace_depth, alt_brace_length).translate((alt_x, alt_y, alt_z)).rotateAboutCenter((0, 1, 0), alt_brace_angle).rotateAboutCenter((0, 0, 1), 90)
-            assembly.add(brace)
-            assembly.add(alt_brace)
+            assembly.add(brace, name=f"{member_type}_{face}_story{story}_primary")
+            assembly.add(alt_brace, name=f"{member_type}_{face}_story{story}_alt")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
@@ -563,7 +575,7 @@ class FramingBuilder:
                         cripple_stud_z_position = previous_ceiling_height + (self.chair_rail_height / 2)
                         cripple_stud = cq.Workplane('XY').box(cripple_stud_height, cripple_stud_width, self.chair_rail_height).translate((new_x, cripple_stud_y_position, cripple_stud_z_position))
                         self.bay_studs[face].append(cripple_stud_y_position)
-                        assembly.add(cripple_stud)
+                        assembly.add(cripple_stud, name=f"cripple_stud_{face}_story{story}_bay{bay}")
                         cripple_quantity += 1
                 
                 elif face in ["front", "rear"]:
@@ -580,11 +592,12 @@ class FramingBuilder:
                         cripple_stud_z_position = previous_ceiling_height + (self.chair_rail_height / 2)
                         cripple_stud = cq.Workplane('XY').box(cripple_stud_width, cripple_stud_height, self.chair_rail_height).translate((cripple_stud_x_position, new_y, cripple_stud_z_position))
                         self.bay_studs[face].append(cripple_stud_x_position)
-                        assembly.add(cripple_stud)
+                        assembly.add(cripple_stud, name=f"cripple_stud_{face}_story{story}_bay{bay}")
                         cripple_quantity += 1
                 
-                assembly.add(left_stud)
-                assembly.add(right_stud)
+                # Add bay studs with descriptive names
+                assembly.add(left_stud, name=f"{member_type}_{face}_story{story}_bay{bay}_left")
+                assembly.add(right_stud, name=f"{member_type}_{face}_story{story}_bay{bay}_right")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
@@ -725,7 +738,7 @@ class FramingBuilder:
                     if face in ["left", "right"]:
                         stud_y_position = prior_position + ((wall_length / (wall_quantity + 1)) * (wall + 1))
                         stud = cq.Workplane('XY').box(4, 3, ceiling_height).translate((new_x, stud_y_position, new_z))
-                        assembly.add(stud)
+                        assembly.add(stud, name=f"{member_type}_{face}_story{story}_section{index}_wall{wall+1}")
                         self.stud_centerlines[face].append(stud_y_position)
                     elif face in ["front", "rear"]:
                         stud_x_position = prior_position + ((wall_length / (wall_quantity + 1)) * (wall + 1))
@@ -735,7 +748,7 @@ class FramingBuilder:
                             continue
                         else:
                             stud = cq.Workplane('XY').box(3, 4, ceiling_height).translate((stud_x_position, new_y, new_z))
-                            assembly.add(stud)
+                            assembly.add(stud, name=f"{member_type}_{face}_story{story}_section{index}_wall{wall+1}")
                             self.stud_centerlines[face].append(stud_x_position)
             
             total_quantity += stud_quantity
@@ -827,8 +840,8 @@ class FramingBuilder:
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
-                # Add the girt to the assembly
-                assembly.add(girt)
+                # Add the girt to the assembly with descriptive name
+                assembly.add(girt, name=f"{member_type}_{face}_story{story}_{girt_counter}")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
