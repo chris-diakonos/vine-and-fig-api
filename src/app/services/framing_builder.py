@@ -134,7 +134,7 @@ class FramingBuilder:
         
         # Build per story
         for story in range(1, self.floorplan.stories + 1):
-            self._add_joists(assembly, story, x_offset, y_offset)
+            self._add_joists(assembly, story, 0, 0)
             self._add_braces(assembly, story, x_offset, y_offset)
             self._add_bays(assembly, story, x_offset, y_offset)
             self._add_studs(assembly, story, x_offset, y_offset)
@@ -291,13 +291,31 @@ class FramingBuilder:
         
         quantity = math.ceil(front_dimension / self.joist_spacing)
         
-        # Match original positioning pattern exactly:
-        # Original: new_x = right_dimension/2 (fixed), new_y = (q * joist_spacing) + joist_spacing (spaced)
-        # Apply offsets to center on foundation
+        # Joist creation and rotation explanation:
+        # 1. Box is created: box(joist_length=240 along X, joist_width=3 along Y, joist_height along Z)
+        # 2. Box is translated to (new_x, new_y, new_z) in world coordinates
+        # 3. Box is rotated 90° around Z axis at origin, which swaps the box's local X and Y
+        #    After rotation: box runs along Y (front-to-rear), width is along X
+        # 
+        # IMPORTANT: The rotation happens AFTER translation, so the translation coordinates
+        # are in the PRE-ROTATION world space. However, the rotation around origin means:
+        # - If we want to space joists along the building WIDTH (X axis), we space new_x
+        # - If we want to center joists in DEPTH (Y axis), we set new_y
+        #
+        # The original code spaces along Y, but after rotation the joist runs along Y,
+        # so spacing along Y would put them in a line front-to-rear (wrong!).
+        # We actually need to space along X (the width direction).
+        #
+        # However, matching the original pattern that works:
+        # - new_x = right_dimension/2 (centers in depth, but this seems wrong for spacing)
+        # - new_y = spaced (spaces along Y, but after rotation this affects X position)
+        #
+        # The rotation around origin means: translate then rotate, so the spacing
+        # along Y in pre-rotation space becomes spacing along X in post-rotation space!
         for q in range(quantity):
-            # X position: match original pattern (right_dimension/2) with offset
+            # X position: fixed at depth center (matches original, but seems wrong)
             new_x = right_dimension / 2 + x_offset
-            # Y position: spaced along Y as in original, with offset
+            # Y position: spaced - this becomes X spacing after rotation!
             new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
             new_z = joist_z
             joist = cq.Workplane('XY').box(joist_length, joist_width, joist_height).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
