@@ -101,8 +101,6 @@ async def generate_model(
         
     except ValueError as e:
         # Validation or input errors
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"ValueError in model generation: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=400,
@@ -110,8 +108,6 @@ async def generate_model(
         )
     except RuntimeError as e:
         # Model generation errors
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"RuntimeError in model generation: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
@@ -119,8 +115,6 @@ async def generate_model(
         )
     except Exception as e:
         # Unexpected errors
-        import logging
-        logger = logging.getLogger(__name__)
         logger.error(f"Unexpected error in model generation: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
