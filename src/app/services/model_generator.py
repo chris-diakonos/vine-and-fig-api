@@ -3,13 +3,19 @@ Main model generation service that orchestrates the entire process.
 """
 from pathlib import Path
 from typing import Tuple, Literal
+import logging
 
 from app.models.structure import Structure
 from app.models.responses import ModelResponse
 from app.services.building_builder import BuildingBuilder
 from app.services.export_service import ExportService
+from app.services.plan_view_generator import PlanViewGenerator
+from app.services.section_view_generator import SectionViewGenerator
+from app.services.elevation_view_generator import ElevationViewGenerator
 from app.utils.file_manager import FileManager
 from app.utils.view_projections import get_projection_settings
+
+logger = logging.getLogger(__name__)
 
 
 class ModelGenerator:
@@ -65,15 +71,25 @@ class ModelGenerator:
         
         # Build the 3D model using CadQuery
         try:
-            building_model = BuildingBuilder.build(structure)
+            building_model, bom_data = BuildingBuilder.build(structure, structure_hash)
         except Exception as e:
             raise RuntimeError(f"Failed to build model: {str(e)}")
+        
+        # Save BOM data if available and structure_hash is provided
+        if bom_data and structure_hash:
+            try:
+                from app.utils.bom_data_manager import BOMDataManager
+                BOMDataManager.save_bom_data(structure_hash, bom_data)
+                logger.info(f"Saved BOM data for structure_hash: {structure_hash}")
+            except Exception as e:
+                logger.warning(f"Failed to save BOM data: {str(e)}")
+                # Don't fail model generation if BOM save fails
         
         # Export based on view mode
         if view_mode == "3d":
             return ModelGenerator._generate_3d(building_model, model_id, structure_hash)
         else:
-            return ModelGenerator._generate_2d(building_model, model_id, view_mode, structure_hash)
+            return ModelGenerator._generate_2d(building_model, model_id, view_mode, structure_hash, structure)
     
     @staticmethod
     def _generate_3d(building_model, model_id: str, structure_hash: str = None) -> ModelResponse:
@@ -81,7 +97,7 @@ class ModelGenerator:
         Generate 3D model output in glTF format.
         
         Args:
-            building_model: CadQuery Workplane with building geometry
+            building_model: CadQuery Assembly or Workplane with building geometry
             model_id: Unique identifier for this model
             
         Returns:
@@ -109,15 +125,18 @@ class ModelGenerator:
         building_model,
         model_id: str,
         view_mode: Literal["plan", "section", "elevation"],
-        structure_hash: str = None
+        structure_hash: str = None,
+        structure: Structure = None
     ) -> ModelResponse:
         """
         Generate 2D drawing output in SVG format.
         
         Args:
-            building_model: CadQuery Workplane with building geometry
+            building_model: CadQuery Assembly or Workplane with building geometry
             model_id: Unique identifier for this model
             view_mode: View mode (plan, section, elevation)
+            structure_hash: Optional structure hash
+            structure: Structure specification for 2D view generation
             
         Returns:
             ModelResponse with 2D drawing URLs

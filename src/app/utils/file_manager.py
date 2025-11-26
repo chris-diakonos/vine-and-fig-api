@@ -363,3 +363,4 @@ class FileManager:
             settings.models_dir.mkdir(parents=True, exist_ok=True)
             settings.drawings_dir.mkdir(parents=True, exist_ok=True)
             settings.structures_dir.mkdir(parents=True, exist_ok=True)
+            settings.bom_data_dir.mkdir(parents=True, exist_ok=True)

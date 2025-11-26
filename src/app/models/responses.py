@@ -40,3 +40,36 @@ class HealthResponse(BaseModel):
         default_factory=datetime.utcnow,
         description="Timestamp of health check"
     )
+
+
+class BOMDataResponse(BaseModel):
+    """Response model for BOM data retrieval."""
+    structure_hash: str = Field(..., description="Structure hash identifier", alias="structureHash")
+    materials: list = Field(..., description="List of materials")
+    bom_components: dict = Field(..., description="BOM component relationships", alias="bomComponents")
+    bom_quantities: dict = Field(..., description="BOM quantities", alias="bomQuantities")
+    bom_levels: dict = Field(..., description="BOM levels", alias="bomLevels")
+    created_at: Optional[str] = Field(None, description="Creation timestamp", alias="createdAt")
+    updated_at: Optional[str] = Field(None, description="Last update timestamp", alias="updatedAt")
+    
+    class Config:
+        populate_by_name = True
+        by_alias = True
+
+
+class BOMSubmissionResponse(BaseModel):
+    """Response model for BOM submission to MRP."""
+    structure_hash: str = Field(..., description="Structure hash identifier", alias="structureHash")
+    success: bool = Field(..., description="Whether submission was successful")
+    materials: dict = Field(..., description="Materials creation results")
+    production_boms: dict = Field(..., description="Production BOM creation results", alias="productionBoms")
+    sales_bom: dict = Field(..., description="Sales BOM creation results", alias="salesBom")
+    errors: list = Field(default_factory=list, description="List of errors if any")
+    timestamp: datetime = Field(
+        default_factory=datetime.utcnow,
+        description="Timestamp of submission"
+    )
+    
+    class Config:
+        populate_by_name = True
+        by_alias = True

@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     models_dir: Path = temp_dir / "models"
     drawings_dir: Path = temp_dir / "drawings"
     structures_dir: Path = temp_dir / "structures"
+    bom_data_dir: Path = temp_dir / "bom_data"
     
     # Azure Storage settings
     azure_storage_account_name: str = os.getenv("AZURE_STORAGE_ACCOUNT_NAME", "")
@@ -82,6 +83,7 @@ class Settings(BaseSettings):
             self.models_dir.mkdir(parents=True, exist_ok=True)
             self.drawings_dir.mkdir(parents=True, exist_ok=True)
             self.structures_dir.mkdir(parents=True, exist_ok=True)
+            self.bom_data_dir.mkdir(parents=True, exist_ok=True)
     
     def is_azure_storage_enabled(self) -> bool:
         """Check if Azure Storage is properly configured."""

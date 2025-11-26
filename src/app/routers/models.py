@@ -5,9 +5,11 @@ import json
 import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from app.models.structure import BuildingRequest
-from app.models.responses import ModelResponse, ErrorResponse
+from app.models.responses import ModelResponse, ErrorResponse, BOMDataResponse, BOMSubmissionResponse
 from app.services.model_generator import ModelGenerator
+from app.services.bom_service import BOMService
 from app.utils.file_manager import FileManager
+from app.utils.bom_data_manager import BOMDataManager
 from app.utils.hash_utils import validate_structure_hash
 
 logger = logging.getLogger(__name__)
@@ -192,4 +194,101 @@ async def get_structure_data(structure_hash: str):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to read structure data: {str(e)}"
+        )
+
+
+@router.get("/bom/{structure_hash}", response_model=BOMDataResponse)
+async def get_bom_data(structure_hash: str):
+    """
+    Get BOM data by structure hash.
+    
+    Args:
+        structure_hash: SHA-256 hash of the structure data
+        
+    Returns:
+        BOM data including materials, components, quantities, and levels
+    """
+    # Check if BOM data exists
+    if not BOMDataManager.bom_data_exists(structure_hash):
+        raise HTTPException(
+            status_code=404,
+            detail=f"BOM data with hash {structure_hash} not found. Generate a model first to create BOM data."
+        )
+    
+    try:
+        # Retrieve BOM data
+        bom_data = BOMDataManager.get_bom_data(structure_hash)
+        if not bom_data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"BOM data with hash {structure_hash} not found"
+            )
+        
+        # Convert defaultdicts to regular dicts for JSON serialization
+        serialized_bom = BOMDataManager.serialize_bom_data(bom_data)
+        
+        return BOMDataResponse(
+            structure_hash=structure_hash,
+            materials=serialized_bom.get('materials', []),
+            bom_components=serialized_bom.get('bom_components', {}),
+            bom_quantities=serialized_bom.get('bom_quantities', {}),
+            bom_levels=serialized_bom.get('bom_levels', {}),
+            created_at=serialized_bom.get('created_at'),
+            updated_at=serialized_bom.get('updated_at')
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve BOM data for {structure_hash}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve BOM data: {str(e)}"
+        )
+
+
+@router.post("/bom/{structure_hash}/submit", response_model=BOMSubmissionResponse)
+async def submit_bom_to_mrp(structure_hash: str):
+    """
+    Submit BOM data to MRP system.
+    
+    This endpoint:
+    1. Retrieves BOM data for the given structure_hash
+    2. Creates materials in MRP system
+    3. Creates production BOMs in MRP system
+    4. Creates sales BOM in MRP system
+    
+    Args:
+        structure_hash: SHA-256 hash of the structure data
+        
+    Returns:
+        Submission results including success status and any errors
+    """
+    # Check if BOM data exists
+    if not BOMDataManager.bom_data_exists(structure_hash):
+        raise HTTPException(
+            status_code=404,
+            detail=f"BOM data with hash {structure_hash} not found. Generate a model first to create BOM data."
+        )
+    
+    try:
+        # Submit BOM to MRP
+        result = BOMService.submit_bom_to_mrp(structure_hash)
+        
+        return BOMSubmissionResponse(
+            structure_hash=structure_hash,
+            success=result.get('success', False),
+            materials=result.get('materials', {}),
+            production_boms=result.get('production_boms', {}),
+            sales_bom=result.get('sales_bom', {}),
+            errors=result.get('errors', [])
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to submit BOM to MRP for {structure_hash}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to submit BOM to MRP: {str(e)}"
         )

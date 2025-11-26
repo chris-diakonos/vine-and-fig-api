@@ -21,13 +21,13 @@ class ExportService:
     """Handles exporting CadQuery models to different file formats."""
     
     @staticmethod
-    def export_gltf(model: cq.Workplane, output_path: Path, upload_to_storage: bool = True) -> str:
+    def export_gltf(model, output_path: Path, upload_to_storage: bool = True) -> str:
         """
         Export model to glTF format for 3D visualization.
         Note: CadQuery only supports glTF export for Assembly objects.
         
         Args:
-            model: CadQuery Workplane object
+            model: CadQuery Workplane or Assembly object
             output_path: Path where the file should be saved (local temp)
             upload_to_storage: Whether to upload to configured storage (Azure/local)
             
@@ -39,9 +39,13 @@ class ExportService:
         """
         try:
             # CadQuery requires an Assembly for glTF export
-            # Wrap the workplane model in an assembly
-            assembly = cq.Assembly()
-            assembly.add(model, name="building", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
+            # If model is already an Assembly, use it directly
+            # Otherwise, wrap the workplane model in an assembly
+            if isinstance(model, cq.Assembly):
+                assembly = model
+            else:
+                assembly = cq.Assembly()
+                assembly.add(model, name="building", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
             
             # Export to glTF (use .gltf extension for text format, .glb for binary)
             gltf_path = output_path.with_suffix('.gltf')
@@ -80,7 +84,7 @@ class ExportService:
     
     @staticmethod
     def export_svg(
-        model: cq.Workplane,
+        model,
         output_path: Path,
         projection_dir: tuple = (0, 0, 1),
         upload_to_storage: bool = True
@@ -89,7 +93,7 @@ class ExportService:
         Export model to SVG format for 2D drawings.
         
         Args:
-            model: CadQuery Workplane object
+            model: CadQuery Workplane or Assembly object
             output_path: Path where the file should be saved (local temp)
             projection_dir: Camera direction for projection (x, y, z)
             upload_to_storage: Whether to upload to configured storage (Azure/local)
@@ -98,6 +102,36 @@ class ExportService:
             URL to the exported file
         """
         try:
+            # If model is an Assembly, convert to workplane for SVG export
+            # SVG export typically works better with workplanes
+            if isinstance(model, cq.Assembly):
+                # Extract all solids from assembly and combine into workplane
+                all_solids = []
+                for name, obj_data in model.traverse():
+                    if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                        obj = obj_data.obj
+                        if isinstance(obj, cq.Workplane) and obj.objects:
+                            for wp_obj in obj.objects:
+                                if hasattr(wp_obj, 'Solids'):
+                                    all_solids.extend(wp_obj.Solids())
+                                elif hasattr(wp_obj, 'isValid') and wp_obj.isValid():
+                                    all_solids.append(wp_obj)
+                        elif hasattr(obj, 'Solids'):
+                            all_solids.extend(obj.Solids())
+                        elif hasattr(obj, 'isValid') and obj.isValid():
+                            all_solids.append(obj)
+                
+                if all_solids:
+                    if len(all_solids) == 1:
+                        model = cq.Workplane("XY").new([all_solids[0]])
+                    else:
+                        combined = all_solids[0]
+                        for solid in all_solids[1:]:
+                            combined = combined.union(solid)
+                        model = cq.Workplane("XY").new([combined])
+                else:
+                    model = cq.Workplane("XY")
+            
             # Configure SVG export options
             svg_opts = {
                 "width": 800,
