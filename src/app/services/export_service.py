@@ -122,15 +122,11 @@ class ExportService:
                             all_solids.append(obj)
                 
                 if all_solids:
-                    # Create a workplane with all solids, then union them using Workplane methods
-                    # Start with first solid
-                    wp = cq.Workplane("XY").new([all_solids[0]])
-                    
-                    # Add remaining solids and union them
-                    if len(all_solids) > 1:
-                        for solid in all_solids[1:]:
-                            wp = wp.union(cq.Workplane("XY").new([solid]))
-                    model = wp
+                    # Create a single workplane containing all solids (no need to union them)
+                    # The SVG exporter can handle multiple objects in a workplane
+                    model = cq.Workplane("XY")
+                    # Add all solids to the workplane's objects list
+                    model.objects = all_solids
                 else:
                     model = cq.Workplane("XY")
             
