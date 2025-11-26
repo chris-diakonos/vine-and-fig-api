@@ -114,22 +114,36 @@ class FramingBuilder:
         """
         assembly = cq.Assembly()
         
+        # Calculate offset to center framing on foundation
+        # Foundation is centered at (0, 0) with overhang
+        # Framing starts at front-left corner (0, 0)
+        # Need to shift framing so its center aligns with foundation center (0, 0)
+        front_dimension = self.faces["front"]
+        right_dimension = self.faces["right"]
+        
+        # Building center in framing coordinate system:
+        # X center: front_dimension / 2
+        # Y center: -right_dimension / 2
+        # Shift to move center to (0, 0):
+        x_offset = -front_dimension / 2
+        y_offset = right_dimension / 2
+        
         # Build framing components in order
-        self._add_sills(assembly)
-        self._add_posts(assembly)
+        self._add_sills(assembly, x_offset, y_offset)
+        self._add_posts(assembly, x_offset, y_offset)
         
         # Build per story
         for story in range(1, self.floorplan.stories + 1):
-            self._add_joists(assembly, story)
-            self._add_braces(assembly, story)
-            self._add_bays(assembly, story)
-            self._add_studs(assembly, story)
-            self._add_girts(assembly, story)
-            self._add_plates(assembly, story)
+            self._add_joists(assembly, story, x_offset, y_offset)
+            self._add_braces(assembly, story, x_offset, y_offset)
+            self._add_bays(assembly, story, x_offset, y_offset)
+            self._add_studs(assembly, story, x_offset, y_offset)
+            self._add_girts(assembly, story, x_offset, y_offset)
+            self._add_plates(assembly, story, x_offset, y_offset)
         
         # Add roof components
-        self._add_false_plates(assembly)
-        self._add_rafters(assembly)
+        self._add_false_plates(assembly, x_offset, y_offset)
+        self._add_rafters(assembly, x_offset, y_offset)
         
         # Prepare BOM data
         bom_data = {
@@ -141,7 +155,7 @@ class FramingBuilder:
         
         return assembly, bom_data
     
-    def _add_sills(self, assembly: cq.Assembly) -> None:
+    def _add_sills(self, assembly: cq.Assembly, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add sills to the assembly."""
         right_dimension = self.faces["right"]
         front_dimension = self.faces["front"]
@@ -149,6 +163,9 @@ class FramingBuilder:
         member_type = "sill"
         sill_height = 8
         sill_depth = 10
+        # Sill bottom should sit on foundation top (z=0)
+        # Since box is centered, raise by half depth so bottom is at z=0
+        sill_z_offset = sill_depth / 2
         total_quantity = 0
         
         for face in self.faces:
@@ -159,24 +176,24 @@ class FramingBuilder:
                 sill_counter = q + 1
                 
                 if face == "front":
-                    new_x = (dimension / quantity) * sill_counter - 120
-                    new_y = 0
-                    new_z = 0
+                    new_x = (dimension / quantity) * sill_counter - 120 + x_offset
+                    new_y = 0 + y_offset
+                    new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
-                    new_x = (dimension / quantity) * sill_counter - 120
-                    new_y = -right_dimension
-                    new_z = 0
+                    new_x = (dimension / quantity) * sill_counter - 120 + x_offset
+                    new_y = -right_dimension + y_offset
+                    new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
-                    new_x = (right_dimension / 2) * sill_counter
-                    new_y = 0
-                    new_z = 0
+                    new_x = (right_dimension / 2) * sill_counter + x_offset
+                    new_y = 0 + y_offset
+                    new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 elif face == "right":
-                    new_x = (right_dimension / 2) * sill_counter
-                    new_y = front_dimension
-                    new_z = 0
+                    new_x = (right_dimension / 2) * sill_counter + x_offset
+                    new_y = front_dimension + y_offset
+                    new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(240, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
                 assembly.add(sill)
@@ -195,7 +212,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_posts(self, assembly: cq.Assembly) -> None:
+    def _add_posts(self, assembly: cq.Assembly, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add corner posts to the assembly."""
         right_dimension = self.faces["right"]
         front_dimension = self.faces["front"]
@@ -207,10 +224,10 @@ class FramingBuilder:
         quantity = 4
         member_type = "post"
         
-        front_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((0, 0, right_offset))
-        rear_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((0, -right_dimension, right_offset))
-        front_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension, 0, right_offset))
-        rear_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension, -right_dimension, right_offset))
+        front_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((0 + x_offset, 0 + y_offset, right_offset))
+        rear_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((0 + x_offset, -right_dimension + y_offset, right_offset))
+        front_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension + x_offset, 0 + y_offset, right_offset))
+        rear_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension + x_offset, -right_dimension + y_offset, right_offset))
         
         assembly.add(front_left_post)
         assembly.add(rear_left_post)
@@ -230,7 +247,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_joists(self, assembly: cq.Assembly, story: int) -> None:
+    def _add_joists(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add joists for a story."""
         joist_width = 3
         joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
@@ -254,8 +271,8 @@ class FramingBuilder:
         quantity = math.ceil(front_dimension / self.joist_spacing)
         
         for q in range(quantity):
-            new_x = right_dimension / 2
-            new_y = (q * self.joist_spacing) + self.joist_spacing
+            new_x = right_dimension / 2 + x_offset
+            new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
             new_z = previous_ceiling_height
             joist = cq.Workplane('XY').box(joist_length, joist_width, joist_height).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
             assembly.add(joist)
@@ -273,7 +290,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_braces(self, assembly: cq.Assembly, story: int) -> None:
+    def _add_braces(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add braces for a story."""
         right_dimension = self.faces["right"]
         front_dimension = self.faces["front"]
@@ -330,57 +347,57 @@ class FramingBuilder:
                 brace_height = math.ceil(ceiling_height * (2/3))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = 180 - math.degrees(math.atan(brace_centerline / brace_height))
-                new_x = brace_centerline / 2
-                new_y = 0
+                new_x = brace_centerline / 2 + x_offset
+                new_y = 0 + y_offset
                 new_z = (brace_height / 2) + previous_ceiling_height
                 
                 alt_brace_height = math.ceil(alt_ceiling_height * (2/3))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
-                alt_x = 0
-                alt_y = -(alt_brace_centerline / 2)
+                alt_x = 0 + x_offset
+                alt_y = -(alt_brace_centerline / 2) + y_offset
                 alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
             elif face == "rear":
                 brace_height = math.ceil(ceiling_height * (5/8))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = 180 - math.degrees(math.atan(brace_centerline / brace_height))
-                new_x = brace_centerline / 2
-                new_y = -right_dimension
+                new_x = brace_centerline / 2 + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = (brace_height / 2) + previous_ceiling_height
                 
                 alt_brace_height = math.ceil(alt_ceiling_height * (5/8))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = 180 - math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
-                alt_x = 0
-                alt_y = -right_dimension + (alt_brace_centerline / 2)
+                alt_x = 0 + x_offset
+                alt_y = -right_dimension + (alt_brace_centerline / 2) + y_offset
                 alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
             elif face == "right":
                 brace_height = math.ceil(ceiling_height * (2/3))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = math.degrees(math.atan(brace_centerline / brace_height))
-                new_x = front_dimension - (brace_centerline / 2)
-                new_y = 0
+                new_x = front_dimension - (brace_centerline / 2) + x_offset
+                new_y = 0 + y_offset
                 new_z = (brace_height / 2) + previous_ceiling_height
                 
                 alt_brace_height = math.ceil(alt_ceiling_height * (2/3))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
-                alt_x = front_dimension
-                alt_y = -(alt_brace_centerline / 2)
+                alt_x = front_dimension + x_offset
+                alt_y = -(alt_brace_centerline / 2) + y_offset
                 alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
             else:  # front
                 brace_height = math.ceil(ceiling_height * (5/8))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = math.degrees(math.atan(brace_centerline / brace_height))
-                new_x = front_dimension - (brace_centerline / 2)
-                new_y = -right_dimension
+                new_x = front_dimension - (brace_centerline / 2) + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = (brace_height / 2) + previous_ceiling_height
                 
                 alt_brace_height = math.ceil(alt_ceiling_height * (5/8))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = 180 - math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
-                alt_x = front_dimension
-                alt_y = -right_dimension + (alt_brace_centerline / 2)
+                alt_x = front_dimension + x_offset
+                alt_y = -right_dimension + (alt_brace_centerline / 2) + y_offset
                 alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
             
             # Add braces to assembly
@@ -402,7 +419,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_bays(self, assembly: cq.Assembly, story: int) -> None:
+    def _add_bays(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add bay studs for a story."""
         front_dimension = self.faces["front"]
         right_dimension = self.faces["right"]
@@ -451,20 +468,20 @@ class FramingBuilder:
             
             # Set base positions for each face
             if face == "front":
-                new_x = 0
-                new_y = 0
+                new_x = 0 + x_offset
+                new_y = 0 + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
             elif face == "rear":
-                new_x = 0
-                new_y = -right_dimension
+                new_x = 0 + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
             elif face == "left":
-                new_x = 0
-                new_y = -right_dimension
+                new_x = 0 + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
             elif face == "right":
-                new_x = front_dimension
-                new_y = -right_dimension
+                new_x = front_dimension + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
             
             # Create bay studs for each centerline
@@ -542,7 +559,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_studs(self, assembly: cq.Assembly, story: int) -> None:
+    def _add_studs(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add wall studs for a story."""
         front_dimension = self.faces["front"]
         right_dimension = self.faces["right"]
@@ -586,23 +603,23 @@ class FramingBuilder:
             
             # Set base positions for each face
             if face == "front":
-                new_x = 0
-                new_y = 0
+                new_x = 0 + x_offset
+                new_y = 0 + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = front_dimension - 6
             elif face == "rear":
-                new_x = 0
-                new_y = -right_dimension
+                new_x = 0 + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = front_dimension - 6
             elif face == "left":
-                new_x = 0
-                new_y = -right_dimension
+                new_x = 0 + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = -right_dimension - 4
             elif face == "right":
-                new_x = front_dimension
-                new_y = -right_dimension
+                new_x = front_dimension + x_offset
+                new_y = -right_dimension + y_offset
                 new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = -right_dimension - 4
             
@@ -685,7 +702,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_girts(self, assembly: cq.Assembly, story: int) -> None:
+    def _add_girts(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add girts for a story."""
         member_type = "girt"
         total_quantity = 0
@@ -733,23 +750,23 @@ class FramingBuilder:
                 girt_counter = q + 1
                 
                 if face == "front":
-                    new_x = (dimension / quantity) * girt_counter - (girt_length / 2)
-                    new_y = 0
+                    new_x = (dimension / quantity) * girt_counter - (girt_length / 2) + x_offset
+                    new_y = 0 + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
-                    new_x = (dimension / quantity) * girt_counter - (girt_length / 2)
-                    new_y = -right_dimension
+                    new_x = (dimension / quantity) * girt_counter - (girt_length / 2) + x_offset
+                    new_y = -right_dimension + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
-                    new_x = (right_dimension / 2) * girt_counter
-                    new_y = 0
+                    new_x = (right_dimension / 2) * girt_counter + x_offset
+                    new_y = 0 + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 elif face == "right":
-                    new_x = (right_dimension / 2) * girt_counter
-                    new_y = front_dimension
+                    new_x = (right_dimension / 2) * girt_counter + x_offset
+                    new_y = front_dimension + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
@@ -769,7 +786,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_plates(self, assembly: cq.Assembly, story: int) -> None:
+    def _add_plates(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add plates for a story."""
         member_type = "plate"
         plate_width = 4
@@ -801,7 +818,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_false_plates(self, assembly: cq.Assembly) -> None:
+    def _add_false_plates(self, assembly: cq.Assembly, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add false plates for roof."""
         member_type = "false_plate"
         false_plate_width = 10
@@ -841,7 +858,7 @@ class FramingBuilder:
             self.bom_quantities, self.bom_levels, self.bom_components
         )
     
-    def _add_rafters(self, assembly: cq.Assembly) -> None:
+    def _add_rafters(self, assembly: cq.Assembly, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add rafters for roof."""
         member_type = "rafter"
         rafter_width = 3

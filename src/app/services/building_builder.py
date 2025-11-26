@@ -66,47 +66,48 @@ class BuildingBuilder:
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Framing construction failed: {e}")
         
+        # TEMPORARILY DISABLED: Only rendering foundation and framing for debugging
         # Build floors
         # Floors sit on top of joists (which sit on sills/girts)
         # Floor positions are calculated based on joist positions
-        floors = FloorBuilder.build(
-            structure.flooring,
-            dimensions,
-            floorplan.stories,
-            floorplan.ceiling_heights,
-            floorplan.joist_heights
-        )
-        building_assembly.add(floors, name="floors", color=cq.Color(0.8, 0.7, 0.6))  # Light wood
+        # floors = FloorBuilder.build(
+        #     structure.flooring,
+        #     dimensions,
+        #     floorplan.stories,
+        #     floorplan.ceiling_heights,
+        #     floorplan.joist_heights
+        # )
+        # building_assembly.add(floors, name="floors", color=cq.Color(0.8, 0.7, 0.6))  # Light wood
         
         # Build sheathing
         # Sheathing boards positioned on exterior of studs
-        sheathing = SheathingBuilder.build(
-            structure.sheathing,
-            dimensions,
-            floorplan.stories,
-            floorplan.ceiling_heights
-        )
-        building_assembly.add(sheathing, name="sheathing", color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
+        # sheathing = SheathingBuilder.build(
+        #     structure.sheathing,
+        #     dimensions,
+        #     floorplan.stories,
+        #     floorplan.ceiling_heights
+        # )
+        # building_assembly.add(sheathing, name="sheathing", color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         # Build roof
-        roof = RoofBuilder.build(
-            structure.roof,
-            dimensions,
-            floorplan.stories,
-            floorplan.ceiling_heights
-        )
-        building_assembly.add(roof, name="roof", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
+        # roof = RoofBuilder.build(
+        #     structure.roof,
+        #     dimensions,
+        #     floorplan.stories,
+        #     floorplan.ceiling_heights
+        # )
+        # building_assembly.add(roof, name="roof", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
         
         # Add windows if specified
-        if structure.windows:
-            windows = OpeningsBuilder.build_windows(structure.windows, dimensions)
-            if windows is not None:
-                building_assembly.add(windows, name="windows", color=cq.Color(0.7, 0.9, 1.0))  # Light blue
+        # if structure.windows:
+        #     windows = OpeningsBuilder.build_windows(structure.windows, dimensions)
+        #     if windows is not None:
+        #         building_assembly.add(windows, name="windows", color=cq.Color(0.7, 0.9, 1.0))  # Light blue
         
         # Add doors if specified
-        if structure.doors:
-            doors = OpeningsBuilder.build_doors(structure.doors, dimensions)
-            if doors is not None:
-                building_assembly.add(doors, name="doors", color=cq.Color(0.5, 0.3, 0.2))  # Brown
+        # if structure.doors:
+        #     doors = OpeningsBuilder.build_doors(structure.doors, dimensions)
+        #     if doors is not None:
+        #         building_assembly.add(doors, name="doors", color=cq.Color(0.5, 0.3, 0.2))  # Brown
         
         return building_assembly, bom_data
