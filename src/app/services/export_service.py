@@ -175,11 +175,26 @@ class ExportService:
             else:
                 logger.error(f"glTF file was not created at {gltf_path}")
             
+            # Check for associated .bin files (glTF often creates binary buffer files)
+            gltf_dir = gltf_path.parent
+            gltf_stem = gltf_path.stem
+            bin_files = list(gltf_dir.glob(f"{gltf_stem}*.bin"))
+            if bin_files:
+                logger.info(f"Found {len(bin_files)} associated .bin file(s) for glTF export")
+                for bin_file in bin_files:
+                    logger.debug(f"  - {bin_file.name} ({bin_file.stat().st_size} bytes)")
+            
             if upload_to_storage:
-                # Determine blob name
+                # Upload glTF file
                 blob_name = f"models/{gltf_path.name}"
-                # Upload to storage and get URL
                 url = FileManager.save_file(gltf_path, blob_name, content_type="model/gltf+json")
+                
+                # Upload any associated .bin files
+                for bin_file in bin_files:
+                    bin_blob_name = f"models/{bin_file.name}"
+                    FileManager.save_file(bin_file, bin_blob_name, content_type="application/octet-stream")
+                    logger.info(f"Uploaded associated .bin file: {bin_file.name}")
+                
                 return url
             
             return str(gltf_path)

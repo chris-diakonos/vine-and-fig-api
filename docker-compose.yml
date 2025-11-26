@@ -13,6 +13,7 @@ services:
       # Server Settings
       - HOST=0.0.0.0
       - PORT=8080
+      - BASE_URL = 192.168.1.221
       
       # CORS Origins - Update these for your frontend URLs
       - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173","http://localhost:5174", "http://192.168.1.221:3000", "http://192.168.1.221:5173", "http://192.168.1.221:5174", "http://vine-and-fig:3000", "http://vine-and-fig", "http://vine-and-fig-frontend:3000", "http://vine-and-fig-frontend"]

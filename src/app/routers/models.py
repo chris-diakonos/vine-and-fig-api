@@ -3,7 +3,7 @@ Model generation endpoints.
 """
 import json
 import logging
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from app.models.structure import BuildingRequest
 from app.models.responses import ModelResponse, ErrorResponse, BOMDataResponse, BOMSubmissionResponse
 from app.services.model_generator import ModelGenerator
@@ -17,10 +17,32 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _get_base_url_from_request(request: Request) -> str:
+    """
+    Extract base URL from request for generating file URLs.
+    Uses the request's host and scheme to construct the base URL.
+    
+    Args:
+        request: FastAPI Request object
+        
+    Returns:
+        Base URL string (e.g., "http://192.168.1.214:8080")
+    """
+    scheme = request.url.scheme
+    host = request.url.hostname
+    port = request.url.port
+    
+    if port and port not in [80, 443]:
+        return f"{scheme}://{host}:{port}"
+    else:
+        return f"{scheme}://{host}"
+
+
 @router.post("/generate-model", response_model=ModelResponse)
 async def generate_model(
     request: BuildingRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    http_request: Request
 ):
     """
     Generate a 3D model or 2D drawing from building specifications.
@@ -87,11 +109,16 @@ async def generate_model(
             else:
                 logger.info(f"Structure data already exists for hash: {request.structure_hash}")
         
+        # Extract base URL from request to ensure URLs are accessible from the client
+        base_url = _get_base_url_from_request(http_request)
+        logger.debug(f"Using base URL from request: {base_url}")
+        
         # Generate the model
         response = ModelGenerator.generate(
             structure=request.structure,
             view_mode=request.view_mode,
-            structure_hash=request.structure_hash
+            structure_hash=request.structure_hash,
+            base_url_override=base_url
         )
         
         # Schedule cleanup of old files in the background
@@ -140,7 +167,9 @@ async def get_model_info(model_id: str):
         return {
             "model_id": model_id,
             "available": True,
-            "url": FileManager.get_model_url(model_id, "gltf")
+            "url": FileManager.get_model_url(model_id, "gltf"),
+            "local_path": str(gltf_path),
+            "file_size": gltf_path.stat().st_size
         }
     
     # Check for drawings
@@ -158,6 +187,52 @@ async def get_model_info(model_id: str):
         status_code=404,
         detail=f"Model {model_id} not found or has been cleaned up"
     )
+
+@router.get("/debug/model-file/{filename:path}")
+async def debug_model_file(filename: str):
+    """
+    Debug endpoint to check model file accessibility.
+    
+    Args:
+        filename: Name of the model file (e.g., 7dbffd4f1d9ce0a5859673995d2281b6f3a1b916ded682e03fc1feb740db677a.gltf)
+        
+    Returns:
+        File information and access details
+    """
+    from pathlib import Path
+    from app.config import settings
+    
+    # Check if file exists
+    file_path = settings.models_dir / filename
+    
+    if not file_path.exists():
+        # List available files for debugging
+        available_files = [f.name for f in settings.models_dir.glob('*') if f.is_file()]
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": f"File not found: {filename}",
+                "requested_path": str(file_path),
+                "models_dir": str(settings.models_dir),
+                "available_files": available_files[:20]  # Limit to first 20
+            }
+        )
+    
+    # Check for associated .bin files
+    file_stem = file_path.stem
+    bin_files = list(file_path.parent.glob(f"{file_stem}*.bin"))
+    
+    return {
+        "filename": filename,
+        "exists": True,
+        "path": str(file_path),
+        "size": file_path.stat().st_size,
+        "url": f"{settings.base_url}/models/{filename}",
+        "static_url": f"/models/{filename}",
+        "associated_bin_files": [f.name for f in bin_files],
+        "models_dir": str(settings.models_dir),
+        "base_url": settings.base_url
+    }
 
 
 @router.get("/structures/{structure_hash}")

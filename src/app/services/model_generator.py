@@ -31,7 +31,8 @@ class ModelGenerator:
             "elevation-left",
             "elevation-right"
         ],
-        structure_hash: str = None
+        structure_hash: str = None,
+        base_url_override: str = None
     ) -> ModelResponse:
         """
         Generate a building model or drawing based on the structure specification.
@@ -52,7 +53,7 @@ class ModelGenerator:
             if view_mode == "3d":
                 if FileManager.hashed_model_exists(structure_hash) and not FileManager.should_regenerate_hashed_file(structure_hash):
                     # Return existing model
-                    model_url = FileManager.get_model_url("", "gltf", structure_hash)
+                    model_url = FileManager.get_model_url("", "gltf", structure_hash, base_url_override=base_url_override)
                     return ModelResponse(
                         model_url=model_url,
                         gltf_url=model_url,
@@ -63,7 +64,7 @@ class ModelGenerator:
             else:
                 if FileManager.hashed_drawing_exists(structure_hash, view_mode) and not FileManager.should_regenerate_hashed_file(structure_hash):
                     # Return existing drawing
-                    drawing_url = FileManager.get_drawing_url("", view_mode, "svg", structure_hash)
+                    drawing_url = FileManager.get_drawing_url("", view_mode, "svg", structure_hash, base_url_override=base_url_override)
                     return ModelResponse(
                         model_url=drawing_url,
                         gltf_url=None,
@@ -93,18 +94,20 @@ class ModelGenerator:
         
         # Export based on view mode
         if view_mode == "3d":
-            return ModelGenerator._generate_3d(building_model, model_id, structure_hash)
+            return ModelGenerator._generate_3d(building_model, model_id, structure_hash, base_url_override=base_url_override)
         else:
-            return ModelGenerator._generate_2d(building_model, model_id, view_mode, structure_hash, structure)
+            return ModelGenerator._generate_2d(building_model, model_id, view_mode, structure_hash, structure, base_url_override=base_url_override)
     
     @staticmethod
-    def _generate_3d(building_model, model_id: str, structure_hash: str = None) -> ModelResponse:
+    def _generate_3d(building_model, model_id: str, structure_hash: str = None, base_url_override: str = None) -> ModelResponse:
         """
         Generate 3D model output in glTF format.
         
         Args:
             building_model: CadQuery Assembly or Workplane with building geometry
             model_id: Unique identifier for this model
+            structure_hash: Optional structure hash
+            base_url_override: Optional base URL to use for file URLs (extracted from request)
             
         Returns:
             ModelResponse with 3D model URLs
@@ -117,6 +120,19 @@ class ModelGenerator:
             model_url = ExportService.export_gltf(building_model, output_path, upload_to_storage=True)
         except Exception as e:
             raise RuntimeError(f"Failed to export 3D model: {str(e)}")
+        
+        # If base_url_override is provided and we're using local storage, regenerate URL with correct base
+        if base_url_override and not FileManager._is_using_azure():
+            # Extract filename from the returned URL and rebuild with correct base URL
+            # URL format: http://localhost:8080/models/filename.gltf or /models/filename.gltf
+            from urllib.parse import urlparse
+            parsed = urlparse(model_url)
+            filename = parsed.path.split('/')[-1]  # Get filename from path
+            if not filename:
+                # Fallback: construct filename
+                filename = f"{structure_hash}.gltf" if structure_hash else f"{model_id}.gltf"
+            model_url = f"{base_url_override}/models/{filename}"
+            logger.debug(f"Overrode base URL: {model_url}")
         
         return ModelResponse(
             model_url=model_url,
@@ -140,7 +156,8 @@ class ModelGenerator:
             "elevation-right"
         ],
         structure_hash: str = None,
-        structure: Structure = None
+        structure: Structure = None,
+        base_url_override: str = None
     ) -> ModelResponse:
         """
         Generate 2D drawing output in SVG format using 3D model projections.
@@ -151,6 +168,7 @@ class ModelGenerator:
             view_mode: View mode (plan, section, elevation, etc.)
             structure_hash: Optional structure hash
             structure: Structure specification (not used for projections, kept for compatibility)
+            base_url_override: Optional base URL to use for file URLs (extracted from request)
             
         Returns:
             ModelResponse with 2D drawing URLs
@@ -172,8 +190,8 @@ class ModelGenerator:
         except Exception as e:
             raise RuntimeError(f"Failed to export 2D drawing: {str(e)}")
         
-        # Generate the drawing URL
-        drawing_url = FileManager.get_drawing_url(model_id, view_mode, "svg", structure_hash)
+        # Generate the drawing URL with base_url_override if provided
+        drawing_url = FileManager.get_drawing_url(model_id, view_mode, "svg", structure_hash, base_url_override=base_url_override)
         
         return ModelResponse(
             model_url=drawing_url,

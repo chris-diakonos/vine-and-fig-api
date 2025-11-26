@@ -64,7 +64,10 @@ class Settings(BaseSettings):
     azure_drawings_prefix: str = "drawings/"
     
     # Base URL for serving files
-    base_url: str = f"http://localhost:{port}"
+    # Can be overridden via BASE_URL environment variable
+    # If not set, defaults to localhost (for local development)
+    # For remote access, set BASE_URL to the server's accessible address (e.g., http://192.168.1.214:8080)
+    base_url: str = os.getenv("BASE_URL", f"http://localhost:{port}")
     
     # File cleanup settings (in seconds)
     file_max_age: int = 3600  # 1 hour

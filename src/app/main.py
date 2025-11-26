@@ -86,12 +86,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 # Configure CORS
+# Note: CORS middleware applies to all routes including static files
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # Expose all headers for CORS
 )
 
 # Request logging middleware
@@ -108,6 +110,8 @@ async def log_requests(request: Request, call_next):
     return response
 
 # Mount static file directories
+# Note: CORS middleware will handle CORS headers for static files
+# FastAPI StaticFiles automatically sets content-type based on file extension
 app.mount(
     "/models",
     StaticFiles(directory=str(settings.models_dir)),

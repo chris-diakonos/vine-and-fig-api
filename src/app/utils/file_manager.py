@@ -84,7 +84,7 @@ class FileManager:
         return settings.drawings_dir / filename
     
     @staticmethod
-    def get_model_url(model_id: str, file_type: str = "gltf", structure_hash: str = None) -> str:
+    def get_model_url(model_id: str, file_type: str = "gltf", structure_hash: str = None, base_url_override: Optional[str] = None) -> str:
         """
         Get the URL for accessing a 3D model.
         
@@ -92,6 +92,8 @@ class FileManager:
             model_id: Unique model identifier
             file_type: File extension (default: gltf)
             structure_hash: Optional structure hash to use in filename
+            base_url_override: Optional base URL to use instead of settings.base_url
+                              (useful when you have the request object and want to use the request host)
             
         Returns:
             URL string
@@ -108,11 +110,12 @@ class FileManager:
             container_name = settings.azure_storage_container_name
             return f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}"
         else:
-            # Return local URL
-            return f"{settings.base_url}/models/{filename}"
+            # Use override if provided, otherwise use settings
+            base_url = base_url_override if base_url_override else settings.base_url
+            return f"{base_url}/models/{filename}"
     
     @staticmethod
-    def get_drawing_url(model_id: str, view_mode: str, file_type: str = "svg", structure_hash: str = None) -> str:
+    def get_drawing_url(model_id: str, view_mode: str, file_type: str = "svg", structure_hash: str = None, base_url_override: Optional[str] = None) -> str:
         """
         Get the URL for accessing a 2D drawing.
         
@@ -121,6 +124,8 @@ class FileManager:
             view_mode: View mode (plan, section, elevation)
             file_type: File extension (default: svg)
             structure_hash: Optional structure hash to use in filename
+            base_url_override: Optional base URL to use instead of settings.base_url
+                              (useful when you have the request object and want to use the request host)
             
         Returns:
             URL string
@@ -137,8 +142,9 @@ class FileManager:
             container_name = settings.azure_storage_container_name
             return f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}"
         else:
-            # Return local URL
-            return f"{settings.base_url}/drawings/{filename}"
+            # Use override if provided, otherwise use settings
+            base_url = base_url_override if base_url_override else settings.base_url
+            return f"{base_url}/drawings/{filename}"
     
     @staticmethod
     def save_file(file_path: Path, blob_name: str, content_type: Optional[str] = None) -> str:
