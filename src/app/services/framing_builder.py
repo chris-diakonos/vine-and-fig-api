@@ -291,15 +291,14 @@ class FramingBuilder:
         
         quantity = math.ceil(front_dimension / self.joist_spacing)
         
-        # Joists run front to rear (along Y axis), so they need to be:
-        # - Centered in Y (depth direction): -right_dimension / 2
-        # - Spaced along X (width direction): (q * joist_spacing) + joist_spacing
+        # Match original positioning pattern exactly:
+        # Original: new_x = right_dimension/2 (fixed), new_y = (q * joist_spacing) + joist_spacing (spaced)
+        # Apply offsets to center on foundation
         for q in range(quantity):
-            # X position: spaced along building width (front dimension)
-            new_x = (q * self.joist_spacing) + self.joist_spacing + x_offset
-            # Y position: centered in building depth (right dimension)
-            # Joists run from front (y=0) to rear (y=-right_dimension), so center is at -right_dimension/2
-            new_y = -right_dimension / 2 + y_offset
+            # X position: match original pattern (right_dimension/2) with offset
+            new_x = right_dimension / 2 + x_offset
+            # Y position: spaced along Y as in original, with offset
+            new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
             new_z = joist_z
             joist = cq.Workplane('XY').box(joist_length, joist_width, joist_height).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
             assembly.add(joist)
