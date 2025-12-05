@@ -31,6 +31,7 @@ class FramingBuilder:
         self.structure_hash = structure_hash
         self.floorplan = structure.floorplan
         self.dimensions = structure.floorplan.dimensions
+        self.building_height = structure.floorplan.building_height
         self.roof = structure.roof
         
         # Extract dimensions
@@ -866,7 +867,6 @@ class FramingBuilder:
         member_type = "plate"
         plate_width = 4
         plate_depth = 6
-        plate_length = 240
         total_quantity = 0
         
         ceiling_height = self.ceiling_heights[story - 1] if story <= len(self.ceiling_heights) else self.ceiling_heights[-1]
@@ -877,8 +877,47 @@ class FramingBuilder:
         
         for face in self.faces:
             dimension = self.faces[face]
-            quantity = int(dimension / 240)
+            right_dimension = self.faces["right"]
+            front_dimension = self.faces["front"]
+
+            if dimension <= 240:
+                quantity = 1
+                plate_length = dimension
+            elif dimension >= 240:
+                quantity = math.ceil(dimension / 240)
+                plate_length = dimension / quantity
+            else:
+                quantity = 1
+                plate_length = 240
+
             total_quantity += quantity
+
+            for q in range(quantity):
+    
+                plate_counter = q + 1
+                
+                if face == "front":
+                    new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
+                    new_y = 0
+                    new_z = previous_ceiling_height + ceiling_height
+                    plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z))
+                elif face == "rear":
+                    new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
+                    new_y = -right_dimension
+                    new_z = previous_ceiling_height + ceiling_height
+                    plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z))
+                elif face == "left":
+                    new_x = +(right_dimension/2) * plate_counter
+                    new_y = 0
+                    new_z = previous_ceiling_height + ceiling_height
+                    plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
+                elif face == "right":
+                    new_x = +(right_dimension/2) * plate_counter
+                    new_y = +(front_dimension)
+                    new_z = previous_ceiling_height + ceiling_height
+                    plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
+
+                assembly.add(plate, name=f"{member_type}_{face}_story{story}_{plate_counter}")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
@@ -898,7 +937,6 @@ class FramingBuilder:
         member_type = "false_plate"
         false_plate_width = 10
         false_plate_depth = 2
-        false_plate_length = 240
         total_quantity = 0
         
         building_height = 0
@@ -917,8 +955,39 @@ class FramingBuilder:
         
         for face in ["front", "rear"]:
             dimension = self.faces[face]
-            quantity = int(dimension / 240)
+            front_dimension = self.faces["front"]
+            rear_dimension = self.faces["rear"]
+            building_height = self.building_height
+            roof_overhang = self.roof_overhang
+            
+            if dimension <= 240:
+                quantity = 1
+                false_plate_length = dimension
+            elif dimension >= 240:
+                quantity = math.ceil(dimension / 240)
+                false_plate_length = dimension / quantity
+            else:
+                quantity = 1
+                false_plate_length = 240
+
             total_quantity += quantity
+
+            for q in range(quantity):
+                false_plate_counter = q + 1
+
+                if face == "front":
+                    new_x = (false_plate_length * false_plate_counter) - (false_plate_length / 2) + x_offset
+                    new_y = (roof_overhang/2)
+                    new_z = building_height - 7
+                    false_plate = cq.Workplane('XY').box(false_plate_length, false_plate_width, false_plate_depth).translate((new_x, new_y, new_z))
+                elif face == "rear":
+                    new_x = (false_plate_length * false_plate_counter) - (false_plate_length / 2) + x_offset
+                    new_y = -(rear_dimension) - (roof_overhang/2)
+                    new_z = building_height - 7
+                    false_plate = cq.Workplane('XY').box(false_plate_length, false_plate_width, false_plate_depth).translate((new_x, new_y, new_z))
+                else: continue
+
+                assembly.add(false_plate, name=f"{member_type}_{face}_{false_plate_counter}")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
@@ -938,6 +1007,9 @@ class FramingBuilder:
         member_type = "rafter"
         rafter_width = 3
         rafter_depth = 6
+        rafter_spacing = self.rafter_spacing
+        roof_overhang = self.roof_overhang
+        roof_pitch_degrees = self.roof_pitch_degrees
         total_quantity = 0
         
         building_height = -12
@@ -958,14 +1030,33 @@ class FramingBuilder:
         front_dimension = self.faces["front"]
         
         for face in ["front", "rear"]:
-            quantity = int(front_dimension / self.rafter_spacing) + 2
+            quantity = math.ceil(front_dimension / rafter_spacing) + 2
             total_quantity += quantity
             
-            rafter_run = (right_dimension / 2) + self.roof_overhang
-            roof_pitch_radians = self.roof_pitch_degrees * (math.pi / 180)
+            rafter_run = (right_dimension / 2) + roof_overhang
+            roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
             rafter_cos = math.cos(roof_pitch_radians)
             rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
-            rafter_height = 6
+            
+            if face == "front":
+                new_x = +(right_dimension/2) + (rafter_length/2.7) + x_offset
+                roof_pitch = roof_pitch_degrees
+            elif face == "rear":
+                new_x = +(right_dimension/2) + (rafter_length/2.7) + x_offset
+                roof_pitch = 180 - roof_pitch_degrees
+
+            for q in range(quantity):
+
+                rafter_counter = q + 1
+
+                if rafter_counter == 1:
+                    new_y = 0 + y_offset
+                else:
+                    new_y = (rafter_spacing * (rafter_counter - 1)) + y_offset
+
+                new_z = building_height + (rafter_length/2.7) - rafter_depth
+                rafter = cq.Workplane('XY').box(rafter_length, rafter_width, rafter_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0),roof_pitch).rotate((0,0,1),(0,0,0),90)
+                assembly.add(rafter, name=f"{member_type}_{face}_{rafter_counter}")
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
