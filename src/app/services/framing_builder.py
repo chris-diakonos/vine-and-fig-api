@@ -31,7 +31,7 @@ class FramingBuilder:
         self.structure_hash = structure_hash
         self.floorplan = structure.floorplan
         self.dimensions = structure.floorplan.dimensions
-        self.building_height = structure.floorplan.building_height
+        self.building_height = structure.floorplan.dimensions.building_height
         self.roof = structure.roof
         
         # Extract dimensions
