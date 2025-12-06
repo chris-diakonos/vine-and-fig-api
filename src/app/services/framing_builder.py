@@ -85,11 +85,8 @@ class FramingBuilder:
             for face in ["front", "rear", "left", "right"]:
                 bay_widths = getattr(self.floorplan.bays, face, [])
                 if bay_widths:
-                    cumulative = 0
                     for width in bay_widths:
-                        cumulative += width / 2
-                        centerlines[face].append(cumulative)
-                        cumulative += width / 2
+                        centerlines[face].append(width)
                 else:
                     # Default centerlines if not specified
                     if face in ["front", "rear"]:
