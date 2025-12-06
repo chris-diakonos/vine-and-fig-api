@@ -772,7 +772,6 @@ class FramingBuilder:
         total_quantity = 0
         girt_width = 4
         girt_depth = 6
-        girt_length = 240
         
         # Find the current story ceiling height
         current_ceiling_height = self.ceiling_heights[story - 1] if story <= len(self.ceiling_heights) else self.ceiling_heights[-1]
@@ -793,7 +792,16 @@ class FramingBuilder:
             dimension = self.faces[face]
             right_dimension = self.faces["right"]
             front_dimension = self.faces["front"]
-            quantity = int(dimension / 240)
+
+            if dimension <= 240:
+                quantity = 1
+                girt_length = dimension
+            elif dimension >= 240:
+                quantity = math.ceil(dimension / 240)
+                girt_length = dimension / quantity
+            else:
+                quantity = 1
+                girt_length = 240
             
             # Set the ceiling height depending on the story and face
             # This ensures the mortises aren't at the same height on adjacent faces of the post
@@ -814,12 +822,12 @@ class FramingBuilder:
                 girt_counter = q + 1
                 
                 if face == "front":
-                    new_x = (dimension / quantity) * girt_counter - (girt_length / 2) + x_offset
+                    new_x = (girt_length * girt_counter) - (girt_length / 2) + x_offset
                     new_y = 0 + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
-                    new_x = (dimension / quantity) * girt_counter - (girt_length / 2) + x_offset
+                    new_x = (girt_length * girt_counter) - (girt_length / 2) + x_offset
                     new_y = -right_dimension + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z))
@@ -827,16 +835,16 @@ class FramingBuilder:
                     # Left girts run along Y axis (front to rear)
                     # X position: fixed at left wall (x=0)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = 0 + x_offset
-                    new_y = (right_dimension / quantity) * girt_counter - (girt_length / 2) + y_offset
+                    new_x = ((right_dimension/2) * girt_counter) + x_offset
+                    new_y = 0 + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 elif face == "right":
                     # Right girts run along Y axis (front to rear)
                     # X position: fixed at right wall (x=front_dimension)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = front_dimension + x_offset
-                    new_y = (right_dimension / quantity) * girt_counter - (girt_length / 2) + y_offset
+                    new_x = ((right_dimension/2) * girt_counter) + x_offset
+                    new_y = front_dimension + y_offset
                     new_z = previous_ceiling_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
