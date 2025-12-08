@@ -955,8 +955,7 @@ class FramingBuilder:
         
         for face in ["front", "rear"]:
             dimension = self.faces[face]
-            front_dimension = self.faces["front"]
-            rear_dimension = self.faces["rear"]
+            right_dimension = self.faces["right"]
             building_height = self.building_height
             roof_overhang = self.roof_overhang
             
@@ -982,7 +981,7 @@ class FramingBuilder:
                     false_plate = cq.Workplane('XY').box(false_plate_length, false_plate_width, false_plate_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
                     new_x = (false_plate_length * false_plate_counter) - (false_plate_length / 2) + x_offset
-                    new_y = -(rear_dimension) - (roof_overhang/2)
+                    new_y = -(right_dimension) - (roof_overhang/2)
                     new_z = building_height - 7
                     false_plate = cq.Workplane('XY').box(false_plate_length, false_plate_width, false_plate_depth).translate((new_x, new_y, new_z))
                 else: continue
@@ -1042,7 +1041,7 @@ class FramingBuilder:
                 new_x = +(right_dimension/2) + (rafter_length/2.7) + x_offset
                 roof_pitch = roof_pitch_degrees
             elif face == "rear":
-                new_x = +(right_dimension/2) + (rafter_length/2.7) + x_offset
+                new_x = +(right_dimension/2) - (rafter_length/2.7) + x_offset
                 roof_pitch = 180 - roof_pitch_degrees
 
             for q in range(quantity):
