@@ -242,12 +242,12 @@ class FramingBuilder:
                 sill_counter = q + 1
                 
                 if face == "front":
-                    new_x = sill_length * sill_counter - (sill_length/2) + x_offset
+                    new_x = (sill_length * sill_counter) - (sill_length/2) + x_offset
                     new_y = 0 + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
-                    new_x = (dimension / quantity) * sill_counter - (sill_length/2) + x_offset
+                    new_x = (sill_length * sill_counter) - (sill_length/2) + x_offset
                     new_y = -right_dimension + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z))
@@ -255,7 +255,7 @@ class FramingBuilder:
                     # Left sills run along Y axis (front to rear)
                     # X position: fixed at left wall (x=0)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = ((right_dimension/2) * sill_counter) + x_offset
+                    new_x = (sill_length * sill_counter) - (sill_length/2) + x_offset
                     new_y = 0 + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
@@ -263,7 +263,7 @@ class FramingBuilder:
                     # Right sills run along Y axis (front to rear)
                     # X position: fixed at right wall (x=front_dimension)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = (+(right_dimension/2) * sill_counter) + x_offset
+                    new_x = (sill_length * sill_counter) - (sill_length/2) + x_offset
                     new_y = front_dimension + y_offset
                     new_z = sill_z_offset
                     sill = cq.Workplane('XY').box(sill_length, sill_height, sill_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
@@ -567,7 +567,7 @@ class FramingBuilder:
                     
                     if cripple_flag:
                         cripple_stud_y_position = left_stud_y_position + (-(left_stud_y_position - right_stud_y_position) / 2)
-                        cripple_stud_z_position = floor_height - (cripple_stud_length / 2)
+                        cripple_stud_z_position = floor_height + (cripple_stud_length / 2)
                         cripple_stud = cq.Workplane('XY').box(cripple_stud_height, cripple_stud_width, cripple_stud_length).translate((new_x, cripple_stud_y_position, cripple_stud_z_position))
                         self.bay_studs[face].append(cripple_stud_y_position)
                         assembly.add(cripple_stud, name=f"cripple_stud_{face}_story{story}_bay{bay}")
@@ -584,7 +584,7 @@ class FramingBuilder:
                     
                     if cripple_flag:
                         cripple_stud_x_position = left_stud_x_position + ((right_stud_x_position - left_stud_x_position) / 2)
-                        cripple_stud_z_position = floor_height - (cripple_stud_length / 2)
+                        cripple_stud_z_position = floor_height + (cripple_stud_length / 2)
                         cripple_stud = cq.Workplane('XY').box(cripple_stud_width, cripple_stud_height, cripple_stud_length).translate((cripple_stud_x_position, new_y, cripple_stud_z_position))
                         self.bay_studs[face].append(cripple_stud_x_position)
                         assembly.add(cripple_stud, name=f"cripple_stud_{face}_story{story}_bay{bay}")
@@ -800,7 +800,7 @@ class FramingBuilder:
                     # Left girts run along Y axis (front to rear)
                     # X position: fixed at left wall (x=0)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = ((right_dimension/2) * girt_counter) + x_offset
+                    new_x = (girt_length * girt_counter) - (girt_length / 2) + x_offset
                     new_y = 0 + y_offset
                     new_z = floor_height - (girt_depth / 2)
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
@@ -808,7 +808,7 @@ class FramingBuilder:
                     # Right girts run along Y axis (front to rear)
                     # X position: fixed at right wall (x=front_dimension)
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
-                    new_x = ((right_dimension/2) * girt_counter) + x_offset
+                    new_x = (girt_length * girt_counter) - (girt_length / 2) + x_offset
                     new_y = front_dimension + y_offset
                     new_z = floor_height - (girt_depth / 2)
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
@@ -835,12 +835,10 @@ class FramingBuilder:
         plate_width = 4
         plate_depth = 6
         total_quantity = 0
+        floor_heights = self._calculate_floor_heights()
+        next_floor_height = floor_heights[story]
+        next_joist_height = self.joist_heights[story] if story <= len(self.joist_heights) else self.joist_heights[-1]
         
-        ceiling_height = self.ceiling_heights[story - 1] if story <= len(self.ceiling_heights) else self.ceiling_heights[-1]
-        if story == 1:
-            previous_ceiling_height = 0
-        else:
-            previous_ceiling_height = self.ceiling_heights[story - 2]
         
         for face in self.faces:
             dimension = self.faces[face]
@@ -866,22 +864,22 @@ class FramingBuilder:
                 if face == "front":
                     new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
                     new_y = 0
-                    new_z = previous_ceiling_height + ceiling_height
+                    new_z = next_floor_height - (plate_depth / 2) - next_joist_height
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
                     new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
                     new_y = -right_dimension
-                    new_z = previous_ceiling_height + ceiling_height
+                    new_z = next_floor_height - (plate_depth / 2) - next_joist_height
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
                     new_x = +(right_dimension/2) * plate_counter
                     new_y = 0
-                    new_z = previous_ceiling_height + ceiling_height
+                    new_z = next_floor_height - (plate_depth / 2)
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
                 elif face == "right":
                     new_x = +(right_dimension/2) * plate_counter
                     new_y = +(front_dimension)
-                    new_z = previous_ceiling_height + ceiling_height
+                    new_z = next_floor_height - (plate_depth / 2)
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
 
                 assembly.add(plate, name=f"{member_type}_{face}_story{story}_{plate_counter}")
@@ -905,25 +903,14 @@ class FramingBuilder:
         false_plate_width = 10
         false_plate_depth = 2
         total_quantity = 0
-        
-        building_height = 0
-        for index, value in enumerate(self.joist_heights):
-            if index == 0:
-                joist_height = 0
-            else:
-                joist_height = value
-            
-            if len(self.ceiling_heights) >= (index + 1):
-                ceiling_height = self.ceiling_heights[index]
-            else:
-                ceiling_height = 0
-            
-            building_height += joist_height + ceiling_height
-        
+        floor_heights = self._calculate_floor_heights()
+        stories = self.stories
+        floor_height = floor_heights[stories]
+
+
         for face in ["front", "rear"]:
             dimension = self.faces[face]
             right_dimension = self.faces["right"]
-            building_height = self.building_height
             roof_overhang = self.roof_overhang
             
             if dimension <= 240:
@@ -944,12 +931,12 @@ class FramingBuilder:
                 if face == "front":
                     new_x = (false_plate_length * false_plate_counter) - (false_plate_length / 2) + x_offset
                     new_y = (roof_overhang/2)
-                    new_z = building_height - 7
+                    new_z = floor_height + (false_plate_depth / 2)
                     false_plate = cq.Workplane('XY').box(false_plate_length, false_plate_width, false_plate_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
                     new_x = (false_plate_length * false_plate_counter) - (false_plate_length / 2) + x_offset
                     new_y = -(right_dimension) - (roof_overhang/2)
-                    new_z = building_height - 7
+                    new_z = floor_height + (false_plate_depth / 2)
                     false_plate = cq.Workplane('XY').box(false_plate_length, false_plate_width, false_plate_depth).translate((new_x, new_y, new_z))
                 else: continue
 
@@ -977,20 +964,10 @@ class FramingBuilder:
         roof_overhang = self.roof_overhang
         roof_pitch_degrees = self.roof_pitch_degrees
         total_quantity = 0
-        
-        building_height = -12
-        for index, value in enumerate(self.joist_heights):
-            if index == 0:
-                joist_height = 0
-            else:
-                joist_height = value
-            
-            if len(self.ceiling_heights) >= (index + 1):
-                ceiling_height = self.ceiling_heights[index]
-            else:
-                ceiling_height = 0
-            
-            building_height += joist_height + ceiling_height
+
+        floor_heights = self._calculate_floor_heights()
+        stories = self.stories
+        floor_height = floor_heights[stories]
         
         right_dimension = self.faces["right"]
         front_dimension = self.faces["front"]
@@ -1020,7 +997,7 @@ class FramingBuilder:
                 else:
                     new_y = (rafter_spacing * (rafter_counter - 1)) + y_offset
 
-                new_z = building_height + (rafter_length/2.7) - rafter_depth
+                new_z = floor_height + (rafter_length/2.7) - rafter_depth
                 rafter = cq.Workplane('XY').box(rafter_length, rafter_width, rafter_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0),roof_pitch).rotate((0,0,1),(0,0,0),90)
                 assembly.add(rafter, name=f"{member_type}_{face}_{rafter_counter}")
         
