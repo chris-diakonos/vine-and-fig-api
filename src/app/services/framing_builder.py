@@ -904,7 +904,7 @@ class FramingBuilder:
         false_plate_depth = 2
         total_quantity = 0
         floor_heights = self._calculate_floor_heights()
-        stories = self.stories
+        stories = self.floorplan.stories
         floor_height = floor_heights[stories]
 
 
@@ -966,7 +966,7 @@ class FramingBuilder:
         total_quantity = 0
 
         floor_heights = self._calculate_floor_heights()
-        stories = self.stories
+        stories = self.floorplan.stories
         floor_height = floor_heights[stories]
         
         right_dimension = self.faces["right"]
