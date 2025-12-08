@@ -525,16 +525,23 @@ class FramingBuilder:
             if face == "front":
                 new_x = 0 + x_offset
                 new_y = 0 + y_offset
+                stud_length = face_stud_length
+                new_z = new_z + (stud_length / 2)
             elif face == "rear":
                 new_x = 0 + x_offset
                 new_y = -right_dimension + y_offset 
+                stud_length = face_stud_length
+                new_z = new_z + (stud_length / 2)
             elif face == "left":
                 new_x = 0 + x_offset
                 new_y = -right_dimension + y_offset
+                stud_length = side_stud_length
+                new_z = new_z + (stud_length / 2)
             elif face == "right":
                 new_x = front_dimension + x_offset
                 new_y = -right_dimension + y_offset
-            
+                stud_length = side_stud_length
+                new_z = new_z + (stud_length / 2)
             # Create bay studs for each centerline
             for i, c in enumerate(centerline):
                 bay = i + 1
@@ -553,8 +560,8 @@ class FramingBuilder:
                     # Left/right faces: studs positioned along Y axis
                     left_stud_y_position = new_y + c - ((self.bay_spacing + bay_stud_width) / 2)
                     right_stud_y_position = new_y + c + ((self.bay_spacing + bay_stud_width) / 2)
-                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, side_stud_length).translate((new_x, left_stud_y_position, new_z))
-                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, side_stud_length).translate((new_x, right_stud_y_position, new_z))
+                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, stud_length).translate((new_x, left_stud_y_position, new_z))
+                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, stud_length).translate((new_x, right_stud_y_position, new_z))
                     self.bay_studs[face].append(left_stud_y_position)
                     self.bay_studs[face].append(right_stud_y_position)
                     
@@ -570,8 +577,8 @@ class FramingBuilder:
                     # Front/rear faces: studs positioned along X axis
                     left_stud_x_position = new_x + c - ((self.bay_spacing + bay_stud_width) / 2)
                     right_stud_x_position = new_x + c + ((self.bay_spacing + bay_stud_width) / 2)
-                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, face_stud_length).translate((left_stud_x_position, new_y, new_z))
-                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, face_stud_length).translate((right_stud_x_position, new_y, new_z))
+                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, stud_length).translate((left_stud_x_position, new_y, new_z))
+                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, stud_length).translate((right_stud_x_position, new_y, new_z))
                     self.bay_studs[face].append(left_stud_x_position)
                     self.bay_studs[face].append(right_stud_x_position)
                     
@@ -645,19 +652,26 @@ class FramingBuilder:
                 new_x = 0 + x_offset
                 new_y = 0 + y_offset
                 last_position = front_dimension - 6
+                stud_length = face_stud_length
+                new_z = new_z + (stud_length / 2)
             elif face == "rear":
                 new_x = 0 + x_offset
                 new_y = -right_dimension + y_offset
                 last_position = front_dimension - 6
+                stud_length = face_stud_length
+                new_z = new_z + (stud_length / 2)
             elif face == "left":
                 new_x = 0 + x_offset
                 new_y = -right_dimension + y_offset
                 last_position = -right_dimension - 4
+                stud_length = side_stud_length
+                new_z = new_z + (stud_length / 2)
             elif face == "right":
                 new_x = front_dimension + x_offset
                 new_y = -right_dimension + y_offset
                 last_position = -right_dimension - 4
-            
+                stud_length = side_stud_length
+                new_z = new_z + (stud_length / 2)
             # Add the last position for the post
             stud_positions.append(last_position)
             
@@ -708,7 +722,7 @@ class FramingBuilder:
                 for wall in range(wall_quantity):
                     if face in ["left", "right"]:
                         stud_y_position = prior_position + ((wall_length / (wall_quantity + 1)) * (wall + 1))
-                        stud = cq.Workplane('XY').box(4, 3, side_stud_length).translate((new_x, stud_y_position, new_z))
+                        stud = cq.Workplane('XY').box(stud_height, stud_width, stud_length).translate((new_x, stud_y_position, new_z))
                         assembly.add(stud, name=f"{member_type}_{face}_story{story}_section{index}_wall{wall+1}")
                         self.stud_centerlines[face].append(stud_y_position)
                     elif face in ["front", "rear"]:
@@ -718,7 +732,7 @@ class FramingBuilder:
                             stud_quantity = stud_quantity - 1
                             continue
                         else:
-                            stud = cq.Workplane('XY').box(3, 4, face_stud_length).translate((stud_x_position, new_y, new_z))
+                            stud = cq.Workplane('XY').box(stud_width, stud_height, stud_length).translate((stud_x_position, new_y, new_z))
                             assembly.add(stud, name=f"{member_type}_{face}_story{story}_section{index}_wall{wall+1}")
                             self.stud_centerlines[face].append(stud_x_position)
             
