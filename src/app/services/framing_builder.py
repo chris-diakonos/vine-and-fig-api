@@ -102,6 +102,58 @@ class FramingBuilder:
             centerlines["left"] = [64, 192]
         
         return centerlines
+
+
+    def _calculate_ceiling_heights(self) -> List[float]:
+        """
+        Calculate ceiling heights for each story.
+        
+        Returns:
+            List of ceiling heights
+        """
+        heights = []
+        height = 0
+        stories = self.floorplan.stories
+        joist_heights = self.floorplan.joist_heights
+        ceiling_heights = self.ceiling_heights
+        sill_height = joist_heights[0]
+
+        for story in range(1, stories + 1):
+            
+            if story == 1:
+                height = sill_height + ceiling_heights[0]
+            else:
+                height = height + joist_heights[story - 1] + ceiling_heights[story - 1]
+            
+            heights.append(height)
+        
+        return heights
+
+
+    def _calculate_floor_heights(self) -> List[float]:
+        """
+        Calculate floor heights for each story.
+        
+        Returns:
+            List of floor heights
+        """
+        heights = []
+        height = 0
+        stories = self.floorplan.stories
+        joist_heights = self.floorplan.joist_heights
+        ceiling_heights = self.ceiling_heights
+        sill_height = joist_heights[0]
+
+        for story in range(1, stories + 2):
+            
+            if story == 1:
+                height = sill_height
+            else:
+                height = height + ceiling_heights[story - 2] + joist_heights[story - 2]
+            
+            heights.append(height)
+        
+        return heights
     
     def build(self) -> Tuple[cq.Assembly, Dict[str, Any]]:
         """
@@ -237,18 +289,29 @@ class FramingBuilder:
         """Add corner posts to the assembly."""
         right_dimension = self.faces["right"]
         front_dimension = self.faces["front"]
-        right_offset = right_dimension / 2
+
+        ceiling_heights = self._calculate_ceiling_heights()
+        floor_heights = self._calculate_floor_heights()
+        stories = self.floorplan.stories
+
         
         post_width = 6
         post_depth = 4
-        post_height = 230
+        post_height = ceiling_heights[stories - 1] - floor_heights[0]
         quantity = 4
         member_type = "post"
+        post_tenon_depth = 2
+
+        left_x = 0 + x_offset
+        right_x = front_dimension + x_offset
+        front_y = 0 + y_offset
+        rear_y = -right_dimension + y_offset
+        new_z = floor_heights[0] - post_tenon_depth + (post_height / 2)
         
-        front_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((0 + x_offset, 0 + y_offset, right_offset))
-        rear_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((0 + x_offset, -right_dimension + y_offset, right_offset))
-        front_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension + x_offset, 0 + y_offset, right_offset))
-        rear_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((front_dimension + x_offset, -right_dimension + y_offset, right_offset))
+        front_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((left_x, front_y, new_z))
+        rear_left_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((left_x, rear_y, new_z))
+        front_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((right_x, front_y, new_z))
+        rear_right_post = cq.Workplane('XY').box(post_width, post_depth, post_height).translate((right_x, rear_y, new_z))
         
         # Add posts with descriptive names
         assembly.add(front_left_post, name=f"{member_type}_front_left")
@@ -274,65 +337,29 @@ class FramingBuilder:
         joist_width = 3
         joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
         member_type = "joist"
-        
-        # Sill dimensions (matching _add_sills)
-        sill_depth = 10
-        sill_z_offset = sill_depth / 2  # Sill bottom at z=0, top at z=10
-        
-        # Calculate previous ceiling height
-        previous_ceiling_height = 0
-        if story > 1:
-            for p in range(story - 1):
-                previous_ceiling_height += self.ceiling_heights[p] + (self.joist_heights[p] / 2)
-        
         right_dimension = self.faces["right"]
         front_dimension = self.faces["front"]
+        joist_spacing = self.joist_spacing
         
+        # Set the joist z position based on the story and floor height
+        floor_heights = self._calculate_floor_heights()
+        floor_height = floor_heights[story - 1]
+        joist_z = floor_height - (joist_height / 2)
+   
+        # Set the joist length based on the story and roof overhang
         if story == len(self.joist_heights):
             joist_length = (self.roof_overhang * 2) + right_dimension
-            previous_ceiling_height = previous_ceiling_height - 4
         else:
             joist_length = right_dimension
         
-        # For first story, joists sit on top of sills (level with top of sill at z=10)
-        # Since joist box is centered, we need to add half joist height to position bottom at z=10
-        if story == 1:
-            # First floor joists: bottom at top of sill (z = sill_depth = 10)
-            # Box is centered, so center is at z = 10 + (joist_height / 2)
-            joist_z = sill_z_offset
-        else:
-            # Upper story joists: use previous_ceiling_height calculation
-            # Box is centered, so we need to add half joist height
-            joist_z = previous_ceiling_height + (joist_height / 2)
+        # Set the quantity of joists based on the front dimension and joist spacing
+        quantity = math.ceil(front_dimension / joist_spacing)
         
-        quantity = math.ceil(front_dimension / self.joist_spacing)
-        
-        # Joist creation and rotation explanation:
-        # 1. Box is created: box(joist_length=240 along X, joist_width=3 along Y, joist_height along Z)
-        # 2. Box is translated to (new_x, new_y, new_z) in world coordinates
-        # 3. Box is rotated 90° around Z axis at origin, which swaps the box's local X and Y
-        #    After rotation: box runs along Y (front-to-rear), width is along X
-        # 
-        # IMPORTANT: The rotation happens AFTER translation, so the translation coordinates
-        # are in the PRE-ROTATION world space. However, the rotation around origin means:
-        # - If we want to space joists along the building WIDTH (X axis), we space new_x
-        # - If we want to center joists in DEPTH (Y axis), we set new_y
-        #
-        # The original code spaces along Y, but after rotation the joist runs along Y,
-        # so spacing along Y would put them in a line front-to-rear (wrong!).
-        # We actually need to space along X (the width direction).
-        #
-        # However, matching the original pattern that works:
-        # - new_x = right_dimension/2 (centers in depth, but this seems wrong for spacing)
-        # - new_y = spaced (spaces along Y, but after rotation this affects X position)
-        #
-        # The rotation around origin means: translate then rotate, so the spacing
-        # along Y in pre-rotation space becomes spacing along X in post-rotation space!
         for q in range(quantity):
             # X position: fixed at depth center (matches original, but seems wrong)
-            new_x = x_offset + (joist_length/2)
+            new_x = x_offset + (right_dimension/2)
             # Y position: spaced - this becomes X spacing after rotation!
-            new_y = (q * self.joist_spacing) + self.joist_spacing + y_offset
+            new_y = (q * joist_spacing) + joist_spacing + y_offset
             new_z = joist_z
             joist = cq.Workplane('XY').box(joist_length, joist_width, joist_height).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
             # Add joist with descriptive name including member_type, story, and position
@@ -363,20 +390,14 @@ class FramingBuilder:
         member_type = "brace"
         total_quantity = 0
         
-        current_ceiling_height = self.ceiling_heights[story - 1] if story <= len(self.ceiling_heights) else self.ceiling_heights[-1]
-        
-        # Calculate prior and next ceiling heights
-        if story == 1:
-            prior_ceiling_height = 0
-            joist_height_adjustment = 0
-        else:
-            prior_ceiling_height = self.ceiling_heights[story - 2]
-            joist_height_adjustment = (self.joist_heights[story - 2] / 2) - (joist_height / 2)
-        
-        if len(self.ceiling_heights) > story:
-            next_ceiling_height = self.ceiling_heights[story]
-        else:
-            next_ceiling_height = 0
+        ceiling_heights = self._calculate_ceiling_heights()
+        floor_heights = self._calculate_floor_heights()
+        floor_height = floor_heights[story - 1]
+        ceiling_height = ceiling_heights[story - 1]
+        next_floor_height = floor_heights[story]
+        face_brace_length = (ceiling_height - floor_height)
+        side_brace_length = (next_floor_height - floor_height) - 6
+        joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
         
         for face in self.faces:
             brace_centerline = self.centerlines[face][0] if self.centerlines[face] else 64
@@ -386,80 +407,63 @@ class FramingBuilder:
             
             total_quantity += 2
             
-            # Set ceiling heights based on story and face
-            if story == 1:
-                alt_ceiling_height = next_ceiling_height + joist_height_adjustment
-                ceiling_height = current_ceiling_height
-                previous_ceiling_height = 0
-                alt_previous_ceiling_height = 0
-            elif story == 2:
-                alt_ceiling_height = prior_ceiling_height
-                ceiling_height = current_ceiling_height
-                previous_ceiling_height = prior_ceiling_height + joist_height_adjustment
-                alt_previous_ceiling_height = current_ceiling_height + joist_height_adjustment
-            else:
-                ceiling_height = current_ceiling_height
-                alt_ceiling_height = current_ceiling_height
-                previous_ceiling_height = prior_ceiling_height + joist_height_adjustment
-                alt_previous_ceiling_height = prior_ceiling_height + joist_height_adjustment
-            
             # Calculate brace positions and angles (simplified - full implementation would match original logic)
             if face == "left":
-                brace_height = math.ceil(ceiling_height * (2/3))
+                brace_height = math.ceil(side_brace_length * (2/3))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = 180 - math.degrees(math.atan(brace_centerline / brace_height))
                 new_x = brace_centerline / 2 + x_offset
                 new_y = 0 + y_offset
-                new_z = (brace_height / 2) + previous_ceiling_height
+                new_z = (brace_height / 2) + floor_height
                 
-                alt_brace_height = math.ceil(alt_ceiling_height * (2/3))
+                alt_brace_height = math.ceil(face_brace_length * (2/3))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
                 alt_x = 0 + x_offset
                 alt_y = -(alt_brace_centerline / 2) + y_offset
-                alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
+                alt_z = (alt_brace_height / 2) + floor_height
             elif face == "rear":
-                brace_height = math.ceil(ceiling_height * (5/8))
+                brace_height = math.ceil(side_brace_length * (5/8))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = 180 - math.degrees(math.atan(brace_centerline / brace_height))
                 new_x = brace_centerline / 2 + x_offset
                 new_y = -right_dimension + y_offset
-                new_z = (brace_height / 2) + previous_ceiling_height
+                new_z = (brace_height / 2) + floor_height
                 
-                alt_brace_height = math.ceil(alt_ceiling_height * (5/8))
+                alt_brace_height = math.ceil(face_brace_length * (5/8))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = 180 - math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
                 alt_x = 0 + x_offset
                 alt_y = -right_dimension + (alt_brace_centerline / 2) + y_offset
-                alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
+                alt_z = (alt_brace_height / 2) + floor_height
             elif face == "right":
-                brace_height = math.ceil(ceiling_height * (2/3))
+                brace_height = math.ceil(side_brace_length * (2/3))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = math.degrees(math.atan(brace_centerline / brace_height))
                 new_x = front_dimension - (brace_centerline / 2) + x_offset
                 new_y = 0 + y_offset
-                new_z = (brace_height / 2) + previous_ceiling_height
+                new_z = (brace_height / 2) + floor_height
                 
-                alt_brace_height = math.ceil(alt_ceiling_height * (2/3))
+                alt_brace_height = math.ceil(face_brace_length * (2/3))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
                 alt_x = front_dimension + x_offset
                 alt_y = -(alt_brace_centerline / 2) + y_offset
-                alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
-            else:  # front
-                brace_height = math.ceil(ceiling_height * (5/8))
+                alt_z = (alt_brace_height / 2) + floor_height
+            elif face == "front":  # front
+                brace_height = math.ceil(side_brace_length * (5/8))
                 brace_length = math.sqrt(math.pow(brace_centerline, 2) + math.pow(brace_height, 2))
                 brace_angle = math.degrees(math.atan(brace_centerline / brace_height))
                 new_x = front_dimension - (brace_centerline / 2) + x_offset
                 new_y = -right_dimension + y_offset
-                new_z = (brace_height / 2) + previous_ceiling_height
+                new_z = (brace_height / 2) + floor_height
                 
-                alt_brace_height = math.ceil(alt_ceiling_height * (5/8))
+                alt_brace_height = math.ceil(face_brace_length * (5/8))
                 alt_brace_length = math.sqrt(math.pow(alt_brace_centerline, 2) + math.pow(alt_brace_height, 2))
                 alt_brace_angle = 180 - math.degrees(math.atan(alt_brace_centerline / alt_brace_height))
                 alt_x = front_dimension + x_offset
                 alt_y = -right_dimension + (alt_brace_centerline / 2) + y_offset
-                alt_z = (alt_brace_height / 2) + alt_previous_ceiling_height
+                alt_z = (alt_brace_height / 2) + floor_height
             
             # Add braces to assembly with descriptive names
             brace = cq.Workplane('XY').box(brace_width, brace_depth, brace_length).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0), brace_angle)
@@ -488,24 +492,21 @@ class FramingBuilder:
         bay_stud_height = 4
         cripple_stud_width = 3
         cripple_stud_height = 4
+        cripple_stud_length = self.chair_rail_height
         member_type = "bay_stud"
         total_quantity = 0
         cripple_quantity = 0
+        stud_tenon_depth = 2
         
-        # Find the current story ceiling height
-        current_ceiling_height = self.ceiling_heights[story - 1] if story <= len(self.ceiling_heights) else self.ceiling_heights[-1]
+        ceiling_heights = self._calculate_ceiling_heights()
+        floor_heights = self._calculate_floor_heights()
+        floor_height = floor_heights[story - 1]
+        ceiling_height = ceiling_heights[story - 1]
+        next_floor_height = floor_heights[story]
+        face_stud_length = (ceiling_height - floor_height) + (2*stud_tenon_depth)
+        side_stud_length = (next_floor_height - floor_height) + (2*stud_tenon_depth) - 6
+        joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
         
-        # Find the prior ceiling height
-        if story == 1:
-            prior_ceiling_height = 0
-        else:
-            prior_ceiling_height = self.ceiling_heights[story - 2]
-        
-        # Find the next ceiling height
-        if len(self.ceiling_heights) > story:
-            next_ceiling_height = self.ceiling_heights[story]
-        else:
-            next_ceiling_height = 0
         
         for face in self.faces:
             centerline = self.centerlines[face]
@@ -514,36 +515,25 @@ class FramingBuilder:
                 
             self.bay_studs[face] = []
             total_quantity += 2 * len(centerline)
-            
-            # Set the ceiling height depending on the story and face
-            # This ensures the mortises aren't at the same height on adjacent faces of the post
-            if face in ["left", "right"] and story == 1:
-                ceiling_height = next_ceiling_height
-                previous_ceiling_height = 0
-            elif face in ["left", "right"] and story == 2:
-                ceiling_height = prior_ceiling_height
-                previous_ceiling_height = current_ceiling_height
+
+            if story == 1:
+                new_z = floor_height - stud_tenon_depth
             else:
-                ceiling_height = current_ceiling_height
-                previous_ceiling_height = prior_ceiling_height
+                new_z = floor_height - (joist_height + stud_tenon_depth)
             
             # Set base positions for each face
             if face == "front":
                 new_x = 0 + x_offset
                 new_y = 0 + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
             elif face == "rear":
                 new_x = 0 + x_offset
-                new_y = -right_dimension + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
+                new_y = -right_dimension + y_offset 
             elif face == "left":
                 new_x = 0 + x_offset
                 new_y = -right_dimension + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
             elif face == "right":
                 new_x = front_dimension + x_offset
                 new_y = -right_dimension + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
             
             # Create bay studs for each centerline
             for i, c in enumerate(centerline):
@@ -563,15 +553,15 @@ class FramingBuilder:
                     # Left/right faces: studs positioned along Y axis
                     left_stud_y_position = new_y + c - ((self.bay_spacing + bay_stud_width) / 2)
                     right_stud_y_position = new_y + c + ((self.bay_spacing + bay_stud_width) / 2)
-                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, ceiling_height).translate((new_x, left_stud_y_position, new_z))
-                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, ceiling_height).translate((new_x, right_stud_y_position, new_z))
+                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, side_stud_length).translate((new_x, left_stud_y_position, new_z))
+                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, side_stud_length).translate((new_x, right_stud_y_position, new_z))
                     self.bay_studs[face].append(left_stud_y_position)
                     self.bay_studs[face].append(right_stud_y_position)
                     
                     if cripple_flag:
                         cripple_stud_y_position = left_stud_y_position + (-(left_stud_y_position - right_stud_y_position) / 2)
-                        cripple_stud_z_position = previous_ceiling_height + (self.chair_rail_height / 2)
-                        cripple_stud = cq.Workplane('XY').box(cripple_stud_height, cripple_stud_width, self.chair_rail_height).translate((new_x, cripple_stud_y_position, cripple_stud_z_position))
+                        cripple_stud_z_position = floor_height - (cripple_stud_length / 2)
+                        cripple_stud = cq.Workplane('XY').box(cripple_stud_height, cripple_stud_width, cripple_stud_length).translate((new_x, cripple_stud_y_position, cripple_stud_z_position))
                         self.bay_studs[face].append(cripple_stud_y_position)
                         assembly.add(cripple_stud, name=f"cripple_stud_{face}_story{story}_bay{bay}")
                         cripple_quantity += 1
@@ -580,15 +570,15 @@ class FramingBuilder:
                     # Front/rear faces: studs positioned along X axis
                     left_stud_x_position = new_x + c - ((self.bay_spacing + bay_stud_width) / 2)
                     right_stud_x_position = new_x + c + ((self.bay_spacing + bay_stud_width) / 2)
-                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, ceiling_height).translate((left_stud_x_position, new_y, new_z))
-                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, ceiling_height).translate((right_stud_x_position, new_y, new_z))
+                    left_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, face_stud_length).translate((left_stud_x_position, new_y, new_z))
+                    right_stud = cq.Workplane('XY').box(bay_stud_width, bay_stud_height, face_stud_length).translate((right_stud_x_position, new_y, new_z))
                     self.bay_studs[face].append(left_stud_x_position)
                     self.bay_studs[face].append(right_stud_x_position)
                     
                     if cripple_flag:
                         cripple_stud_x_position = left_stud_x_position + ((right_stud_x_position - left_stud_x_position) / 2)
-                        cripple_stud_z_position = previous_ceiling_height + (self.chair_rail_height / 2)
-                        cripple_stud = cq.Workplane('XY').box(cripple_stud_width, cripple_stud_height, self.chair_rail_height).translate((cripple_stud_x_position, new_y, cripple_stud_z_position))
+                        cripple_stud_z_position = floor_height - (cripple_stud_length / 2)
+                        cripple_stud = cq.Workplane('XY').box(cripple_stud_width, cripple_stud_height, cripple_stud_length).translate((cripple_stud_x_position, new_y, cripple_stud_z_position))
                         self.bay_studs[face].append(cripple_stud_x_position)
                         assembly.add(cripple_stud, name=f"cripple_stud_{face}_story{story}_bay{bay}")
                         cripple_quantity += 1
@@ -630,59 +620,42 @@ class FramingBuilder:
         stud_height = 4
         member_type = "stud"
         total_quantity = 0
-        
-        # Find the current story ceiling height
-        current_ceiling_height = self.ceiling_heights[story - 1] if story <= len(self.ceiling_heights) else self.ceiling_heights[-1]
-        
-        # Find the prior ceiling height
-        if story == 1:
-            prior_ceiling_height = 0
-        else:
-            prior_ceiling_height = self.ceiling_heights[story - 2]
-        
-        # Find the next ceiling height
-        if len(self.ceiling_heights) > story:
-            next_ceiling_height = self.ceiling_heights[story]
-        else:
-            next_ceiling_height = 0
+        stud_tenon_depth = 2
+        ceiling_heights = self._calculate_ceiling_heights()
+        floor_heights = self._calculate_floor_heights()
+        floor_height = floor_heights[story - 1]
+        ceiling_height = ceiling_heights[story - 1]
+        next_floor_height = floor_heights[story]
+        face_stud_length = (ceiling_height - floor_height) + (2*stud_tenon_depth)
+        side_stud_length = (next_floor_height - floor_height) + (2*stud_tenon_depth) - 6
+        joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
         
         for face in self.faces:
             self.stud_centerlines[face] = []
             stud_positions = self.bay_studs.get(face, []).copy()
             stud_quantity = 0
             
-            # Set the ceiling height depending on the story and face
-            # This ensures the mortises aren't at the same height on adjacent faces of the post
-            if face in ["left", "right"] and story == 1:
-                ceiling_height = next_ceiling_height
-                previous_ceiling_height = 0
-            elif face in ["left", "right"] and story == 2:
-                ceiling_height = prior_ceiling_height
-                previous_ceiling_height = current_ceiling_height
+            if story == 1:
+                new_z = floor_height - stud_tenon_depth
             else:
-                ceiling_height = current_ceiling_height
-                previous_ceiling_height = prior_ceiling_height
+                new_z = floor_height - (joist_height + stud_tenon_depth)
             
             # Set base positions for each face
             if face == "front":
                 new_x = 0 + x_offset
                 new_y = 0 + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = front_dimension - 6
             elif face == "rear":
                 new_x = 0 + x_offset
                 new_y = -right_dimension + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = front_dimension - 6
             elif face == "left":
                 new_x = 0 + x_offset
                 new_y = -right_dimension + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = -right_dimension - 4
             elif face == "right":
                 new_x = front_dimension + x_offset
                 new_y = -right_dimension + y_offset
-                new_z = previous_ceiling_height + (ceiling_height / 2)
                 last_position = -right_dimension - 4
             
             # Add the last position for the post
@@ -735,7 +708,7 @@ class FramingBuilder:
                 for wall in range(wall_quantity):
                     if face in ["left", "right"]:
                         stud_y_position = prior_position + ((wall_length / (wall_quantity + 1)) * (wall + 1))
-                        stud = cq.Workplane('XY').box(4, 3, ceiling_height).translate((new_x, stud_y_position, new_z))
+                        stud = cq.Workplane('XY').box(4, 3, side_stud_length).translate((new_x, stud_y_position, new_z))
                         assembly.add(stud, name=f"{member_type}_{face}_story{story}_section{index}_wall{wall+1}")
                         self.stud_centerlines[face].append(stud_y_position)
                     elif face in ["front", "rear"]:
@@ -745,7 +718,7 @@ class FramingBuilder:
                             stud_quantity = stud_quantity - 1
                             continue
                         else:
-                            stud = cq.Workplane('XY').box(3, 4, ceiling_height).translate((stud_x_position, new_y, new_z))
+                            stud = cq.Workplane('XY').box(3, 4, face_stud_length).translate((stud_x_position, new_y, new_z))
                             assembly.add(stud, name=f"{member_type}_{face}_story{story}_section{index}_wall{wall+1}")
                             self.stud_centerlines[face].append(stud_x_position)
             
@@ -771,21 +744,13 @@ class FramingBuilder:
         girt_width = 4
         girt_depth = 6
         
-        # Find the current story ceiling height
-        current_ceiling_height = self.ceiling_heights[story - 1] if story <= len(self.ceiling_heights) else self.ceiling_heights[-1]
-        
-        # Find the prior ceiling height
-        if story == 1:
-            prior_ceiling_height = 0
-        else:
-            prior_ceiling_height = self.ceiling_heights[story - 2]
-        
-        # Find the next ceiling height
-        if len(self.ceiling_heights) > story:
-            next_ceiling_height = self.ceiling_heights[story]
-        else:
-            next_ceiling_height = 0
-        
+        ceiling_heights = self._calculate_ceiling_heights()
+        floor_heights = self._calculate_floor_heights()
+        floor_height = floor_heights[story - 1]
+        ceiling_height = ceiling_heights[story - 1]
+        next_floor_height = floor_heights[story]
+        joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
+            
         for face in self.faces:
             dimension = self.faces[face]
             right_dimension = self.faces["right"]
@@ -801,18 +766,6 @@ class FramingBuilder:
                 quantity = 1
                 girt_length = 240
             
-            # Set the ceiling height depending on the story and face
-            # This ensures the mortises aren't at the same height on adjacent faces of the post
-            if face in ["left", "right"] and story == 1:
-                ceiling_height = next_ceiling_height
-                previous_ceiling_height = 0
-            elif face in ["left", "right"] and story == 2:
-                ceiling_height = prior_ceiling_height
-                previous_ceiling_height = current_ceiling_height
-            else:
-                ceiling_height = current_ceiling_height
-                previous_ceiling_height = prior_ceiling_height
-            
             total_quantity += quantity
             
             # Create girts for this face
@@ -822,12 +775,12 @@ class FramingBuilder:
                 if face == "front":
                     new_x = (girt_length * girt_counter) - (girt_length / 2) + x_offset
                     new_y = 0 + y_offset
-                    new_z = previous_ceiling_height
+                    new_z = floor_height - (girt_depth / 2) - joist_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
                     new_x = (girt_length * girt_counter) - (girt_length / 2) + x_offset
                     new_y = -right_dimension + y_offset
-                    new_z = previous_ceiling_height
+                    new_z = floor_height - (girt_depth / 2) - joist_height
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
                     # Left girts run along Y axis (front to rear)
@@ -835,7 +788,7 @@ class FramingBuilder:
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
                     new_x = ((right_dimension/2) * girt_counter) + x_offset
                     new_y = 0 + y_offset
-                    new_z = previous_ceiling_height
+                    new_z = floor_height - (girt_depth / 2)
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 elif face == "right":
                     # Right girts run along Y axis (front to rear)
@@ -843,7 +796,7 @@ class FramingBuilder:
                     # Y position: spaced along depth (right_dimension), similar to front/rear spacing
                     new_x = ((right_dimension/2) * girt_counter) + x_offset
                     new_y = front_dimension + y_offset
-                    new_z = previous_ceiling_height
+                    new_z = floor_height - (girt_depth / 2)
                     girt = cq.Workplane('XY').box(girt_length, girt_width, girt_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1), (0, 0, 0), 90)
                 
                 # Add the girt to the assembly with descriptive name
@@ -1029,7 +982,7 @@ class FramingBuilder:
         front_dimension = self.faces["front"]
         
         for face in ["front", "rear"]:
-            quantity = math.ceil(front_dimension / rafter_spacing) + 2
+            quantity = math.ceil(front_dimension / rafter_spacing) + 1
             total_quantity += quantity
             
             rafter_run = (right_dimension / 2) + roof_overhang
