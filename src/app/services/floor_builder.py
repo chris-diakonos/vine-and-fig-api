@@ -5,6 +5,7 @@ import cadquery as cq
 from typing import List, Optional
 from app.models.building import Flooring
 from app.models.floorplan import Dimensions
+from app.services.framing_builder import FramingBuilder
 
 
 class FloorBuilder:
@@ -19,7 +20,7 @@ class FloorBuilder:
         joist_heights: Optional[List[float]] = None
     ) -> cq.Workplane:
         """
-        Build floor structures for all stories.
+        Build floor structures for all stories using individual tongue-and-groove planks.
         
         Args:
             flooring: List of flooring specifications (one per story + attic)
@@ -37,6 +38,13 @@ class FloorBuilder:
         if joist_heights is None:
             joist_heights = [10] * (stories + 1)  # Include foundation floor
         
+        # Calculate floor heights using the same method as FramingBuilder
+        floor_heights = FramingBuilder.calculate_floor_heights(
+            stories,
+            joist_heights,
+            ceiling_heights
+        )
+        
         floors = None
         
         # If flooring array is empty or insufficient, create default config
@@ -49,54 +57,146 @@ class FloorBuilder:
             flooring_exposure=9.25
         )
         
-        # Calculate floor positions based on joist positions
-        # Joists are positioned at previous_ceiling_height and are centered (so extend joist_height/2 above and below)
-        # Floors should sit on TOP of the joists
-        
-        # Match the joist positioning logic from FramingBuilder._add_joists()
-        # Story 1: joists at z=0 (sitting on sills)
-        # Story 2+: joists at accumulated previous_ceiling_height
-        
+        # Build floors for each story
         for i in range(stories + 1):  # +1 for foundation floor (first floor)
-            # Convert floor index to story number (floors are 0-indexed, stories are 1-indexed)
-            story = i + 1
-            
-            # Calculate previous_ceiling_height exactly as in FramingBuilder._add_joists()
-            previous_ceiling_height = 0
-            if story > 1:
-                for p in range(story - 1):
-                    previous_ceiling_height += ceiling_heights[p] + (joist_heights[p] / 2)
-            
-            # Get joist height for this story (story is 1-indexed, so use story-1 as index)
-            joist_height_for_floor = joist_heights[story - 1] if (story - 1) < len(joist_heights) else joist_heights[-1]
-            
-            # Joist is centered at previous_ceiling_height
-            # Joist extends from previous_ceiling_height - joist_height/2 to previous_ceiling_height + joist_height/2
-            # Joist top = previous_ceiling_height + joist_height/2
-            joist_top = previous_ceiling_height + (joist_height_for_floor / 2)
-            
-            # Floor sits on top of joists
-            # Floor bottom = joist top
-            # Floor is centered, so floor center = floor bottom + floor_thickness/2
+            # Get flooring config for this floor
             if len(flooring) > 0:
                 flooring_config = flooring[i] if i < len(flooring) else flooring[0]
             else:
                 flooring_config = default_flooring
             
+            # Get floor height from calculated heights
+            floor_height = floor_heights[i]
             floor_thickness = flooring_config.flooring_thickness
-            floor_center_z = joist_top + (floor_thickness / 2)
+            floor_center_z = floor_height + (floor_thickness / 2)
             
-            # Create floor slab
-            floor_slab = (
-                cq.Workplane("XY")
-                .box(dimensions.front, dimensions.left, floor_thickness)
-                .translate((0, 0, floor_center_z))
+            # Build individual planks for this floor
+            floor_planks = FloorBuilder._build_floor_planks(
+                flooring_config,
+                dimensions,
+                floor_center_z
             )
             
-            # Add floor to collection
+            # Add floor planks to collection
             if floors is None:
-                floors = floor_slab
+                floors = floor_planks
             else:
-                floors = floors.union(floor_slab)
+                floors = floors.union(floor_planks)
         
         return floors
+    
+    @staticmethod
+    def _build_floor_planks(
+        flooring_config: Flooring,
+        dimensions: Dimensions,
+        floor_center_z: float
+    ) -> cq.Workplane:
+        """
+        Build individual tongue-and-groove planks for a floor.
+        
+        Args:
+            flooring_config: Flooring configuration
+            dimensions: Building dimensions
+            floor_center_z: Z position of floor center
+            
+        Returns:
+            CadQuery Workplane with all planks
+        """
+        flooring_width = flooring_config.flooring_width
+        flooring_exposure = flooring_config.flooring_exposure
+        floor_thickness = flooring_config.flooring_thickness
+        
+        # Calculate tongue dimensions
+        # Tongue is 1/2 of the difference between width and exposure
+        overlap = flooring_width - flooring_exposure
+        tongue_width = overlap / 2
+        groove_width = overlap / 2
+        
+        # Calculate number of planks needed
+        # Planks are spaced by exposure, starting from one edge
+        floor_length = dimensions.front
+        num_planks = int(floor_length / flooring_exposure) + 2  # Add extra to ensure coverage
+        
+        planks = None
+        
+        for i in range(num_planks):
+            # Calculate plank position (center of plank)
+            # First plank starts at flooring_width/2 (left edge at 0)
+            # Subsequent planks are spaced by flooring_exposure
+            plank_x = (flooring_width / 2) + (i * flooring_exposure)
+            
+            # Create plank with tongue-and-groove
+            plank = FloorBuilder._create_tongue_groove_plank(
+                flooring_width,
+                dimensions.left,  # Plank runs along left dimension (Y axis)
+                floor_thickness,
+                tongue_width,
+                groove_width
+            )
+            
+            # Position plank
+            plank = plank.translate((plank_x, 0, floor_center_z))
+            
+            # Add to collection
+            if planks is None:
+                planks = plank
+            else:
+                planks = planks.union(plank)
+        
+        return planks
+    
+    @staticmethod
+    def _create_tongue_groove_plank(
+        width: float,
+        length: float,
+        thickness: float,
+        tongue_width: float,
+        groove_width: float
+    ) -> cq.Workplane:
+        """
+        Create a single tongue-and-groove plank.
+        
+        The plank has:
+        - A tongue on one edge (extending beyond the main body)
+        - A groove on the other edge (recessed into the main body)
+        
+        Args:
+            width: Width of the plank (including tongue/groove)
+            length: Length of the plank
+            thickness: Thickness of the plank
+            tongue_width: Width of the tongue extension
+            groove_width: Width of the groove recess
+            
+        Returns:
+            CadQuery Workplane with the plank geometry
+        """
+        # Main plank body is the exposed width
+        # Tongue extends beyond on one side, groove recesses on the other
+        main_width = width - tongue_width - groove_width  # This equals flooring_exposure
+        
+        # Create main body (the visible/exposed part)
+        main_body = (
+            cq.Workplane("XY")
+            .box(main_width, length, thickness)
+        )
+        
+        # Add tongue on one side (positive X direction)
+        # Tongue extends outward from the main body
+        tongue = (
+            cq.Workplane("XY")
+            .box(tongue_width, length, thickness)
+            .translate((main_width / 2 + tongue_width / 2, 0, 0))
+        )
+        
+        # Create groove by cutting a recess into the main body
+        # Groove is on the negative X side (opposite from tongue)
+        groove_cutout = (
+            cq.Workplane("XY")
+            .box(groove_width, length, thickness * 0.6)  # Groove depth (60% of thickness)
+            .translate((-(main_width / 2 + groove_width / 2), 0, -thickness * 0.2))
+        )
+        
+        # Combine main body and tongue, then cut groove
+        plank = main_body.union(tongue).cut(groove_cutout)
+        
+        return plank

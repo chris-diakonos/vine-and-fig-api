@@ -137,12 +137,32 @@ class FramingBuilder:
         Returns:
             List of floor heights
         """
+        return FramingBuilder.calculate_floor_heights(
+            self.floorplan.stories,
+            self.floorplan.joist_heights,
+            self.ceiling_heights
+        )
+    
+    @staticmethod
+    def calculate_floor_heights(
+        stories: int,
+        joist_heights: List[float],
+        ceiling_heights: List[float]
+    ) -> List[float]:
+        """
+        Calculate floor heights for each story (static method for reuse).
+        
+        Args:
+            stories: Number of stories
+            joist_heights: List of joist heights for each floor
+            ceiling_heights: List of ceiling heights for each story
+            
+        Returns:
+            List of floor heights
+        """
         heights = []
         height = 0
-        stories = self.floorplan.stories
-        joist_heights = self.floorplan.joist_heights
-        ceiling_heights = self.ceiling_heights
-        sill_height = joist_heights[0]
+        sill_height = joist_heights[0] if joist_heights else 10
 
         for story in range(1, stories + 2):
             
