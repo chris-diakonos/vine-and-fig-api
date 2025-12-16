@@ -136,7 +136,7 @@ class FloorBuilder:
             )
             
             # Position plank
-            plank = plank.translate((plank_x, plank_length/2, floor_center_z))
+            plank = plank.translate((plank_x, -plank_length/2, floor_center_z))
             
             # Add plank to assembly as individual component
             plank_name = f"floor_plank_floor{floor_index}_plank{i}"
