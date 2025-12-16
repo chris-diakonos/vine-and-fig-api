@@ -7,6 +7,7 @@ import math
 from typing import List, Optional
 from app.models.building import Sheathing
 from app.models.floorplan import Dimensions
+from app.services.framing_builder import FramingBuilder
 
 
 class SheathingBuilder:
@@ -99,26 +100,42 @@ class SheathingBuilder:
         sheathing: Sheathing,
         dimensions: Dimensions,
         stories: int,
-        ceiling_heights: Optional[List[float]] = None
-    ) -> cq.Workplane:
+        ceiling_heights: Optional[List[float]] = None,
+        joist_heights: Optional[List[float]] = None
+    ) -> cq.Assembly:
         """
         Build exterior sheathing boards positioned on the outside of studs.
         
         Creates individual sheathing boards based on exposure and height specifications,
-        positioned on the exterior face of the wall studs.
+        positioned on the exterior face of the wall studs. Boards lap continuously from
+        the lowest floor height to the highest floor height.
         
         Args:
             sheathing: Sheathing specification (exposure, height, type)
             dimensions: Building dimensions
             stories: Number of stories
             ceiling_heights: Ceiling heights for each story
+            joist_heights: Joist heights for each floor
             
         Returns:
-            CadQuery Workplane with sheathing board geometry
+            CadQuery Assembly with individual sheathing boards as separate components
         """
-        # Use default ceiling heights if not specified
+        # Use defaults if not specified
         if ceiling_heights is None:
             ceiling_heights = [120] * stories  # 10 feet default
+        if joist_heights is None:
+            joist_heights = [10] * (stories + 1)  # Include foundation floor
+        
+        # Calculate floor heights using the same method as FramingBuilder
+        floor_heights = FramingBuilder.calculate_floor_heights(
+            stories,
+            joist_heights,
+            ceiling_heights
+        )
+        
+        # Determine the range: from lowest floor height to highest floor height
+        lowest_floor_height = min(floor_heights)
+        highest_floor_height = max(floor_heights)
         
         # Sheathing board specifications
         board_exposure = sheathing.sheathing_exposure  # Visible exposure in inches
@@ -138,138 +155,119 @@ class SheathingBuilder:
         front_rear_offset = stud_depth_front_rear / 2 + board_thickness / 2
         left_right_offset = stud_depth_left_right / 2 + board_thickness / 2
         
-        all_boards = None
+        # Create assembly to hold individual boards
+        sheathing_assembly = cq.Assembly()
         
-        # Build sheathing for each story
-        current_z = 0  # Start at foundation level (sills)
+        # Start from lowest floor height and lap boards up to highest floor height
+        wall_bottom = lowest_floor_height
+        wall_top = highest_floor_height + (ceiling_heights[-1] if ceiling_heights else 120)
         
-        for story in range(1, stories + 1):
-            story_ceiling_height = ceiling_heights[story - 1] if story <= len(ceiling_heights) else ceiling_heights[-1]
-            
-            # Calculate previous ceiling height for this story
-            previous_ceiling_height = 0
-            if story > 1:
-                for p in range(story - 1):
-                    previous_ceiling_height += ceiling_heights[p]
-            
-            # Wall height for this story (from previous ceiling to current ceiling)
-            wall_bottom = previous_ceiling_height
-            wall_top = previous_ceiling_height + story_ceiling_height
-            
-            # Create sheathing boards for each face
-            for face in ["front", "rear", "left", "right"]:
-                if face == "front":
-                    wall_length = dimensions.front
-                    # Position on exterior: studs at y=0, sheathing at y = -offset (outside)
-                    # Studs are 3" wide x 4" deep, so exterior face is at y = -2"
-                    # Sheathing center should be at y = -2" - board_thickness/2
-                    base_y = -(stud_depth_front_rear / 2) - (board_thickness / 2)
-                    wall_center_x = wall_length / 2
-                    
-                elif face == "rear":
-                    wall_length = dimensions.rear
-                    # Position on exterior: studs at y=-right_dimension, sheathing at y = -right_dimension + offset
-                    # Studs are 3" wide x 4" deep, so exterior face is at y = -right_dimension + 2"
-                    # Sheathing center should be at y = -right_dimension + 2" + board_thickness/2
-                    base_y = -dimensions.right + (stud_depth_front_rear / 2) + (board_thickness / 2)
-                    wall_center_x = wall_length / 2
-                    
-                elif face == "left":
-                    wall_length = dimensions.left
-                    # Position on exterior: studs at x=0, sheathing at x = -offset (outside)
-                    # Studs are 4" wide x 3" deep, so exterior face is at x = -1.5"
-                    # Sheathing center should be at x = -1.5" - board_thickness/2
-                    base_x = -(stud_depth_left_right / 2) - (board_thickness / 2)
-                    wall_center_y = -dimensions.right + (wall_length / 2)
-                    
-                elif face == "right":
-                    wall_length = dimensions.right
-                    # Position on exterior: studs at x=front_dimension, sheathing at x = front_dimension + offset
-                    # Studs are 4" wide x 3" deep, so exterior face is at x = front_dimension + 1.5"
-                    # Sheathing center should be at x = front_dimension + 1.5" + board_thickness/2
-                    base_x = dimensions.front + (stud_depth_left_right / 2) + (board_thickness / 2)
-                    wall_center_y = -dimensions.right + (wall_length / 2)
+        # Calculate number of boards needed vertically (continuous lapping)
+        vertical_coverage = wall_top - wall_bottom
+        num_boards = math.ceil(vertical_coverage / board_exposure)
+        
+        # Create sheathing boards for each face
+        for face in ["front", "rear", "left", "right"]:
+            if face == "front":
+                wall_length = dimensions.front
+                # Position on exterior: studs at y=0, sheathing at y = -offset (outside)
+                # Studs are 3" wide x 4" deep, so exterior face is at y = -2"
+                # Sheathing center should be at y = -2" - board_thickness/2
+                base_y = -(stud_depth_front_rear / 2) - (board_thickness / 2)
+                wall_center_x = wall_length / 2
                 
-                # Calculate number of boards needed vertically
-                # Boards overlap based on exposure (visible portion)
-                vertical_coverage = wall_top - wall_bottom
-                num_boards = math.ceil(vertical_coverage / board_exposure)
+            elif face == "rear":
+                wall_length = dimensions.rear
+                # Position on exterior: studs at y=-right_dimension, sheathing at y = -right_dimension + offset
+                # Studs are 3" wide x 4" deep, so exterior face is at y = -right_dimension + 2"
+                # Sheathing center should be at y = -right_dimension + 2" + board_thickness/2
+                base_y = -dimensions.right + (stud_depth_front_rear / 2) + (board_thickness / 2)
+                wall_center_x = wall_length / 2
                 
-                # Create individual sheathing boards
-                for board_index in range(num_boards):
-                    # Calculate vertical position (bottom of board)
-                    board_bottom_z = wall_bottom + (board_index * board_exposure)
-                    board_top_z = board_bottom_z + board_height
-                    
-                    # Clamp to wall boundaries
-                    if board_bottom_z < wall_bottom:
-                        board_bottom_z = wall_bottom
-                    if board_top_z > wall_top:
-                        board_top_z = wall_top
-                    
-                    actual_board_height = board_top_z - board_bottom_z
-                    if actual_board_height <= 0:
-                        continue
-                    
-                    # Board center Z position
-                    board_center_z = board_bottom_z + (actual_board_height / 2)
-                    
-                    # Create 2D profile based on sheathing type
-                    # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
-                    if sheathing.sheathing_type == "beveled-weatherboard":
-                        base_profile = SheathingBuilder._bevel_weatherboard(
-                            top_width, bottom_width, actual_board_height
-                        )
-                    elif sheathing.sheathing_type == "beaded-weatherboard":
-                        base_profile = SheathingBuilder._beaded_weatherboard(
-                            top_width, bottom_width, actual_board_height
-                        )
-                    else:
-                        # Fallback to beveled if unknown type
-                        base_profile = SheathingBuilder._bevel_weatherboard(
-                            top_width, bottom_width, actual_board_height
-                        )
-                    
-                    # Extrude profile along wall length to create board
-                    # Profile is in XZ plane: X = width, Z = height (negative), normal = Y
-                    # When extruded from XZ plane, extends in Y direction by default
-                    if face in ["front", "rear"]:
-                        # Boards run horizontally along X axis (wall length)
-                        # Profile width should be in Y direction (perpendicular to wall)
-                        # Profile height is in Z direction (vertical)
-                        # Rotate profile 90° around Z to put width in Y direction
-                        # Then sweep along X axis path
-                        rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), 90)
-                        # Create path along X axis
-                        sweep_path = cq.Workplane("XY").moveTo(0, 0).lineTo(wall_length, 0)
-                        board = (
-                            rotated_profile
-                            .sweep(sweep_path)
-                            .translate((wall_center_x - wall_length / 2, base_y, board_center_z))
-                        )
-                    else:  # left, right
-                        # Boards run horizontally along Y axis (wall length)
-                        # Profile width should be in X direction (perpendicular to wall)
-                        # Profile height is in Z direction (vertical)
-                        # Profile is in XZ plane, so width is already in X
-                        # Extrude along Y (default direction for XZ workplane)
-                        board = (
-                            base_profile
-                            .extrude(wall_length)  # Extrude along Y (wall length)
-                            .translate((base_x, wall_center_y - wall_length / 2, board_center_z))
-                        )
-                    
-                    # Add board to collection
-                    if all_boards is None:
-                        all_boards = board
-                    else:
-                        all_boards = all_boards.union(board)
+            elif face == "left":
+                wall_length = dimensions.left
+                # Position on exterior: studs at x=0, sheathing at x = -offset (outside)
+                # Studs are 4" wide x 3" deep, so exterior face is at x = -1.5"
+                # Sheathing center should be at x = -1.5" - board_thickness/2
+                base_x = -(stud_depth_left_right / 2) - (board_thickness / 2)
+                wall_center_y = -dimensions.right + (wall_length / 2)
+                
+            elif face == "right":
+                wall_length = dimensions.right
+                # Position on exterior: studs at x=front_dimension, sheathing at x = front_dimension + offset
+                # Studs are 4" wide x 3" deep, so exterior face is at x = front_dimension + 1.5"
+                # Sheathing center should be at x = front_dimension + 1.5" + board_thickness/2
+                base_x = dimensions.front + (stud_depth_left_right / 2) + (board_thickness / 2)
+                wall_center_y = -dimensions.right + (wall_length / 2)
             
-            # Move up for next story
-            current_z += story_ceiling_height
+            # Create individual sheathing boards lapping continuously from bottom to top
+            for board_index in range(num_boards):
+                # Calculate vertical position (bottom of board)
+                # Boards lap based on exposure (visible portion)
+                board_bottom_z = wall_bottom + (board_index * board_exposure)
+                board_top_z = board_bottom_z + board_height
+                
+                # Clamp to wall boundaries
+                if board_bottom_z < wall_bottom:
+                    board_bottom_z = wall_bottom
+                if board_top_z > wall_top:
+                    board_top_z = wall_top
+                
+                actual_board_height = board_top_z - board_bottom_z
+                if actual_board_height <= 0:
+                    continue
+                
+                # Board center Z position
+                board_center_z = board_bottom_z + (actual_board_height / 2)
+                
+                # Create 2D profile based on sheathing type
+                # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
+                if sheathing.sheathing_type == "beveled-weatherboard":
+                    base_profile = SheathingBuilder._bevel_weatherboard(
+                        top_width, bottom_width, actual_board_height
+                    )
+                elif sheathing.sheathing_type == "beaded-weatherboard":
+                    base_profile = SheathingBuilder._beaded_weatherboard(
+                        top_width, bottom_width, actual_board_height
+                    )
+                else:
+                    # Fallback to beveled if unknown type
+                    base_profile = SheathingBuilder._bevel_weatherboard(
+                        top_width, bottom_width, actual_board_height
+                    )
+                
+                # Extrude profile along wall length to create board
+                # Profile is in XZ plane: X = width, Z = height (negative), normal = Y
+                # When extruded from XZ plane, extends in Y direction by default
+                if face in ["front", "rear"]:
+                    # Boards run horizontally along X axis (wall length)
+                    # Profile width should be in Y direction (perpendicular to wall)
+                    # Profile height is in Z direction (vertical)
+                    # Rotate profile 90° around Z to put width in Y direction
+                    # Then sweep along X axis path
+                    rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), 90)
+                    # Create path along X axis
+                    sweep_path = cq.Workplane("XY").moveTo(0, 0).lineTo(wall_length, 0)
+                    board = (
+                        rotated_profile
+                        .sweep(sweep_path)
+                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z))
+                    )
+                else:  # left, right
+                    # Boards run horizontally along Y axis (wall length)
+                    # Profile width should be in X direction (perpendicular to wall)
+                    # Profile height is in Z direction (vertical)
+                    # Profile is in XZ plane, so width is already in X
+                    # Extrude along Y (default direction for XZ workplane)
+                    board = (
+                        base_profile
+                        .extrude(wall_length)  # Extrude along Y (wall length)
+                        .translate((base_x, wall_center_y - wall_length / 2, board_center_z))
+                    )
+                
+                # Add board to assembly as individual component
+                board_name = f"sheathing_{face}_board{board_index}"
+                sheathing_assembly.add(board, name=board_name)
         
-        if all_boards is None:
-            return cq.Workplane("XY")
-        
-        return all_boards
+        return sheathing_assembly
 

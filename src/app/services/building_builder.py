@@ -99,13 +99,21 @@ class BuildingBuilder:
         # Build sheathing
         # Sheathing boards positioned on exterior of studs
         if component_visibility.sheathing:
-            sheathing = SheathingBuilder.build(
+            sheathing_assembly = SheathingBuilder.build(
                 structure.sheathing,
                 dimensions,
                 floorplan.stories,
-                floorplan.ceiling_heights
+                floorplan.ceiling_heights,
+                floorplan.joist_heights
             )
-            building_assembly.add(sheathing, name="sheathing", color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
+            
+            # Add all sheathing boards to the main assembly as individual components
+            # Traverse the sheathing assembly and add each board
+            for name, obj_data in sheathing_assembly.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    # Use the original name from sheathing assembly or generate one
+                    component_name = name if name else f"sheathing_{len(building_assembly.children)}"
+                    building_assembly.add(obj_data.obj, name=component_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         # Build roof
         if component_visibility.roof:
