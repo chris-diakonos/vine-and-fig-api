@@ -104,6 +104,9 @@ class FloorBuilder:
         flooring_exposure = flooring_config.flooring_exposure
         floor_thickness = flooring_config.flooring_thickness
         
+        # Small visual gap between planks (in inches) for visual distinction
+        plank_gap = 0.03  # 0.03 inches = ~0.76mm - small but visible
+        
         # Calculate tongue dimensions
         # Tongue is 1/2 of the difference between width and exposure
         overlap = flooring_width - flooring_exposure
@@ -111,15 +114,16 @@ class FloorBuilder:
         groove_width = overlap / 2
         
         # Calculate number of planks needed
-        # Planks are spaced by exposure, starting from one edge
+        # Planks are spaced by exposure + gap, starting from one edge
         floor_length = dimensions.front
-        num_planks = int(floor_length / flooring_exposure) + 2  # Add extra to ensure coverage
+        spacing = flooring_exposure + plank_gap
+        num_planks = int(floor_length / spacing) + 2  # Add extra to ensure coverage
         
         for i in range(num_planks):
             # Calculate plank position (center of plank)
             # First plank starts at flooring_width/2 (left edge at 0)
-            # Subsequent planks are spaced by flooring_exposure
-            plank_x = (flooring_width / 2) + (i * flooring_exposure)
+            # Subsequent planks are spaced by exposure + gap
+            plank_x = (flooring_width / 2) + (i * spacing)
             
             # Create plank with tongue-and-groove
             plank = FloorBuilder._create_tongue_groove_plank(
