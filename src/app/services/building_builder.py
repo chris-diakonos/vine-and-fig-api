@@ -80,14 +80,21 @@ class BuildingBuilder:
         # Floors sit on top of joists (which sit on sills/girts)
         # Floor positions are calculated based on joist positions
         if component_visibility.floors:
-            floors = FloorBuilder.build(
+            floor_assembly = FloorBuilder.build(
                 structure.flooring,
                 dimensions,
                 floorplan.stories,
                 floorplan.ceiling_heights,
                 floorplan.joist_heights
             )
-            building_assembly.add(floors, name="floors", color=cq.Color(0.8, 0.7, 0.6))  # Light wood
+            
+            # Add all floor planks to the main assembly as individual components
+            # Traverse the floor assembly and add each plank
+            for name, obj_data in floor_assembly.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    # Use the original name from floor assembly or generate one
+                    component_name = name if name else f"floor_{len(building_assembly.children)}"
+                    building_assembly.add(obj_data.obj, name=component_name, color=cq.Color(0.8, 0.7, 0.6))  # Light wood
         
         # Build sheathing
         # Sheathing boards positioned on exterior of studs

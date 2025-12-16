@@ -18,7 +18,7 @@ class FloorBuilder:
         stories: int,
         ceiling_heights: Optional[List[float]] = None,
         joist_heights: Optional[List[float]] = None
-    ) -> cq.Workplane:
+    ) -> cq.Assembly:
         """
         Build floor structures for all stories using individual tongue-and-groove planks.
         
@@ -30,7 +30,7 @@ class FloorBuilder:
             joist_heights: Joist heights for each floor
             
         Returns:
-            CadQuery Workplane with floor geometry
+            CadQuery Assembly with individual planks as separate components
         """
         # Use defaults if not specified
         if ceiling_heights is None:
@@ -45,7 +45,8 @@ class FloorBuilder:
             ceiling_heights
         )
         
-        floors = None
+        # Create assembly to hold individual planks
+        floor_assembly = cq.Assembly()
         
         # If flooring array is empty or insufficient, create default config
         from app.models.building import Flooring as FlooringModel
@@ -70,37 +71,34 @@ class FloorBuilder:
             floor_thickness = flooring_config.flooring_thickness
             floor_center_z = floor_height + (floor_thickness / 2)
             
-            # Build individual planks for this floor
-            floor_planks = FloorBuilder._build_floor_planks(
+            # Build individual planks for this floor and add to assembly
+            FloorBuilder._build_floor_planks(
+                floor_assembly,
                 flooring_config,
                 dimensions,
-                floor_center_z
+                floor_center_z,
+                i  # floor index for naming
             )
-            
-            # Add floor planks to collection
-            if floors is None:
-                floors = floor_planks
-            else:
-                floors = floors.union(floor_planks)
         
-        return floors
+        return floor_assembly
     
     @staticmethod
     def _build_floor_planks(
+        assembly: cq.Assembly,
         flooring_config: Flooring,
         dimensions: Dimensions,
-        floor_center_z: float
-    ) -> cq.Workplane:
+        floor_center_z: float,
+        floor_index: int
+    ) -> None:
         """
-        Build individual tongue-and-groove planks for a floor.
+        Build individual tongue-and-groove planks for a floor and add to assembly.
         
         Args:
+            assembly: Assembly to add planks to
             flooring_config: Flooring configuration
             dimensions: Building dimensions
             floor_center_z: Z position of floor center
-            
-        Returns:
-            CadQuery Workplane with all planks
+            floor_index: Index of the floor (for naming)
         """
         flooring_width = flooring_config.flooring_width
         flooring_exposure = flooring_config.flooring_exposure
@@ -116,8 +114,6 @@ class FloorBuilder:
         # Planks are spaced by exposure, starting from one edge
         floor_length = dimensions.front
         num_planks = int(floor_length / flooring_exposure) + 2  # Add extra to ensure coverage
-        
-        planks = None
         
         for i in range(num_planks):
             # Calculate plank position (center of plank)
@@ -137,13 +133,9 @@ class FloorBuilder:
             # Position plank
             plank = plank.translate((plank_x, 0, floor_center_z))
             
-            # Add to collection
-            if planks is None:
-                planks = plank
-            else:
-                planks = planks.union(plank)
-        
-        return planks
+            # Add plank to assembly as individual component
+            plank_name = f"floor_plank_floor{floor_index}_plank{i}"
+            assembly.add(plank, name=plank_name)
     
     @staticmethod
     def _create_tongue_groove_plank(
