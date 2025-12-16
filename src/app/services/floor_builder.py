@@ -103,9 +103,10 @@ class FloorBuilder:
         flooring_width = flooring_config.flooring_width
         flooring_exposure = flooring_config.flooring_exposure
         floor_thickness = flooring_config.flooring_thickness
+        plank_length = dimensions.left
         
         # Small visual gap between planks (in inches) for visual distinction
-        plank_gap = 0.03  # 0.03 inches = ~0.76mm - small but visible
+        plank_gap = 0.0625  # 0.0625 inches = ~1.59mm - small but visible
         
         # Calculate tongue dimensions
         # Tongue is 1/2 of the difference between width and exposure
@@ -128,14 +129,14 @@ class FloorBuilder:
             # Create plank with tongue-and-groove
             plank = FloorBuilder._create_tongue_groove_plank(
                 flooring_width,
-                dimensions.left,  # Plank runs along left dimension (Y axis)
+                plank_length,  # Plank runs along left dimension (Y axis)
                 floor_thickness,
                 tongue_width,
                 groove_width
             )
             
             # Position plank
-            plank = plank.translate((plank_x, 0, floor_center_z))
+            plank = plank.translate((plank_x, plank_length/2, floor_center_z))
             
             # Add plank to assembly as individual component
             plank_name = f"floor_plank_floor{floor_index}_plank{i}"
