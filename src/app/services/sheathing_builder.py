@@ -140,15 +140,15 @@ class SheathingBuilder:
         # Sheathing board specifications
         board_exposure = sheathing.sheathing_exposure  # Visible exposure in inches
         board_height = sheathing.sheathing_height  # Board height in inches
-        board_thickness = 0.75  # Typical sheathing board thickness in inches
+        board_thickness = 0  # Typical sheathing board thickness in inches
         
         # Profile dimensions (same for beveled and beaded weatherboard)
         top_width = 0.375  # Top width in inches
         bottom_width = 0.625  # Bottom width in inches
         
         # Stud dimensions (from framing)
-        stud_depth_front_rear = 4  # Front/rear studs: 3" wide x 4" deep
-        stud_depth_left_right = 3  # Left/right studs: 4" wide x 3" deep
+        stud_depth_front_rear = 0  # Front/rear studs: 3" wide x 4" deep
+        stud_depth_left_right = 0 # Left/right studs: 4" wide x 3" deep
         
         # Calculate sheathing position offset from stud face
         # Sheathing sits on the exterior (outside) of studs
@@ -245,7 +245,10 @@ class SheathingBuilder:
                     # Profile height is in Z direction (vertical)
                     # Rotate profile 90° around Z to put width in Y direction
                     # Then sweep along X axis path
-                    rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), 90)
+                    if face == "front":
+                        rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), -90)
+                    else:
+                        rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), 90)
                     # Create path along X axis
                     sweep_path = cq.Workplane("XY").moveTo(0, 0).lineTo(wall_length, 0)
                     board = (
@@ -259,10 +262,17 @@ class SheathingBuilder:
                     # Profile height is in Z direction (vertical)
                     # Profile is in XZ plane, so width is already in X
                     # Extrude along Y (default direction for XZ workplane)
+
+                    # Rotate profile 90° around Z to put width in X direction
+                    if face == "left":
+                        rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), 180)
+                    else:
+                        rotated_profile = base_profile
+
                     board = (
-                        base_profile
+                        rotated_profile
                         .extrude(wall_length)  # Extrude along Y (wall length)
-                        .translate((base_x, wall_center_y - wall_length / 2, board_center_z))
+                        .translate((base_x, wall_center_y + wall_length / 2, board_center_z))
                     )
                 
                 # Add board to assembly as individual component
