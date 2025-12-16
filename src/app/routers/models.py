@@ -118,7 +118,8 @@ async def generate_model(
             structure=request.structure,
             view_mode=request.view_mode,
             structure_hash=request.structure_hash,
-            base_url_override=base_url
+            base_url_override=base_url,
+            component_visibility=request.component_visibility
         )
         
         # Schedule cleanup of old files in the background

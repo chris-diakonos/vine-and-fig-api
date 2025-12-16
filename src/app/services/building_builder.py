@@ -3,7 +3,7 @@ Main building builder that combines all components.
 """
 import cadquery as cq
 from typing import Tuple, Dict, Any, Optional
-from app.models.structure import Structure
+from app.models.structure import Structure, ComponentVisibility
 from app.services.foundation_builder import FoundationBuilder
 from app.services.floor_builder import FloorBuilder
 from app.services.sheathing_builder import SheathingBuilder
@@ -16,7 +16,11 @@ class BuildingBuilder:
     """Orchestrates the construction of complete building model."""
     
     @staticmethod
-    def build(structure: Structure, structure_hash: Optional[str] = None) -> Tuple[cq.Assembly, Optional[Dict[str, Any]]]:
+    def build(
+        structure: Structure, 
+        structure_hash: Optional[str] = None,
+        component_visibility: Optional[ComponentVisibility] = None
+    ) -> Tuple[cq.Assembly, Optional[Dict[str, Any]]]:
         """
         Build a complete building from structure specification.
         
@@ -26,10 +30,15 @@ class BuildingBuilder:
         Args:
             structure: Complete structure specification
             structure_hash: Optional structure hash for BOM tracking
+            component_visibility: Optional visibility flags for each component (defaults to all visible)
             
         Returns:
             Tuple of (CadQuery Assembly with complete building geometry, BOM data dictionary)
         """
+        # Default to all components visible if not specified
+        if component_visibility is None:
+            component_visibility = ComponentVisibility()
+        
         floorplan = structure.floorplan
         dimensions = floorplan.dimensions
         
@@ -38,16 +47,17 @@ class BuildingBuilder:
         
         # Build foundation first
         # Foundation top is at z=0, foundation extends downward
-        foundation = FoundationBuilder.build(
-            structure.foundation,
-            dimensions
-        )
-        building_assembly.add(foundation, name="foundation", color=cq.Color(0.7, 0.7, 0.7))  # Gray
+        if component_visibility.foundation:
+            foundation = FoundationBuilder.build(
+                structure.foundation,
+                dimensions
+            )
+            building_assembly.add(foundation, name="foundation", color=cq.Color(0.7, 0.7, 0.7))  # Gray
         
         # Build framing (returns assembly and BOM data)
         # Framing starts at z=0 (sills sit on foundation top)
         bom_data = None
-        if structure_hash:
+        if component_visibility.framing and structure_hash:
             try:
                 framing_builder = FramingBuilder(structure, structure_hash)
                 framing_assembly, bom_data = framing_builder.build()
@@ -66,48 +76,50 @@ class BuildingBuilder:
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Framing construction failed: {e}")
         
-        # TEMPORARILY DISABLED: Only rendering foundation and framing for debugging
         # Build floors
         # Floors sit on top of joists (which sit on sills/girts)
         # Floor positions are calculated based on joist positions
-        # floors = FloorBuilder.build(
-        #     structure.flooring,
-        #     dimensions,
-        #     floorplan.stories,
-        #     floorplan.ceiling_heights,
-        #     floorplan.joist_heights
-        # )
-        # building_assembly.add(floors, name="floors", color=cq.Color(0.8, 0.7, 0.6))  # Light wood
+        if component_visibility.floors:
+            floors = FloorBuilder.build(
+                structure.flooring,
+                dimensions,
+                floorplan.stories,
+                floorplan.ceiling_heights,
+                floorplan.joist_heights
+            )
+            building_assembly.add(floors, name="floors", color=cq.Color(0.8, 0.7, 0.6))  # Light wood
         
         # Build sheathing
         # Sheathing boards positioned on exterior of studs
-        # sheathing = SheathingBuilder.build(
-        #     structure.sheathing,
-        #     dimensions,
-        #     floorplan.stories,
-        #     floorplan.ceiling_heights
-        # )
-        # building_assembly.add(sheathing, name="sheathing", color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
+        if component_visibility.sheathing:
+            sheathing = SheathingBuilder.build(
+                structure.sheathing,
+                dimensions,
+                floorplan.stories,
+                floorplan.ceiling_heights
+            )
+            building_assembly.add(sheathing, name="sheathing", color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         # Build roof
-        # roof = RoofBuilder.build(
-        #     structure.roof,
-        #     dimensions,
-        #     floorplan.stories,
-        #     floorplan.ceiling_heights
-        # )
-        # building_assembly.add(roof, name="roof", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
+        if component_visibility.roof:
+            roof = RoofBuilder.build(
+                structure.roof,
+                dimensions,
+                floorplan.stories,
+                floorplan.ceiling_heights
+            )
+            building_assembly.add(roof, name="roof", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
         
         # Add windows if specified
-        # if structure.windows:
-        #     windows = OpeningsBuilder.build_windows(structure.windows, dimensions)
-        #     if windows is not None:
-        #         building_assembly.add(windows, name="windows", color=cq.Color(0.7, 0.9, 1.0))  # Light blue
+        if component_visibility.windows and structure.windows:
+            windows = OpeningsBuilder.build_windows(structure.windows, dimensions)
+            if windows is not None:
+                building_assembly.add(windows, name="windows", color=cq.Color(0.7, 0.9, 1.0))  # Light blue
         
         # Add doors if specified
-        # if structure.doors:
-        #     doors = OpeningsBuilder.build_doors(structure.doors, dimensions)
-        #     if doors is not None:
-        #         building_assembly.add(doors, name="doors", color=cq.Color(0.5, 0.3, 0.2))  # Brown
+        if component_visibility.doors and structure.doors:
+            doors = OpeningsBuilder.build_doors(structure.doors, dimensions)
+            if doors is not None:
+                building_assembly.add(doors, name="doors", color=cq.Color(0.5, 0.3, 0.2))  # Brown
         
         return building_assembly, bom_data

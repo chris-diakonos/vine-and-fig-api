@@ -21,6 +21,17 @@ class Structure(BaseModel):
     doors: List[Door] = Field(default_factory=list, description="Door specifications")
 
 
+class ComponentVisibility(BaseModel):
+    """Controls which building components are rendered in the model."""
+    foundation: bool = Field(default=True, description="Render foundation")
+    framing: bool = Field(default=True, description="Render framing")
+    floors: bool = Field(default=True, description="Render floors")
+    sheathing: bool = Field(default=True, description="Render sheathing")
+    roof: bool = Field(default=True, description="Render roof")
+    windows: bool = Field(default=True, description="Render windows")
+    doors: bool = Field(default=True, description="Render doors")
+
+
 class BuildingRequest(BaseModel):
     """Request model for generating building models and drawings."""
     customer: Customer = Field(..., description="Customer information")
@@ -38,4 +49,8 @@ class BuildingRequest(BaseModel):
     ] = Field(
         default="3d",
         description="View mode for the generated output"
+    )
+    component_visibility: Optional[ComponentVisibility] = Field(
+        default_factory=ComponentVisibility,
+        description="Controls which building components are rendered (useful for debugging)"
     )

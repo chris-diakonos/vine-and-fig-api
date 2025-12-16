@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Tuple, Literal
 import logging
 
-from app.models.structure import Structure
+from app.models.structure import Structure, ComponentVisibility
 from app.models.responses import ModelResponse
 from app.services.building_builder import BuildingBuilder
 from app.services.export_service import ExportService
@@ -32,7 +32,8 @@ class ModelGenerator:
             "elevation-right"
         ],
         structure_hash: str = None,
-        base_url_override: str = None
+        base_url_override: str = None,
+        component_visibility: ComponentVisibility = None
     ) -> ModelResponse:
         """
         Generate a building model or drawing based on the structure specification.
@@ -78,7 +79,11 @@ class ModelGenerator:
         
         # Build the 3D model using CadQuery
         try:
-            building_model, bom_data = BuildingBuilder.build(structure, structure_hash)
+            building_model, bom_data = BuildingBuilder.build(
+                structure, 
+                structure_hash,
+                component_visibility=component_visibility
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to build model: {str(e)}")
         

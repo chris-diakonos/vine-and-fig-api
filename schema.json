@@ -154,6 +154,19 @@
             "roof": { "$ref": "#RoofSchema" },
             "flooring": { "$ref": "#FlooringSchema" }
         }
+    },
+    "componentVisibility": {
+        "$anchor": "ComponentVisibilitySchema",
+        "type": "object",
+        "properties": {
+            "foundation": { "type": "boolean", "default": true, "description": "Render foundation" },
+            "framing": { "type": "boolean", "default": true, "description": "Render framing" },
+            "floors": { "type": "boolean", "default": true, "description": "Render floors" },
+            "sheathing": { "type": "boolean", "default": true, "description": "Render sheathing" },
+            "roof": { "type": "boolean", "default": true, "description": "Render roof" },
+            "windows": { "type": "boolean", "default": true, "description": "Render windows" },
+            "doors": { "type": "boolean", "default": true, "description": "Render doors" }
+        }
     }
 }
 }

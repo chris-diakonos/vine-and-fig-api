@@ -149,7 +149,7 @@ class FramingBuilder:
             if story == 1:
                 height = sill_height
             else:
-                height = height + ceiling_heights[story - 2] + joist_heights[story - 2]
+                height = height + ceiling_heights[story - 2] + joist_heights[story - 1]
             
             heights.append(height)
         
@@ -187,7 +187,7 @@ class FramingBuilder:
 
             self._add_joists(assembly, story, -y_offset, x_offset)
 
-            if story in (1, self.floorplan.stories):
+            if story in range(1, self.floorplan.stories + 1):
                 self._add_braces(assembly, story, x_offset, y_offset)
                 self._add_bays(assembly, story, x_offset, y_offset)
                 self._add_studs(assembly, story, x_offset, y_offset)
@@ -596,10 +596,10 @@ class FramingBuilder:
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
-            member_type, ceiling_height / 12, bay_stud_width, bay_stud_height, self.materials
+            member_type, stud_length / 12, bay_stud_width, bay_stud_height, self.materials
         )
         raw_material_id_cripple, component_id_cripple = add_framing_materials(
-            "cripple_stud", self.chair_rail_height / 12, cripple_stud_width, cripple_stud_height, self.materials
+            "cripple_stud", cripple_stud_length / 12, cripple_stud_width, cripple_stud_height, self.materials
         )
         add_production_bom_quantities(
             component_id, raw_material_id, 1, 2,
@@ -740,7 +740,7 @@ class FramingBuilder:
         
         # Add BOM tracking
         raw_material_id, component_id = add_framing_materials(
-            member_type, ceiling_height / 12, stud_width, stud_height, self.materials
+            member_type, stud_length / 12, stud_width, stud_height, self.materials
         )
         add_production_bom_quantities(
             component_id, raw_material_id, 1, 2,
@@ -863,22 +863,22 @@ class FramingBuilder:
                 
                 if face == "front":
                     new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
-                    new_y = 0
+                    new_y = 0 + y_offset
                     new_z = next_floor_height - (plate_depth / 2) - next_joist_height
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z))
                 elif face == "rear":
                     new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
-                    new_y = -right_dimension
+                    new_y = -right_dimension + y_offset
                     new_z = next_floor_height - (plate_depth / 2) - next_joist_height
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z))
                 elif face == "left":
-                    new_x = +(right_dimension/2) * plate_counter
-                    new_y = 0
+                    new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
+                    new_y = 0 + y_offset
                     new_z = next_floor_height - (plate_depth / 2)
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
                 elif face == "right":
-                    new_x = +(right_dimension/2) * plate_counter
-                    new_y = +(front_dimension)
+                    new_x = (plate_length * plate_counter) - (plate_length / 2) + x_offset
+                    new_y = +(front_dimension) + y_offset
                     new_z = next_floor_height - (plate_depth / 2)
                     plate = cq.Workplane('XY').box(plate_length, plate_width, plate_depth).translate((new_x, new_y, new_z)).rotate((0, 0, 1),(0,0,0), 90)
 
