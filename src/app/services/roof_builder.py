@@ -338,7 +338,20 @@ class RoofBuilder:
                     # Fallback to AG panel
                     panel = RoofBuilder._ag_panel(panel_length)
 
-                panel = panel.rotateAboutCenter((1, 0, 0),roof_pitch).translate((panel_x, panel_y, panel_z))
+                # Rotate the panel first
+                panel = panel.rotateAboutCenter((1, 0, 0), roof_pitch)
+                
+                # Get the bounding box after rotation to find actual center Y position
+                # panel_y represents where the center should be after accounting for pitch
+                # After rotateAboutCenter, the center stays fixed, so we need to find where it is
+                bbox = panel.val().BoundingBox()
+                current_center_y = (bbox.ymin + bbox.ymax) / 2
+                
+                # Calculate offset needed to move center from current position to panel_y
+                y_offset = panel_y - current_center_y
+                
+                # Translate to final position
+                panel = panel.translate((panel_x, y_offset, panel_z))
                 
                 assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
 
