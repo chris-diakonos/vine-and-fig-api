@@ -146,6 +146,12 @@ class SheathingBuilder:
         top_width = 0.375  # Top width in inches
         bottom_width = 0.625  # Bottom width in inches
         
+        # Calculate bevel angle for lapped siding
+        # The bevel is the angle created by the difference between top and bottom width
+        # bevel_angle = arctan((bottom_width - top_width) / board_height)
+        bevel_angle_radians = math.atan((bottom_width - top_width) / board_height)
+        bevel_angle_degrees = math.degrees(bevel_angle_radians)
+        
         # Stud dimensions (from framing)
         stud_depth_front_rear = 0  # Front/rear studs: 3" wide x 4" deep
         stud_depth_left_right = 0 # Left/right studs: 4" wide x 3" deep
@@ -256,6 +262,17 @@ class SheathingBuilder:
                         .sweep(sweep_path)
                         .translate((wall_center_x - wall_length / 2, base_y, board_center_z))
                     )
+                    # Rotate board around X axis to accommodate bevel angle
+                    # This tilts the board so the beveled edge aligns properly when lapped
+                    # For lapped siding, the bottom (wider) should tilt outward
+                    # Front face: negative Y is outside, so rotate to tilt bottom outward
+                    # Rear face: positive Y is outside, so rotate opposite direction
+                    if face == "front":
+                        # Rotate negative to tilt bottom toward negative Y (outward)
+                        board = board.rotate((wall_center_x - wall_length / 2, base_y, board_center_z), (1, 0, 0), -bevel_angle_degrees)
+                    else:  # rear
+                        # Rotate positive to tilt bottom toward positive Y (outward)
+                        board = board.rotate((wall_center_x - wall_length / 2, base_y, board_center_z), (1, 0, 0), bevel_angle_degrees)
                 else:  # left, right
                     # Boards run horizontally along Y axis (wall length)
                     # Profile width should be in X direction (perpendicular to wall)
@@ -274,6 +291,17 @@ class SheathingBuilder:
                         .extrude(wall_length)  # Extrude along Y (wall length)
                         .translate((base_x, wall_center_y + wall_length / 2, board_center_z))
                     )
+                    # Rotate board around Y axis to accommodate bevel angle
+                    # This tilts the board so the beveled edge aligns properly when lapped
+                    # For lapped siding, the bottom (wider) should tilt outward
+                    # Left face: negative X is outside, so rotate to tilt bottom outward
+                    # Right face: positive X is outside, so rotate opposite direction
+                    if face == "left":
+                        # Rotate negative to tilt bottom toward negative X (outward)
+                        board = board.rotate((base_x, wall_center_y + wall_length / 2, board_center_z), (0, 1, 0), -bevel_angle_degrees)
+                    else:  # right
+                        # Rotate positive to tilt bottom toward positive X (outward)
+                        board = board.rotate((base_x, wall_center_y + wall_length / 2, board_center_z), (0, 1, 0), bevel_angle_degrees)
                 
                 # Add board to assembly as individual component
                 board_name = f"sheathing_{face}_board{board_index}"
