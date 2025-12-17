@@ -343,7 +343,7 @@ class RoofBuilder:
                     # Fallback to AG panel
                     panel = RoofBuilder._ag_panel(panel_length)
 
-                panel = panel.translate((panel_x, panel_y, panel_z)).rotateAboutCenter((0, 0, 1),roof_pitch)
+                panel = panel.translate((panel_x, panel_y, panel_z)).rotateAboutCenter((1, 0, 0),roof_pitch)
                 
                 assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}")
 
