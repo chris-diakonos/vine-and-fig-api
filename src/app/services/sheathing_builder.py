@@ -248,7 +248,7 @@ class SheathingBuilder:
                     board = (
                         rotated_profile
                         .sweep(sweep_path)
-                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z + 1))
+                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z + 3))
                     )
                     # Rotate board around X axis to accommodate bevel angle
                     # This tilts the board so the beveled edge aligns properly when lapped
