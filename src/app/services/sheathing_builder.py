@@ -158,15 +158,15 @@ class SheathingBuilder:
         
         # Calculate sheathing position offset from stud face
         # Sheathing sits on the exterior (outside) of studs
-        front_rear_offset = stud_depth_front_rear / 2 + board_thickness / 2
-        left_right_offset = stud_depth_left_right / 2 + board_thickness / 2
+        front_rear_offset = 5
+        left_right_offset = 5
         
         # Create assembly to hold individual boards
         sheathing_assembly = cq.Assembly()
         
         # Start from lowest floor height and lap boards up to highest floor height
         wall_bottom = lowest_floor_height
-        wall_top = highest_floor_height + (ceiling_heights[-1] if ceiling_heights else 120)
+        wall_top = highest_floor_height
         
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = wall_top - wall_bottom
@@ -176,34 +176,22 @@ class SheathingBuilder:
         for face in ["front", "rear", "left", "right"]:
             if face == "front":
                 wall_length = dimensions.front
-                # Position on exterior: studs at y=0, sheathing at y = -offset (outside)
-                # Studs are 3" wide x 4" deep, so exterior face is at y = -2"
-                # Sheathing center should be at y = -2" - board_thickness/2
-                base_y = -(stud_depth_front_rear / 2) - (board_thickness / 2)
+                base_y = front_rear_offset
                 wall_center_x = wall_length / 2
                 
             elif face == "rear":
                 wall_length = dimensions.rear
-                # Position on exterior: studs at y=-right_dimension, sheathing at y = -right_dimension + offset
-                # Studs are 3" wide x 4" deep, so exterior face is at y = -right_dimension + 2"
-                # Sheathing center should be at y = -right_dimension + 2" + board_thickness/2
-                base_y = -dimensions.right + (stud_depth_front_rear / 2) + (board_thickness / 2)
+                base_y = -dimensions.right - front_rear_offset
                 wall_center_x = wall_length / 2
                 
             elif face == "left":
                 wall_length = dimensions.left
-                # Position on exterior: studs at x=0, sheathing at x = -offset (outside)
-                # Studs are 4" wide x 3" deep, so exterior face is at x = -1.5"
-                # Sheathing center should be at x = -1.5" - board_thickness/2
-                base_x = -(stud_depth_left_right / 2) - (board_thickness / 2)
+                base_x = -left_right_offset
                 wall_center_y = -dimensions.right + (wall_length / 2)
                 
             elif face == "right":
                 wall_length = dimensions.right
-                # Position on exterior: studs at x=front_dimension, sheathing at x = front_dimension + offset
-                # Studs are 4" wide x 3" deep, so exterior face is at x = front_dimension + 1.5"
-                # Sheathing center should be at x = front_dimension + 1.5" + board_thickness/2
-                base_x = dimensions.front + (stud_depth_left_right / 2) + (board_thickness / 2)
+                base_x = dimensions.front + left_right_offset
                 wall_center_y = -dimensions.right + (wall_length / 2)
             
             # Create individual sheathing boards lapping continuously from bottom to top
