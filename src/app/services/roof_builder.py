@@ -76,7 +76,8 @@ class RoofBuilder:
             panel_run,
             roof_pitch_degrees,
             total_wall_height,
-            gable_direction
+            gable_direction,
+            roof.roof_panel_exposure
         )
         
         return roof_assembly
@@ -275,7 +276,8 @@ class RoofBuilder:
         roof_run: float,
         roof_pitch_degrees: float,
         base_elevation: float,
-        gable_direction: str
+        gable_direction: str,
+        roof_panel_exposure: float
     ) -> cq.Workplane:
         """
         Build a gable roof using individual metal roofing panels.
@@ -290,31 +292,22 @@ class RoofBuilder:
         """
         
         assembly = cq.Assembly()
-        quantity = math.ceil(roof_length / roof.roof_panel_exposure)
+        
 
-        for q in range(quantity):
+        if gable_direction == "side":
+            faces = ["front", "rear"]
+        elif gable_direction == "front":
+            faces = ["left", "right"]
+        else:
+            raise ValueError(f"Invalid gable direction: {gable_direction}")
 
-            panel_counter = q + 1
+        for face in faces:
 
-            if gable_direction == "side":
-                faces = ["front", "rear"]
-            elif gable_direction == "front":
-                faces = ["left", "right"]
-            else:
-                raise ValueError(f"Invalid gable direction: {gable_direction}")
+            quantity = math.ceil(roof_length / roof_panel_exposure)
 
-            for face in faces:
+            for q in range(quantity):
 
-                # Create panel based on panel type
-                if roof.roof_panel_type == "ag-panel":
-                    panel = RoofBuilder._ag_panel(panel_length)
-                elif roof.roof_panel_type == "cf-panel":
-                    panel = RoofBuilder._cf_panel(panel_length)
-                elif roof.roof_panel_type == "pbr-panel":
-                    panel = RoofBuilder._pbr_panel(panel_length)
-                else:
-                    # Fallback to AG panel
-                    panel = RoofBuilder._ag_panel(panel_length)
+                panel_counter = q + 1
 
                 if face == "front":
                     panel_x = +(roof_run/2) + (panel_length/2.7)
@@ -330,13 +323,28 @@ class RoofBuilder:
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
                     panel_y = +(roof_run/2) - (panel_length/2.7)
                     panel_z = base_elevation + (panel_length/2.7)
+                    roof_pitch = 90
                 elif face == "right":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
                     panel_y = +(roof_run/2) + (panel_length/2.7)
                     panel_z = base_elevation + (panel_length/2.7)
+                    roof_pitch = -90
+                else:
+                    raise ValueError(f"Invalid face: {face}")
 
-                panel = panel.translate((panel_x, panel_y, panel_z))
+                # Create panel based on panel type
+                if roof.roof_panel_type == "ag-panel":
+                    panel = RoofBuilder._ag_panel(panel_length)
+                elif roof.roof_panel_type == "cf-panel":
+                    panel = RoofBuilder._cf_panel(panel_length)
+                elif roof.roof_panel_type == "pbr-panel":
+                    panel = RoofBuilder._pbr_panel(panel_length)
+                else:
+                    # Fallback to AG panel
+                    panel = RoofBuilder._ag_panel(panel_length)
 
+                panel = panel.translate((panel_x, panel_y, panel_z)).rotateAboutCenter((0, 1, 0),roof_pitch).rotate((0,0,1),(0,0,0),90)
+                
                 assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}")
 
         return assembly
