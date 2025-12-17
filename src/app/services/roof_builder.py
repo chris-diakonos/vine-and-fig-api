@@ -351,7 +351,7 @@ class RoofBuilder:
                     # Fallback to AG panel
                     panel = RoofBuilder._ag_panel(panel_length)
 
-                panel = panel.translate((panel_x, panel_y, panel_z)).rotateAboutCenter((1, 0, 0),roof_pitch)
+                panel = panel.rotateAboutCenter((1, 0, 0),roof_pitch).translate((panel_x, panel_y, panel_z))
                 
                 assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
 
