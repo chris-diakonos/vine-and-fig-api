@@ -108,8 +108,8 @@ class BuildingBuilder:
         
         # Get floorplan values with defaults
         stories = floorplan.stories
-        raw_ceiling_heights = floorplan.ceiling_heights or [120, 108]
-        joist_heights = floorplan.joist_heights or [10, 9, 8]
+        raw_ceiling_heights = floorplan.ceiling_heights
+        joist_heights = floorplan.joist_heights
         
         # Calculate ceiling and floor heights once
         calculated_ceiling_heights = BuildingBuilder.calculate_ceiling_heights(

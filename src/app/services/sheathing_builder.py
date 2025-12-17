@@ -121,14 +121,15 @@ class SheathingBuilder:
         """
         
         # Determine the range: from lowest floor height to highest floor height
-        lowest_floor_height = floor_heights[0]
-        highest_floor_height = floor_heights[len(floor_heights) - 1]
-        chair_rail_height = 30
+        lowest_floor_height = min(floor_heights)
+        highest_floor_height = max(floor_heights)
+        print(f"Lowest floor height: {lowest_floor_height}")
+        print(f"Highest floor height: {highest_floor_height}")
+        print(f"Floor heights: {floor_heights}")
 
         # Sheathing board specifications
         board_exposure = sheathing.sheathing_exposure  # Visible exposure in inches
         board_height = sheathing.sheathing_height  # Board height in inches
-        board_thickness = 0  # Typical sheathing board thickness in inches
         
         # Profile dimensions (same for beveled and beaded weatherboard)
         top_width = 0.375  # Top width in inches
@@ -140,29 +141,19 @@ class SheathingBuilder:
         bevel_angle_degrees = 4
         
         # Stud dimensions (from framing)
-        stud_depth_front_rear = 0  # Front/rear studs: 3" wide x 4" deep
-        stud_depth_left_right = 0 # Left/right studs: 4" wide x 3" deep
-        
-        # Calculate sheathing position offset from stud face
-        # Sheathing sits on the exterior (outside) of studs
-        front_rear_offset = 5
-        left_right_offset = 5
+        stud_depth = 4
         
         # Create assembly to hold individual boards
         sheathing_assembly = cq.Assembly()
         
-        # Start from lowest floor height and lap boards up to highest floor height
-        wall_bottom = lowest_floor_height
-        wall_top = highest_floor_height
-        
         # Calculate number of boards needed vertically (continuous lapping)
-        vertical_coverage = wall_top - wall_bottom
-        vertical_boards = 10
+        vertical_coverage = highest_floor_height - lowest_floor_height
+        quantity = math.ceil(vertical_coverage / board_exposure)
         
         # Create sheathing boards for each face
         for face in ["front", "rear", "left", "right"]:
 
-            current_board_height = wall_bottom
+            current_board_height = lowest_floor_height
 
             if face == "front":
                 wall_length = dimensions.front
@@ -177,19 +168,22 @@ class SheathingBuilder:
             elif face == "left":
                 wall_length = dimensions.left
                 bays = floorplan.bays.left if floorplan and floorplan.bays else []
-                board_x = 0
+                board_x = 0 - (stud_depth / 2)
                 board_y = -wall_length / 2
             elif face == "right":
                 wall_length = dimensions.right
                 bays = floorplan.bays.right if floorplan and floorplan.bays else []
-                board_x = dimensions.front
+                board_x = dimensions.front + (stud_depth / 2)
                 board_y = -wall_length / 2
+
             # Create individual sheathing boards lapping continuously from bottom to top
-            for board_index in range(vertical_boards):
+            for q in range(1, quantity + 1):
                 
                 current_board_height += board_exposure
                 board_length = wall_length
                 board_z = current_board_height - (board_height / 2)
+                print(f"Board number: {q+1}")
+                print(f"Board z: {board_z}")
                 
                 # Create 2D profile based on sheathing type
                 # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
