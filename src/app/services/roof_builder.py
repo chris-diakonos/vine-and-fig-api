@@ -82,6 +82,7 @@ class RoofBuilder:
             panel_y,
             roof_pitch_degrees,
             panel_z,
+            total_wall_height,
             gable_direction,
             roof.roof_panel_exposure
         )
@@ -279,9 +280,10 @@ class RoofBuilder:
         roof: Roof,
         panel_length: float,
         roof_length: float,
-        roof_run: float,
+        panel_y_offset: float,
         roof_pitch_degrees: float,
-        panel_z: float,
+        panel_z_offset: float,
+        base_elevation: float,
         gable_direction: str,
         roof_panel_exposure: float
     ) -> cq.Workplane:
@@ -317,23 +319,23 @@ class RoofBuilder:
 
                 if face == "front":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(panel_y)
-                    panel_z = panel_z
+                    panel_y = panel_y_offset
+                    panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = -(panel_y)
-                    panel_z = panel_z
+                    panel_y = -panel_y_offset
+                    panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
                 elif face == "left":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(panel_y)
-                    panel_z = panel_z
+                    panel_y = panel_y_offset
+                    panel_z = base_elevation + panel_z_offset
                     roof_pitch = 90
                 elif face == "right":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(panel_y)
-                    panel_z = panel_z
+                    panel_y = -panel_y_offset
+                    panel_z = base_elevation + panel_z_offset
                     roof_pitch = -90
                 else:
                     raise ValueError(f"Invalid face: {face}")
