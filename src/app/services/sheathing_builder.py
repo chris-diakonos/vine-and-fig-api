@@ -291,9 +291,9 @@ class SheathingBuilder:
                         # Rotate positive to tilt bottom toward positive X (outward)
                         board = board.rotate((base_x, wall_center_y + wall_length / 2, board_center_z), (0, 1, 0), bevel_angle_degrees)
                 
-                # Add board to assembly as individual component
+                # Add board to assembly as individual component with color
                 board_name = f"sheathing_{face}_board{board_index}"
-                sheathing_assembly.add(board, name=board_name)
+                sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         return sheathing_assembly
 

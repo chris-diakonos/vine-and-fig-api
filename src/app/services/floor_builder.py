@@ -138,9 +138,9 @@ class FloorBuilder:
             # Position plank
             plank = plank.translate((plank_x, -plank_length/2, floor_center_z))
             
-            # Add plank to assembly as individual component
+            # Add plank to assembly as individual component with color
             plank_name = f"floor_plank_floor{floor_index}_plank{i}"
-            assembly.add(plank, name=plank_name)
+            assembly.add(plank, name=plank_name, color=cq.Color(0.8, 0.7, 0.6))  # Light wood
     
     @staticmethod
     def _create_tongue_groove_plank(

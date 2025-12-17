@@ -11,7 +11,7 @@ class OpeningsBuilder:
     """Builds window and door geometry using CadQuery."""
     
     @staticmethod
-    def build_windows(windows: List[Window], dimensions: Dimensions) -> Optional[cq.Workplane]:
+    def build_windows(windows: List[Window], dimensions: Dimensions) -> Optional[cq.Assembly]:
         """
         Build window openings and frames.
         
@@ -20,14 +20,14 @@ class OpeningsBuilder:
             dimensions: Building dimensions
             
         Returns:
-            CadQuery Workplane with window geometry, or None if no windows
+            CadQuery Assembly with window geometry and colors, or None if no windows
         """
         if not windows:
             return None
         
-        all_windows = None
+        windows_assembly = cq.Assembly()
         
-        for window in windows:
+        for i, window in enumerate(windows):
             # Parse window size
             size_parts = window.size.split('x')
             if len(size_parts) == 2:
@@ -55,15 +55,14 @@ class OpeningsBuilder:
                     height
                 )
                 
-                if all_windows is None:
-                    all_windows = positioned_window
-                else:
-                    all_windows = all_windows.union(positioned_window)
+                # Add window to assembly with color
+                window_name = f"window_{i}"
+                windows_assembly.add(positioned_window, name=window_name, color=cq.Color(0.7, 0.9, 1.0))  # Light blue
         
-        return all_windows
+        return windows_assembly if windows_assembly.children else None
     
     @staticmethod
-    def build_doors(doors: List[Door], dimensions: Dimensions) -> Optional[cq.Workplane]:
+    def build_doors(doors: List[Door], dimensions: Dimensions) -> Optional[cq.Assembly]:
         """
         Build door openings and frames.
         
@@ -72,14 +71,14 @@ class OpeningsBuilder:
             dimensions: Building dimensions
             
         Returns:
-            CadQuery Workplane with door geometry, or None if no doors
+            CadQuery Assembly with door geometry and colors, or None if no doors
         """
         if not doors:
             return None
         
-        all_doors = None
+        doors_assembly = cq.Assembly()
         
-        for door in doors:
+        for i, door in enumerate(doors):
             # Parse door size
             size_parts = door.size.split('x')
             if len(size_parts) == 2:
@@ -107,12 +106,11 @@ class OpeningsBuilder:
                     height
                 )
                 
-                if all_doors is None:
-                    all_doors = positioned_door
-                else:
-                    all_doors = all_doors.union(positioned_door)
+                # Add door to assembly with color
+                door_name = f"door_{i}"
+                doors_assembly.add(positioned_door, name=door_name, color=cq.Color(0.5, 0.3, 0.2))  # Brown
         
-        return all_doors
+        return doors_assembly if doors_assembly.children else None
     
     @staticmethod
     def _position_opening(

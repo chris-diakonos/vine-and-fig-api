@@ -10,7 +10,7 @@ class FoundationBuilder:
     """Builds foundation geometry using CadQuery."""
     
     @staticmethod
-    def build(foundation: Foundation, dimensions: Dimensions) -> cq.Workplane:
+    def build(foundation: Foundation, dimensions: Dimensions) -> cq.Assembly:
         """
         Build the foundation structure.
         
@@ -19,7 +19,7 @@ class FoundationBuilder:
             dimensions: Building dimensions
             
         Returns:
-            CadQuery Workplane with foundation geometry
+            CadQuery Assembly with foundation geometry and color
         """
         # Calculate foundation height based on courses
         # Each course includes block height + joint thickness
@@ -48,4 +48,8 @@ class FoundationBuilder:
         # Add visual texture for blocks (simplified representation)
         # In production, you could add actual block courses with joints
         
-        return foundation_obj
+        # Create assembly with color
+        foundation_assembly = cq.Assembly()
+        foundation_assembly.add(foundation_obj, name="foundation", color=cq.Color(0.7, 0.7, 0.7))  # Gray
+        
+        return foundation_assembly

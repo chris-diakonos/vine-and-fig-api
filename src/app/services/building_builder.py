@@ -48,11 +48,15 @@ class BuildingBuilder:
         # Build foundation first
         # Foundation top is at z=0, foundation extends downward
         if component_visibility.foundation:
-            foundation = FoundationBuilder.build(
+            foundation_assembly = FoundationBuilder.build(
                 structure.foundation,
                 dimensions
             )
-            building_assembly.add(foundation, name="foundation", color=cq.Color(0.7, 0.7, 0.7))  # Gray
+            # Add all foundation components to the main assembly (colors are already set in foundation_builder)
+            for name, obj_data in foundation_assembly.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    component_name = name if name else f"foundation_{len(building_assembly.children)}"
+                    building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.7, 0.7, 0.7))
         
         # Build framing (returns assembly and BOM data)
         # Framing starts at z=0 (sills sit on foundation top)
@@ -63,12 +67,12 @@ class BuildingBuilder:
                 framing_assembly, bom_data = framing_builder.build()
                 
                 # Add all framing components to the main assembly
-                # Traverse the framing assembly and add each component
+                # Traverse the framing assembly and add each component (colors are already set in framing_builder)
                 for name, obj_data in framing_assembly.traverse():
                     if hasattr(obj_data, 'obj') and obj_data.obj is not None:
                         # Use the original name from framing assembly or generate one
                         component_name = name if name else f"framing_{len(building_assembly.children)}"
-                        building_assembly.add(obj_data.obj, name=component_name, color=cq.Color(0.55, 0.45, 0.33))  # Wood color
+                        building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.55, 0.45, 0.33))
                         
             except Exception as e:
                 # If framing fails, continue without it but log the error
@@ -89,12 +93,12 @@ class BuildingBuilder:
             )
             
             # Add all floor planks to the main assembly as individual components
-            # Traverse the floor assembly and add each plank
+            # Traverse the floor assembly and add each plank (colors are already set in floor_builder)
             for name, obj_data in floor_assembly.traverse():
                 if hasattr(obj_data, 'obj') and obj_data.obj is not None:
                     # Use the original name from floor assembly or generate one
                     component_name = name if name else f"floor_{len(building_assembly.children)}"
-                    building_assembly.add(obj_data.obj, name=component_name, color=cq.Color(0.8, 0.7, 0.6))  # Light wood
+                    building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
         
         # Build sheathing
         # Sheathing boards positioned on exterior of studs
@@ -108,12 +112,12 @@ class BuildingBuilder:
             )
             
             # Add all sheathing boards to the main assembly as individual components
-            # Traverse the sheathing assembly and add each board
+            # Traverse the sheathing assembly and add each board (colors are already set in sheathing_builder)
             for name, obj_data in sheathing_assembly.traverse():
                 if hasattr(obj_data, 'obj') and obj_data.obj is not None:
                     # Use the original name from sheathing assembly or generate one
                     component_name = name if name else f"sheathing_{len(building_assembly.children)}"
-                    building_assembly.add(obj_data.obj, name=component_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
+                    building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.9, 0.85, 0.75))
         
         # Build roof
         if component_visibility.roof:
@@ -136,14 +140,22 @@ class BuildingBuilder:
         
         # Add windows if specified
         if component_visibility.windows and structure.windows:
-            windows = OpeningsBuilder.build_windows(structure.windows, dimensions)
-            if windows is not None:
-                building_assembly.add(windows, name="windows", color=cq.Color(0.7, 0.9, 1.0))  # Light blue
+            windows_assembly = OpeningsBuilder.build_windows(structure.windows, dimensions)
+            if windows_assembly is not None:
+                # Add all windows to the main assembly (colors are already set in openings_builder)
+                for name, obj_data in windows_assembly.traverse():
+                    if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                        component_name = name if name else f"window_{len(building_assembly.children)}"
+                        building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.7, 0.9, 1.0))
         
         # Add doors if specified
         if component_visibility.doors and structure.doors:
-            doors = OpeningsBuilder.build_doors(structure.doors, dimensions)
-            if doors is not None:
-                building_assembly.add(doors, name="doors", color=cq.Color(0.5, 0.3, 0.2))  # Brown
+            doors_assembly = OpeningsBuilder.build_doors(structure.doors, dimensions)
+            if doors_assembly is not None:
+                # Add all doors to the main assembly (colors are already set in openings_builder)
+                for name, obj_data in doors_assembly.traverse():
+                    if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                        component_name = name if name else f"door_{len(building_assembly.children)}"
+                        building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.5, 0.3, 0.2))
         
         return building_assembly, bom_data

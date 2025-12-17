@@ -29,7 +29,7 @@ class Roof(BaseModel):
     roof_type: Literal["side-gable", "front-gable", "hipped-gable", "side-gable-with-shed"] = Field(
         ..., description="Type of roof configuration"
     )
-    roof_panel_type: Literal["cf-panel", "ag-panel", "pbr-panel"] = Field(
+    roof_panel_type: Literal["ag-panel", "cf-panel", "pbr-panel"] = Field(
         ..., description="Type of roof panel"
     )
     roof_panel_color: Literal[
