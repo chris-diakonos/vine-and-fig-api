@@ -999,14 +999,17 @@ class FramingBuilder:
             rafter_run = (right_dimension / 2) + roof_overhang
             roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
             rafter_cos = math.cos(roof_pitch_radians)
+            rafter_sin = math.sin(roof_pitch_radians)
             rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
             
             if face == "front":
-                new_x = +(right_dimension/2) + (rafter_length/2.7) + x_offset
+                new_x = +(right_dimension/2) + (rafter_length/2 * rafter_cos) + x_offset
                 roof_pitch = roof_pitch_degrees
+                new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
             elif face == "rear":
-                new_x = +(right_dimension/2) - (rafter_length/2.7) + x_offset
+                new_x = +(right_dimension/2) - (rafter_length/2 * rafter_cos) + x_offset
                 roof_pitch = 180 - roof_pitch_degrees
+                new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
 
             for q in range(quantity):
 
@@ -1017,7 +1020,7 @@ class FramingBuilder:
                 else:
                     new_y = (rafter_spacing * (rafter_counter - 1)) + y_offset
 
-                new_z = floor_height + (rafter_length/2.7) - rafter_depth
+
                 rafter = cq.Workplane('XY').box(rafter_length, rafter_width, rafter_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0),roof_pitch).rotate((0,0,1),(0,0,0),90)
                 assembly.add(rafter, name=f"{member_type}_{face}_{rafter_counter}", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
         
