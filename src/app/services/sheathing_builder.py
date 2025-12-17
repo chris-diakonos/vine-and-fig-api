@@ -248,7 +248,7 @@ class SheathingBuilder:
                     board = (
                         rotated_profile
                         .sweep(sweep_path)
-                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z))
+                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z + 1))
                     )
                     # Rotate board around X axis to accommodate bevel angle
                     # This tilts the board so the beveled edge aligns properly when lapped
@@ -257,7 +257,7 @@ class SheathingBuilder:
                     # Rear face: positive Y is outside, so rotate opposite direction
                     if face == "front":
                         # Rotate negative to tilt bottom toward negative Y (outward)
-                        board = board.rotate((0,0,0), (0, 0, 1), -bevel_angle_degrees)
+                        board = board.rotate((0,0,0), (1, 0, 0), -bevel_angle_degrees)
                     else:  # rear
                         # Rotate positive to tilt bottom toward positive Y (outward)
                         board = board.rotate((wall_center_x - wall_length / 2, base_y, board_center_z), (1, 0, 0), bevel_angle_degrees)
