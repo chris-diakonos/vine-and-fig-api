@@ -310,12 +310,12 @@ class RoofBuilder:
 
                 if face == "front":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = panel_y_offset - panel_run
+                    panel_y = panel_y_offset - panel_run + roof.roof_overhang
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = -panel_y_offset + panel_run
+                    panel_y = -panel_y_offset - panel_run + roof.roof_overhang
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
                 elif face == "left":
