@@ -73,7 +73,8 @@ class RoofBuilder:
             roof,
             panel_length,
             roof_length,
-            roof_pitch_radians,
+            panel_run,
+            roof_pitch_degrees,
             total_wall_height,
             gable_direction
         )
@@ -271,7 +272,8 @@ class RoofBuilder:
         roof: Roof,
         panel_length: float,
         roof_length: float,
-        roof_pitch_radians: float,
+        roof_run: float,
+        roof_pitch_degrees: float,
         base_elevation: float,
         gable_direction: str
     ) -> cq.Workplane:
@@ -287,26 +289,19 @@ class RoofBuilder:
             gable_direction: Direction of gable ("side" or "front")
         """
         
-        all_panels = None
+        assembly = cq.Assembly()
         quantity = math.ceil(roof_length / roof.roof_panel_exposure)
 
         for q in range(quantity):
 
+            panel_counter = q + 1
+
             if gable_direction == "side":
-                panel_x = q * roof.roof_panel_exposure
-                panel_y = 0
                 faces = ["front", "rear"]
             elif gable_direction == "front":
-                panel_x = 0
-                panel_y = q * roof.roof_panel_exposure
                 faces = ["left", "right"]
             else:
-                panel_x = 0
-                panel_y = q * roof.roof_panel_exposure
-                faces = ["left", "right"]
-
-            # Calculate panel position based on roof pitch
-            panel_z = base_elevation + (q * panel_length * math.tan(roof_pitch_radians))
+                raise ValueError(f"Invalid gable direction: {gable_direction}")
 
             for face in faces:
 
@@ -322,20 +317,24 @@ class RoofBuilder:
                     panel = RoofBuilder._ag_panel(panel_length)
 
                 if face == "front":
-                    panel = panel.rotate((0, 0, 0), (0, 0, 1), 90).translate((panel_x, panel_y, panel_z))
+                    panel_x = +(roof_run/2) + (panel_length/2.7)
+                    panel_y = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_z = base_elevation + (panel_length/2.7)
                 elif face == "rear":
-                    panel = panel.rotate((0, 0, 0), (0, 0, 1), -90).translate((panel_x, panel_y, panel_z))
+                    panel_x = +(roof_run/2) - (panel_length/2.7)
+                    panel_y = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_z = base_elevation + (panel_length/2.7)
                 elif face == "left":
-                    panel = panel.rotate((0, 0, 0), (0, 0, 1), 180).translate((panel_x, panel_y, panel_z))
+                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_y = +(roof_run/2) - (panel_length/2.7)
+                    panel_z = base_elevation + (panel_length/2.7)
                 elif face == "right":
-                    panel = panel.rotate((0, 0, 0), (0, 0, 1), -180).translate((panel_x, panel_y, panel_z))
+                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_y = +(roof_run/2) + (panel_length/2.7)
+                    panel_z = base_elevation + (panel_length/2.7)
 
-                if all_panels is None:
-                    all_panels = panel
-                else:
-                    all_panels = all_panels.union(panel)
+                panel = panel.translate((panel_x, panel_y, panel_z)).rotateAboutCenter((0, 1, 0),roof_pitch_degrees).rotate((0,0,1),(0,0,0),90)
 
-        # Return the combined panels (or an empty workplane if no panels)
-        if all_panels is None:
-            return cq.Workplane("XY")
-        return all_panels
+                assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}")
+
+        return assembly
