@@ -311,12 +311,12 @@ class RoofBuilder:
 
                 if face == "front":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(roof_run/2) + (panel_length/2.7)
+                    panel_y = +(panel_length/2.7)
                     panel_z = base_elevation + (panel_length/2.7)
                     roof_pitch = 180 - roof_pitch_degrees
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(roof_run/2) - (panel_length/2.7)
+                    panel_y = -(panel_length/2.7)
                     panel_z = base_elevation + (panel_length/2.7)
                     roof_pitch = roof_pitch_degrees
                 elif face == "left":
@@ -345,6 +345,6 @@ class RoofBuilder:
 
                 panel = panel.translate((panel_x, panel_y, panel_z)).rotateAboutCenter((1, 0, 0),roof_pitch)
                 
-                assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}")
+                assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
 
         return assembly

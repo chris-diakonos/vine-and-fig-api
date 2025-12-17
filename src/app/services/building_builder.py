@@ -117,14 +117,22 @@ class BuildingBuilder:
         
         # Build roof
         if component_visibility.roof:
-            roof = RoofBuilder.build(
+            roof_assembly = RoofBuilder.build(
                 structure.roof,
                 dimensions,
                 floorplan.stories,
                 floorplan.ceiling_heights,
                 floorplan.joist_heights
             )
-            building_assembly.add(roof, name="roof", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
+            
+            # Add all roof panels to the main assembly as individual components
+            # Traverse the roof assembly and add each panel (colors are already set in roof_builder)
+            for name, obj_data in roof_assembly.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    # Use the original name from roof assembly or generate one
+                    component_name = name if name else f"roof_{len(building_assembly.children)}"
+                    # Color is already set in roof_builder, preserve it from the assembly
+                    building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.3, 0.3, 0.3))
         
         # Add windows if specified
         if component_visibility.windows and structure.windows:
