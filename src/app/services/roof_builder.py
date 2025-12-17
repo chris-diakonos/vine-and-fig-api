@@ -45,7 +45,7 @@ class RoofBuilder:
             panel_cos = math.cos(roof_pitch_radians)
             panel_sin = math.sin(roof_pitch_radians)
             panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
-            panel_y = ((panel_length/2) * panel_cos) - (panel_run/2)
+            panel_y = ((panel_length/2) * panel_cos)
             panel_z = (panel_length/2) * panel_sin
             roof_length = front_dimension
             gable_direction = "side"
@@ -71,7 +71,8 @@ class RoofBuilder:
             panel_z,
             total_wall_height,
             gable_direction,
-            roof.roof_panel_exposure
+            roof.roof_panel_exposure,
+            panel_run
         )
         
         return roof_assembly
@@ -272,7 +273,8 @@ class RoofBuilder:
         panel_z_offset: float,
         base_elevation: float,
         gable_direction: str,
-        roof_panel_exposure: float
+        roof_panel_exposure: float,
+        panel_run: float
     ) -> cq.Workplane:
         """
         Build a gable roof using individual metal roofing panels.
@@ -284,6 +286,8 @@ class RoofBuilder:
             roof_pitch_radians: Roof pitch in radians
             base_elevation: Base elevation for roof
             gable_direction: Direction of gable ("side" or "front")
+            roof_panel_exposure: Exposure of the roof panel in inches
+            panel_run: Run of the roof panel in inches
         """
         
         assembly = cq.Assembly()
@@ -306,12 +310,12 @@ class RoofBuilder:
 
                 if face == "front":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = panel_y_offset
+                    panel_y = panel_y_offset - panel_run
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = -panel_y_offset
+                    panel_y = -panel_y_offset + panel_run
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
                 elif face == "left":
