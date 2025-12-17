@@ -170,7 +170,7 @@ class SheathingBuilder:
         
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = wall_top - wall_bottom
-        num_boards = 1
+        num_boards = 2
         
         # Create sheathing boards for each face
         for face in ["front"]:
@@ -212,7 +212,7 @@ class SheathingBuilder:
                     continue
                 
                 # Board center Z position
-                board_center_z = board_bottom_z + (actual_board_height / 2) + 2
+                board_center_z = board_bottom_z + (actual_board_height / 2)
                 
                 # Create 2D profile based on sheathing type
                 # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
@@ -248,7 +248,7 @@ class SheathingBuilder:
                     board = (
                         rotated_profile
                         .sweep(sweep_path)
-                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z + 3))
+                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z))
                     )
                     # Rotate board around X axis to accommodate bevel angle
                     # This tilts the board so the beveled edge aligns properly when lapped
@@ -257,7 +257,7 @@ class SheathingBuilder:
                     # Rear face: positive Y is outside, so rotate opposite direction
                     if face == "front":
                         # Rotate negative to tilt bottom toward negative Y (outward)
-                        board = board.rotate((0,0,0), (1, 0, 0), -bevel_angle_degrees)
+                        board = board.rotate((0,0,0), (0, 1, 0), bevel_angle_degrees)
                     else:  # rear
                         # Rotate positive to tilt bottom toward positive Y (outward)
                         board = board.rotate((wall_center_x - wall_length / 2, base_y, board_center_z), (1, 0, 0), bevel_angle_degrees)
