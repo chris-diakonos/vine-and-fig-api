@@ -56,13 +56,19 @@ class RoofBuilder:
             # Pitch applies to the depth dimension
             panel_run = (right_dimension / 2) + roof_overhang
             panel_cos = math.cos(roof_pitch_radians)
+            panel_sin = math.sin(roof_pitch_radians)
             panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
+            panel_y = (panel_length/2) * panel_cos
+            panel_z = (panel_length/2) * panel_sin
             roof_length = front_dimension
             gable_direction = "side"
         elif roof.roof_type == "front-gable":
             panel_run = (front_dimension / 2) + roof_overhang
             panel_cos = math.cos(roof_pitch_radians)
+            panel_sin = math.sin(roof_pitch_radians)
             panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
+            panel_y = (panel_length/2) * panel_cos
+            panel_z = (panel_length/2) * panel_sin
             roof_length = right_dimension
             gable_direction = "front"
         else:
@@ -73,9 +79,9 @@ class RoofBuilder:
             roof,
             panel_length,
             roof_length,
-            panel_run,
+            panel_y,
             roof_pitch_degrees,
-            total_wall_height,
+            panel_z,
             gable_direction,
             roof.roof_panel_exposure
         )
@@ -275,7 +281,7 @@ class RoofBuilder:
         roof_length: float,
         roof_run: float,
         roof_pitch_degrees: float,
-        base_elevation: float,
+        panel_z: float,
         gable_direction: str,
         roof_panel_exposure: float
     ) -> cq.Workplane:
@@ -311,23 +317,23 @@ class RoofBuilder:
 
                 if face == "front":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(panel_length/2.7)
-                    panel_z = base_elevation + (panel_length/2.7)
+                    panel_y = +(panel_y)
+                    panel_z = panel_z
                     roof_pitch = 180 - roof_pitch_degrees
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = -(panel_length/2.7)
-                    panel_z = base_elevation + (panel_length/2.7)
+                    panel_y = -(panel_y)
+                    panel_z = panel_z
                     roof_pitch = roof_pitch_degrees
                 elif face == "left":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(roof_run/2) - (panel_length/2.7)
-                    panel_z = base_elevation + (panel_length/2.7)
+                    panel_y = +(panel_y)
+                    panel_z = panel_z
                     roof_pitch = 90
                 elif face == "right":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
-                    panel_y = +(roof_run/2) + (panel_length/2.7)
-                    panel_z = base_elevation + (panel_length/2.7)
+                    panel_y = +(panel_y)
+                    panel_z = panel_z
                     roof_pitch = -90
                 else:
                     raise ValueError(f"Invalid face: {face}")
