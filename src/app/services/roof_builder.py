@@ -335,7 +335,7 @@ class RoofBuilder:
                     panel_y = +(roof_run/2) + (panel_length/2.7)
                     panel_z = base_elevation + (panel_length/2.7)
 
-                panel = panel.translate((panel_y, panel_x, panel_z)).rotateAboutCenter((0, 1, 0),roof_pitch).rotate((0,0,1),(0,0,0),90)
+                panel = panel.translate((panel_x, panel_y, panel_z))
 
                 assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}")
 
