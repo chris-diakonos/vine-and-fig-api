@@ -50,25 +50,35 @@ class RoofBuilder:
         front_dimension = dimensions.front
         
         # Calculate roof height based on pitch (rise over 12 inches run)
+        roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
+        
         if roof.roof_type == "side-gable":
             # Pitch applies to the depth dimension
-
             panel_run = (right_dimension / 2) + roof_overhang
-            roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
             panel_cos = math.cos(roof_pitch_radians)
             panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
             roof_length = front_dimension
-
+            gable_direction = "side"
         elif roof.roof_type == "front-gable":
             panel_run = (front_dimension / 2) + roof_overhang
-            roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
             panel_cos = math.cos(roof_pitch_radians)
             panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
             roof_length = right_dimension
+            gable_direction = "front"
         else:
             raise ValueError(f"Invalid roof type: {roof.roof_type}")
 
+        # Build the roof panels
+        roof_assembly = RoofBuilder._build_gable_roof(
+            roof,
+            panel_length,
+            roof_length,
+            roof_pitch_radians,
+            total_wall_height,
+            gable_direction
+        )
         
+        return roof_assembly
 
     
     @staticmethod
@@ -280,7 +290,7 @@ class RoofBuilder:
         all_panels = None
         quantity = math.ceil(roof_length / roof.roof_panel_exposure)
 
-        for q in quantity:
+        for q in range(quantity):
 
             if gable_direction == "side":
                 panel_x = q * roof.roof_panel_exposure
@@ -325,5 +335,7 @@ class RoofBuilder:
                 else:
                     all_panels = all_panels.union(panel)
 
-        
-        return roof, all_panels
+        # Return the combined panels (or an empty workplane if no panels)
+        if all_panels is None:
+            return cq.Workplane("XY")
+        return all_panels
