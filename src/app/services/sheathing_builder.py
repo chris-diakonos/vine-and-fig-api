@@ -173,7 +173,7 @@ class SheathingBuilder:
         num_boards = math.ceil(vertical_coverage / board_exposure)
         
         # Create sheathing boards for each face
-        for face in ["front", "rear", "left", "right"]:
+        for face in ["front"]:
             if face == "front":
                 wall_length = dimensions.front
                 base_y = front_rear_offset
@@ -212,7 +212,7 @@ class SheathingBuilder:
                     continue
                 
                 # Board center Z position
-                board_center_z = board_bottom_z + (actual_board_height / 2)
+                board_center_z = board_bottom_z + (actual_board_height / 2) + 2
                 
                 # Create 2D profile based on sheathing type
                 # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
