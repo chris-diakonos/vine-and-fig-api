@@ -171,7 +171,7 @@ class SheathingBuilder:
         
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = wall_top - wall_bottom
-        vertical_boards = math.ceil(vertical_coverage / board_exposure)
+        vertical_boards = 1
         
         # Create sheathing boards for each face
         for face in ["front"]:
@@ -221,7 +221,7 @@ class SheathingBuilder:
                         top_width, bottom_width, board_height, board_length
                     )
                 
-                board = board.translate((board_x, board_y, board_z)).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((0,1,0), bevel_angle_degrees)
+                board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
                 
                 # Add board to assembly as individual component with color
                 board_name = f"sheathing_{face}_board{board_index}"
