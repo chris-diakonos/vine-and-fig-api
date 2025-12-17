@@ -45,7 +45,7 @@ class RoofBuilder:
         )
         total_wall_height = floor_heights[stories]
         roof_overhang = roof.roof_overhang
-        roof_pitch_degrees = roof.roof_pitch_degrees
+        roof_pitch_degrees = roof.roof_pitch
         right_dimension = dimensions.right
         front_dimension = dimensions.front
         

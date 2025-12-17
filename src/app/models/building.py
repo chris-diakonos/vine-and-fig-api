@@ -40,6 +40,9 @@ class Roof(BaseModel):
     roof_panel_exposure: int = Field(
         ..., ge=12, le=36, description="Panel exposure width in inches"
     )
+    roof_overhang: float = Field(
+        default=12, ge=6, le=18, description="Roof overhang in inches"
+    )
 
 
 class Sheathing(BaseModel):
