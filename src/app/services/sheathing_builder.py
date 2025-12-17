@@ -174,7 +174,7 @@ class SheathingBuilder:
         vertical_boards = 10
         
         # Create sheathing boards for each face
-        for face in ["front"]:
+        for face in ["front", "rear", "left", "right"]:
 
             if face == "front":
                 wall_length = dimensions.front
@@ -225,7 +225,14 @@ class SheathingBuilder:
                         top_width, bottom_width, board_height, board_length
                     )
                 
-                board = board.rotateAboutCenter((1,0,0), rotation_degrees).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
+                if face == "front":
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
+                elif face == "rear":
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((0,1,0), bevel_angle_degrees).translate((board_x, board_y, board_z))
+                elif face == "left":
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees).translate((board_x, board_y, board_z))
+                elif face == "right":
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), bevel_angle_degrees).translate((board_x, board_y, board_z))
                 
                 # Add board to assembly as individual component with color
                 board_name = f"sheathing_{face}_board{board_index}"
