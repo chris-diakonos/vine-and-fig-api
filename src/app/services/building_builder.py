@@ -121,7 +121,8 @@ class BuildingBuilder:
                 structure.roof,
                 dimensions,
                 floorplan.stories,
-                floorplan.ceiling_heights
+                floorplan.ceiling_heights,
+                floorplan.joist_heights
             )
             building_assembly.add(roof, name="roof", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
         
