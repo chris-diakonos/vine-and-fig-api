@@ -45,7 +45,7 @@ class RoofBuilder:
             panel_cos = math.cos(roof_pitch_radians)
             panel_sin = math.sin(roof_pitch_radians)
             panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
-            panel_y = (panel_length/2) * panel_cos
+            panel_y = ((panel_length/2) * panel_cos) - (panel_run/2)
             panel_z = (panel_length/2) * panel_sin
             roof_length = front_dimension
             gable_direction = "side"
