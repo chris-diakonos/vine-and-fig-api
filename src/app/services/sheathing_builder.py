@@ -176,38 +176,34 @@ class SheathingBuilder:
         # Create sheathing boards for each face
         for face in ["front", "rear", "left", "right"]:
 
+            current_board_height = wall_bottom
+
             if face == "front":
                 wall_length = dimensions.front
                 bays = floorplan.bays.front if floorplan and floorplan.bays else []
                 board_x = wall_length / 2
                 board_y = 0
-                rotation_degrees = 0
             elif face == "rear":
                 wall_length = dimensions.rear
                 bays = floorplan.bays.rear if floorplan and floorplan.bays else []
                 board_x = wall_length / 2
                 board_y = -dimensions.right
-                rotation_degrees = 180
             elif face == "left":
                 wall_length = dimensions.left
                 bays = floorplan.bays.left if floorplan and floorplan.bays else []
                 board_x = 0
                 board_y = wall_length / 2
-                rotation_degrees = 90
             elif face == "right":
                 wall_length = dimensions.right
                 bays = floorplan.bays.right if floorplan and floorplan.bays else []
                 board_x = 0
                 board_y = -wall_length / 2
-                rotation_degrees = -90
             # Create individual sheathing boards lapping continuously from bottom to top
             for board_index in range(vertical_boards):
                 
-                # Calculate the board length
-                board_top_height = (board_index * board_exposure) + board_exposure
+                current_board_height += board_exposure
                 board_length = wall_length
-                board_z = board_top_height - (board_height / 2)
-
+                board_z = current_board_height - (board_height / 2)
                 
                 # Create 2D profile based on sheathing type
                 # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
@@ -226,13 +222,13 @@ class SheathingBuilder:
                     )
                 
                 if face == "front":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((0,0,1), -bevel_angle_degrees).translate((board_x, board_y, board_z))
                 elif face == "rear":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((0,1,0), bevel_angle_degrees).translate((board_x, board_y, board_z))
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((0,0,1), bevel_angle_degrees).translate((board_x, board_y, board_z))
                 elif face == "left":
                     board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees).translate((board_x, board_y, board_z))
                 elif face == "right":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), bevel_angle_degrees).translate((board_x, board_y, board_z))
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
                 
                 # Add board to assembly as individual component with color
                 board_name = f"sheathing_{face}_board{board_index}"
