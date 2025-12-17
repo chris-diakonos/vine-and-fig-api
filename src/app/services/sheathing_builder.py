@@ -171,7 +171,7 @@ class SheathingBuilder:
         
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = wall_top - wall_bottom
-        vertical_boards = 1
+        vertical_boards = 10
         
         # Create sheathing boards for each face
         for face in ["front"]:
@@ -181,21 +181,25 @@ class SheathingBuilder:
                 bays = floorplan.bays.front if floorplan and floorplan.bays else []
                 board_x = wall_length / 2
                 board_y = 0
+                rotation_degrees = 0
             elif face == "rear":
                 wall_length = dimensions.rear
                 bays = floorplan.bays.rear if floorplan and floorplan.bays else []
                 board_x = wall_length / 2
                 board_y = -dimensions.right
+                rotation_degrees = 180
             elif face == "left":
                 wall_length = dimensions.left
                 bays = floorplan.bays.left if floorplan and floorplan.bays else []
                 board_x = 0
                 board_y = wall_length / 2
+                rotation_degrees = 90
             elif face == "right":
                 wall_length = dimensions.right
                 bays = floorplan.bays.right if floorplan and floorplan.bays else []
                 board_x = 0
                 board_y = -wall_length / 2
+                rotation_degrees = -90
             # Create individual sheathing boards lapping continuously from bottom to top
             for board_index in range(vertical_boards):
                 
@@ -221,7 +225,7 @@ class SheathingBuilder:
                         top_width, bottom_width, board_height, board_length
                     )
                 
-                board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
+                board = board.rotateAboutCenter((1,0,0), rotation_degrees).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
                 
                 # Add board to assembly as individual component with color
                 board_name = f"sheathing_{face}_board{board_index}"
