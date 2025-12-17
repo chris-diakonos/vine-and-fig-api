@@ -149,8 +149,8 @@ class SheathingBuilder:
         # Calculate bevel angle for lapped siding
         # The bevel is the angle created by the difference between top and bottom width
         # bevel_angle = arctan((bottom_width - top_width) / board_height)
-        bevel_angle_radians = math.atan((bottom_width - top_width) / board_height)
-        bevel_angle_degrees = math.degrees(bevel_angle_radians)
+        bevel_angle_radians = math.atan(((bottom_width + top_width) - top_width) / board_height)
+        bevel_angle_degrees = 4
         
         # Stud dimensions (from framing)
         stud_depth_front_rear = 0  # Front/rear studs: 3" wide x 4" deep
@@ -170,7 +170,7 @@ class SheathingBuilder:
         
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = wall_top - wall_bottom
-        num_boards = math.ceil(vertical_coverage / board_exposure)
+        num_boards = 1
         
         # Create sheathing boards for each face
         for face in ["front"]:
