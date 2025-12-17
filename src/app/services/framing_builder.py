@@ -4,7 +4,7 @@ Integrates framing.py functionality into the API architecture.
 """
 import cadquery as cq
 import math
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from collections import defaultdict
 
 from app.models.structure import Structure
@@ -57,6 +57,10 @@ class FramingBuilder:
         self.roof_overhang = 12  # Default, could come from roof config
         self.roof_pitch_degrees = self.roof.roof_pitch if self.roof else 40
         
+        # Calculated heights (set by build method)
+        self.calculated_ceiling_heights: Optional[List[float]] = None
+        self.calculated_floor_heights: Optional[List[float]] = None
+        
         # BOM tracking
         self.materials = []
         self.bom_components = defaultdict(set)
@@ -104,84 +108,25 @@ class FramingBuilder:
         return centerlines
 
 
-    def _calculate_ceiling_heights(self) -> List[float]:
-        """
-        Calculate ceiling heights for each story.
-        
-        Returns:
-            List of ceiling heights
-        """
-        heights = []
-        height = 0
-        stories = self.floorplan.stories
-        joist_heights = self.floorplan.joist_heights
-        ceiling_heights = self.ceiling_heights
-        sill_height = joist_heights[0]
-
-        for story in range(1, stories + 1):
-            
-            if story == 1:
-                height = sill_height + ceiling_heights[0]
-            else:
-                height = height + joist_heights[story - 1] + ceiling_heights[story - 1]
-            
-            heights.append(height)
-        
-        return heights
-
-
-    def _calculate_floor_heights(self) -> List[float]:
-        """
-        Calculate floor heights for each story.
-        
-        Returns:
-            List of floor heights
-        """
-        return FramingBuilder.calculate_floor_heights(
-            self.floorplan.stories,
-            self.floorplan.joist_heights,
-            self.ceiling_heights
-        )
-    
-    @staticmethod
-    def calculate_floor_heights(
-        stories: int,
-        joist_heights: List[float],
-        ceiling_heights: List[float]
-    ) -> List[float]:
-        """
-        Calculate floor heights for each story (static method for reuse).
-        
-        Args:
-            stories: Number of stories
-            joist_heights: List of joist heights for each floor
-            ceiling_heights: List of ceiling heights for each story
-            
-        Returns:
-            List of floor heights
-        """
-        heights = []
-        height = 0
-        sill_height = joist_heights[0] if joist_heights else 10
-
-        for story in range(1, stories + 2):
-            
-            if story == 1:
-                height = sill_height
-            else:
-                height = height + ceiling_heights[story - 2] + joist_heights[story - 1]
-            
-            heights.append(height)
-        
-        return heights
-    
-    def build(self) -> Tuple[cq.Assembly, Dict[str, Any]]:
+    def build(
+        self,
+        calculated_ceiling_heights: List[float],
+        calculated_floor_heights: List[float]
+    ) -> Tuple[cq.Assembly, Dict[str, Any]]:
         """
         Build complete framing structure.
         
+        Args:
+            calculated_ceiling_heights: Pre-calculated ceiling heights for each story
+            calculated_floor_heights: Pre-calculated floor heights for each story
+            
         Returns:
             Tuple of (CadQuery Assembly, BOM data dictionary)
         """
+        # Store calculated heights for use in internal methods
+        self.calculated_ceiling_heights = calculated_ceiling_heights
+        self.calculated_floor_heights = calculated_floor_heights
+        
         assembly = cq.Assembly()
         
         # Calculate offset to center framing on foundation
@@ -310,8 +255,8 @@ class FramingBuilder:
         right_dimension = self.faces["right"]
         front_dimension = self.faces["front"]
 
-        ceiling_heights = self._calculate_ceiling_heights()
-        floor_heights = self._calculate_floor_heights()
+        ceiling_heights = self.calculated_ceiling_heights
+        floor_heights = self.calculated_floor_heights
         stories = self.floorplan.stories
 
         
@@ -362,7 +307,7 @@ class FramingBuilder:
         joist_spacing = self.joist_spacing
         
         # Set the joist z position based on the story and floor height
-        floor_heights = self._calculate_floor_heights()
+        floor_heights = self.calculated_floor_heights
         floor_height = floor_heights[story - 1]
         joist_z = floor_height - (joist_height / 2)
    
@@ -410,8 +355,8 @@ class FramingBuilder:
         member_type = "brace"
         total_quantity = 0
         
-        ceiling_heights = self._calculate_ceiling_heights()
-        floor_heights = self._calculate_floor_heights()
+        ceiling_heights = self.calculated_ceiling_heights
+        floor_heights = self.calculated_floor_heights
         floor_height = floor_heights[story - 1]
         ceiling_height = ceiling_heights[story - 1]
         next_floor_height = floor_heights[story]
@@ -518,8 +463,8 @@ class FramingBuilder:
         cripple_quantity = 0
         stud_tenon_depth = 2
         
-        ceiling_heights = self._calculate_ceiling_heights()
-        floor_heights = self._calculate_floor_heights()
+        ceiling_heights = self.calculated_ceiling_heights
+        floor_heights = self.calculated_floor_heights
         floor_height = floor_heights[story - 1]
         ceiling_height = ceiling_heights[story - 1]
         next_floor_height = floor_heights[story]
@@ -648,8 +593,8 @@ class FramingBuilder:
         member_type = "stud"
         total_quantity = 0
         stud_tenon_depth = 2
-        ceiling_heights = self._calculate_ceiling_heights()
-        floor_heights = self._calculate_floor_heights()
+        ceiling_heights = self.calculated_ceiling_heights
+        floor_heights = self.calculated_floor_heights
         floor_height = floor_heights[story - 1]
         ceiling_height = ceiling_heights[story - 1]
         next_floor_height = floor_heights[story]
@@ -778,8 +723,8 @@ class FramingBuilder:
         girt_width = 4
         girt_depth = 6
         
-        ceiling_heights = self._calculate_ceiling_heights()
-        floor_heights = self._calculate_floor_heights()
+        ceiling_heights = self.calculated_ceiling_heights
+        floor_heights = self.calculated_floor_heights
         floor_height = floor_heights[story - 1]
         ceiling_height = ceiling_heights[story - 1]
         next_floor_height = floor_heights[story]
@@ -855,7 +800,7 @@ class FramingBuilder:
         plate_width = 4
         plate_depth = 6
         total_quantity = 0
-        floor_heights = self._calculate_floor_heights()
+        floor_heights = self.calculated_floor_heights
         next_floor_height = floor_heights[story]
         next_joist_height = self.joist_heights[story] if story <= len(self.joist_heights) else self.joist_heights[-1]
         
@@ -923,7 +868,7 @@ class FramingBuilder:
         false_plate_width = 10
         false_plate_depth = 2
         total_quantity = 0
-        floor_heights = self._calculate_floor_heights()
+        floor_heights = self.calculated_floor_heights
         stories = self.floorplan.stories
         floor_height = floor_heights[stories]
 
@@ -985,7 +930,7 @@ class FramingBuilder:
         roof_pitch_degrees = self.roof_pitch_degrees
         total_quantity = 0
 
-        floor_heights = self._calculate_floor_heights()
+        floor_heights = self.calculated_floor_heights
         stories = self.floorplan.stories
         floor_height = floor_heights[stories]
         

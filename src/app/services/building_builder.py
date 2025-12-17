@@ -2,7 +2,7 @@
 Main building builder that combines all components.
 """
 import cadquery as cq
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, List
 from app.models.structure import Structure, ComponentVisibility
 from app.services.foundation_builder import FoundationBuilder
 from app.services.floor_builder import FloorBuilder
@@ -14,6 +14,70 @@ from app.services.framing_builder import FramingBuilder
 
 class BuildingBuilder:
     """Orchestrates the construction of complete building model."""
+    
+    @staticmethod
+    def calculate_ceiling_heights(
+        stories: int,
+        joist_heights: List[float],
+        ceiling_heights: List[float]
+    ) -> List[float]:
+        """
+        Calculate ceiling heights for each story.
+        
+        Args:
+            stories: Number of stories
+            joist_heights: List of joist heights for each floor
+            ceiling_heights: List of ceiling heights for each story
+            
+        Returns:
+            List of ceiling heights (cumulative z positions)
+        """
+        heights = []
+        height = 0
+        sill_height = joist_heights[0] if joist_heights else 10
+
+        for story in range(1, stories + 1):
+            
+            if story == 1:
+                height = sill_height + ceiling_heights[0]
+            else:
+                height = height + joist_heights[story - 1] + ceiling_heights[story - 1]
+            
+            heights.append(height)
+        
+        return heights
+    
+    @staticmethod
+    def calculate_floor_heights(
+        stories: int,
+        joist_heights: List[float],
+        ceiling_heights: List[float]
+    ) -> List[float]:
+        """
+        Calculate floor heights for each story (static method for reuse).
+        
+        Args:
+            stories: Number of stories
+            joist_heights: List of joist heights for each floor
+            ceiling_heights: List of ceiling heights for each story
+            
+        Returns:
+            List of floor heights
+        """
+        heights = []
+        height = 0
+        sill_height = joist_heights[0] if joist_heights else 10
+
+        for story in range(1, stories + 2):
+            
+            if story == 1:
+                height = sill_height
+            else:
+                height = height + ceiling_heights[story - 2] + joist_heights[story - 1]
+            
+            heights.append(height)
+        
+        return heights
     
     @staticmethod
     def build(
@@ -42,6 +106,23 @@ class BuildingBuilder:
         floorplan = structure.floorplan
         dimensions = floorplan.dimensions
         
+        # Get floorplan values with defaults
+        stories = floorplan.stories
+        raw_ceiling_heights = floorplan.ceiling_heights or [120, 108]
+        joist_heights = floorplan.joist_heights or [10, 9, 8]
+        
+        # Calculate ceiling and floor heights once
+        calculated_ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            stories,
+            joist_heights,
+            raw_ceiling_heights
+        )
+        calculated_floor_heights = BuildingBuilder.calculate_floor_heights(
+            stories,
+            joist_heights,
+            raw_ceiling_heights
+        )
+        
         # Create main building assembly
         building_assembly = cq.Assembly()
         
@@ -64,7 +145,10 @@ class BuildingBuilder:
         if component_visibility.framing and structure_hash:
             try:
                 framing_builder = FramingBuilder(structure, structure_hash)
-                framing_assembly, bom_data = framing_builder.build()
+                framing_assembly, bom_data = framing_builder.build(
+                    calculated_ceiling_heights,
+                    calculated_floor_heights
+                )
                 
                 # Add all framing components to the main assembly
                 # Traverse the framing assembly and add each component (colors are already set in framing_builder)
@@ -87,9 +171,8 @@ class BuildingBuilder:
             floor_assembly = FloorBuilder.build(
                 structure.flooring,
                 dimensions,
-                floorplan.stories,
-                floorplan.ceiling_heights,
-                floorplan.joist_heights
+                stories,
+                calculated_floor_heights
             )
             
             # Add all floor planks to the main assembly as individual components
@@ -106,9 +189,8 @@ class BuildingBuilder:
             sheathing_assembly = SheathingBuilder.build(
                 structure.sheathing,
                 dimensions,
-                floorplan.stories,
-                floorplan.ceiling_heights,
-                floorplan.joist_heights,
+                stories,
+                calculated_floor_heights,
                 floorplan
             )
             
@@ -125,9 +207,8 @@ class BuildingBuilder:
             roof_assembly = RoofBuilder.build(
                 structure.roof,
                 dimensions,
-                floorplan.stories,
-                floorplan.ceiling_heights,
-                floorplan.joist_heights
+                stories,
+                calculated_floor_heights
             )
             
             # Add all roof panels to the main assembly as individual components

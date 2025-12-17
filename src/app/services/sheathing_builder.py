@@ -7,7 +7,6 @@ import math
 from typing import List, Optional
 from app.models.building import Sheathing
 from app.models.floorplan import Dimensions, Floorplan
-from app.services.framing_builder import FramingBuilder
 
 
 class SheathingBuilder:
@@ -100,8 +99,7 @@ class SheathingBuilder:
         sheathing: Sheathing,
         dimensions: Dimensions,
         stories: int,
-        ceiling_heights: Optional[List[float]] = None,
-        joist_heights: Optional[List[float]] = None,
+        floor_heights: List[float],
         floorplan: Optional[Floorplan] = None
     ) -> cq.Assembly:
         """
@@ -115,28 +113,16 @@ class SheathingBuilder:
             sheathing: Sheathing specification (exposure, height, type)
             dimensions: Building dimensions
             stories: Number of stories
-            ceiling_heights: Ceiling heights for each story
-            joist_heights: Joist heights for each floor
+            floor_heights: Pre-calculated floor heights for each story
+            floorplan: Optional floorplan for bay information
             
         Returns:
             CadQuery Assembly with individual sheathing boards as separate components
         """
-        # Use defaults if not specified
-        if ceiling_heights is None:
-            ceiling_heights = [120] * stories  # 10 feet default
-        if joist_heights is None:
-            joist_heights = [10] * (stories + 1)  # Include foundation floor
-        
-        # Calculate floor heights using the same method as FramingBuilder
-        floor_heights = FramingBuilder.calculate_floor_heights(
-            stories,
-            joist_heights,
-            ceiling_heights
-        )
         
         # Determine the range: from lowest floor height to highest floor height
-        lowest_floor_height = min(floor_heights)
-        highest_floor_height = max(floor_heights)
+        lowest_floor_height = floor_heights[0]
+        highest_floor_height = floor_heights[len(floor_heights) - 1]
         chair_rail_height = 30
 
         # Sheathing board specifications
@@ -192,11 +178,11 @@ class SheathingBuilder:
                 wall_length = dimensions.left
                 bays = floorplan.bays.left if floorplan and floorplan.bays else []
                 board_x = 0
-                board_y = wall_length / 2
+                board_y = -wall_length / 2
             elif face == "right":
                 wall_length = dimensions.right
                 bays = floorplan.bays.right if floorplan and floorplan.bays else []
-                board_x = 0
+                board_x = dimensions.front
                 board_y = -wall_length / 2
             # Create individual sheathing boards lapping continuously from bottom to top
             for board_index in range(vertical_boards):

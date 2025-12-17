@@ -2,10 +2,9 @@
 Floor builder service using CadQuery.
 """
 import cadquery as cq
-from typing import List, Optional
+from typing import List
 from app.models.building import Flooring
 from app.models.floorplan import Dimensions
-from app.services.framing_builder import FramingBuilder
 
 
 class FloorBuilder:
@@ -16,8 +15,7 @@ class FloorBuilder:
         flooring: List[Flooring],
         dimensions: Dimensions,
         stories: int,
-        ceiling_heights: Optional[List[float]] = None,
-        joist_heights: Optional[List[float]] = None
+        floor_heights: List[float]
     ) -> cq.Assembly:
         """
         Build floor structures for all stories using individual tongue-and-groove planks.
@@ -26,24 +24,11 @@ class FloorBuilder:
             flooring: List of flooring specifications (one per story + attic)
             dimensions: Building dimensions
             stories: Number of stories
-            ceiling_heights: Ceiling heights for each story
-            joist_heights: Joist heights for each floor
+            floor_heights: Pre-calculated floor heights for each story
             
         Returns:
             CadQuery Assembly with individual planks as separate components
         """
-        # Use defaults if not specified
-        if ceiling_heights is None:
-            ceiling_heights = [120] * stories  # 10 feet default
-        if joist_heights is None:
-            joist_heights = [10] * (stories + 1)  # Include foundation floor
-        
-        # Calculate floor heights using the same method as FramingBuilder
-        floor_heights = FramingBuilder.calculate_floor_heights(
-            stories,
-            joist_heights,
-            ceiling_heights
-        )
         
         # Create assembly to hold individual planks
         floor_assembly = cq.Assembly()

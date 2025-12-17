@@ -3,10 +3,9 @@ Roof builder service using CadQuery.
 """
 import cadquery as cq
 import math
-from typing import List, Optional
+from typing import List
 from app.models.building import Roof
 from app.models.floorplan import Dimensions
-from app.services.framing_builder import FramingBuilder
 
 
 class RoofBuilder:
@@ -17,8 +16,7 @@ class RoofBuilder:
         roof: Roof,
         dimensions: Dimensions,
         stories: int,
-        ceiling_heights: Optional[List[float]] = None,
-        joist_heights: Optional[List[float]] = None
+        floor_heights: List[float]
     ) -> cq.Workplane:
         """
         Build roof structure based on roof type and pitch.
@@ -27,22 +25,11 @@ class RoofBuilder:
             roof: Roof specification
             dimensions: Building dimensions
             stories: Number of stories
-            ceiling_heights: Ceiling heights for each story
-            joist_heights: Joist heights for each floor
+            floor_heights: Pre-calculated floor heights for each story
             
         Returns:
             CadQuery Workplane with roof geometry
         """
-        if ceiling_heights is None:
-            ceiling_heights = [120, 108]
-        if joist_heights is None:
-            joist_heights = [10, 9, 8]
-        
-        floor_heights = FramingBuilder.calculate_floor_heights(
-            stories,
-            joist_heights,
-            ceiling_heights
-        )
         total_wall_height = floor_heights[stories]
         roof_overhang = roof.roof_overhang
         roof_pitch_degrees = roof.roof_pitch
