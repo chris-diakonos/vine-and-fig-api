@@ -6,7 +6,7 @@ import cadquery as cq
 import math
 from typing import List, Optional
 from app.models.building import Sheathing
-from app.models.floorplan import Dimensions
+from app.models.floorplan import Dimensions, Floorplan
 from app.services.framing_builder import FramingBuilder
 
 
@@ -14,7 +14,7 @@ class SheathingBuilder:
     """Builds exterior sheathing boards using CadQuery."""
     
     @staticmethod
-    def _bevel_weatherboard(top_width: float, bottom_width: float, height: float) -> cq.Workplane:
+    def _bevel_weatherboard(top_width: float, bottom_width: float, height: float, length: float) -> cq.Workplane:
         """
         Create a 2D beveled weatherboard profile.
         
@@ -35,12 +35,12 @@ class SheathingBuilder:
         profile_points.append((0, -height))
         
         # Create the 2D profile
-        profile = cq.Workplane("XZ").polyline(profile_points).close()
+        profile = cq.Workplane("XY").polyline(profile_points).close().extrude(length)
         
         return profile
     
     @staticmethod
-    def _beaded_weatherboard(top_width: float, bottom_width: float, height: float) -> cq.Workplane:
+    def _beaded_weatherboard(top_width: float, bottom_width: float, height: float, length: float) -> cq.Workplane:
         """
         Create a 2D beaded weatherboard profile.
         
@@ -91,7 +91,7 @@ class SheathingBuilder:
         profile_points.append((0, -height))
         
         # Create the 2D profile
-        profile = cq.Workplane("XZ").polyline(profile_points).close()
+        profile = cq.Workplane("XY").polyline(profile_points).close().extrude(length)
         
         return profile
     
@@ -101,7 +101,8 @@ class SheathingBuilder:
         dimensions: Dimensions,
         stories: int,
         ceiling_heights: Optional[List[float]] = None,
-        joist_heights: Optional[List[float]] = None
+        joist_heights: Optional[List[float]] = None,
+        floorplan: Optional[Floorplan] = None
     ) -> cq.Assembly:
         """
         Build exterior sheathing boards positioned on the outside of studs.
@@ -136,7 +137,8 @@ class SheathingBuilder:
         # Determine the range: from lowest floor height to highest floor height
         lowest_floor_height = min(floor_heights)
         highest_floor_height = max(floor_heights)
-        
+        chair_rail_height = 30
+
         # Sheathing board specifications
         board_exposure = sheathing.sheathing_exposure  # Visible exposure in inches
         board_height = sheathing.sheathing_height  # Board height in inches
@@ -149,7 +151,6 @@ class SheathingBuilder:
         # Calculate bevel angle for lapped siding
         # The bevel is the angle created by the difference between top and bottom width
         # bevel_angle = arctan((bottom_width - top_width) / board_height)
-        bevel_angle_radians = math.atan(((bottom_width + top_width) - top_width) / board_height)
         bevel_angle_degrees = 4
         
         # Stud dimensions (from framing)
@@ -170,126 +171,57 @@ class SheathingBuilder:
         
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = wall_top - wall_bottom
-        num_boards = 2
+        vertical_boards = math.ceil(vertical_coverage / board_exposure)
         
         # Create sheathing boards for each face
         for face in ["front"]:
+
             if face == "front":
                 wall_length = dimensions.front
-                base_y = front_rear_offset
-                wall_center_x = wall_length / 2
-                
+                bays = floorplan.bays.front if floorplan and floorplan.bays else []
+                board_x = wall_length / 2
+                board_y = 0
             elif face == "rear":
                 wall_length = dimensions.rear
-                base_y = -dimensions.right - front_rear_offset
-                wall_center_x = wall_length / 2
-                
+                bays = floorplan.bays.rear if floorplan and floorplan.bays else []
+                board_x = wall_length / 2
+                board_y = -dimensions.right
             elif face == "left":
                 wall_length = dimensions.left
-                base_x = -left_right_offset
-                wall_center_y = -dimensions.right + (wall_length / 2)
-                
+                bays = floorplan.bays.left if floorplan and floorplan.bays else []
+                board_x = 0
+                board_y = wall_length / 2
             elif face == "right":
                 wall_length = dimensions.right
-                base_x = dimensions.front + left_right_offset
-                wall_center_y = -dimensions.right + (wall_length / 2)
-            
+                bays = floorplan.bays.right if floorplan and floorplan.bays else []
+                board_x = 0
+                board_y = -wall_length / 2
             # Create individual sheathing boards lapping continuously from bottom to top
-            for board_index in range(num_boards):
-                # Calculate vertical position (bottom of board)
-                # Boards lap based on exposure (visible portion)
-                board_bottom_z = wall_bottom + (board_index * board_exposure)
-                board_top_z = board_bottom_z + board_height
+            for board_index in range(vertical_boards):
                 
-                # Clamp to wall boundaries
-                if board_bottom_z < wall_bottom:
-                    board_bottom_z = wall_bottom
-                if board_top_z > wall_top:
-                    board_top_z = wall_top
-                
-                actual_board_height = board_top_z - board_bottom_z
-                if actual_board_height <= 0:
-                    continue
-                
-                # Board center Z position
-                board_center_z = board_bottom_z + (actual_board_height / 2)
+                # Calculate the board length
+                board_top_height = (board_index * board_exposure) + board_exposure
+                board_length = wall_length
+                board_z = board_top_height - (board_height / 2)
+
                 
                 # Create 2D profile based on sheathing type
                 # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
                 if sheathing.sheathing_type == "beveled-weatherboard":
-                    base_profile = SheathingBuilder._bevel_weatherboard(
-                        top_width, bottom_width, actual_board_height
+                    board = SheathingBuilder._bevel_weatherboard(
+                        top_width, bottom_width, board_height, board_length
                     )
                 elif sheathing.sheathing_type == "beaded-weatherboard":
-                    base_profile = SheathingBuilder._beaded_weatherboard(
-                        top_width, bottom_width, actual_board_height
+                    board = SheathingBuilder._beaded_weatherboard(
+                        top_width, bottom_width, board_height, board_length
                     )
                 else:
                     # Fallback to beveled if unknown type
-                    base_profile = SheathingBuilder._bevel_weatherboard(
-                        top_width, bottom_width, actual_board_height
+                    board = SheathingBuilder._bevel_weatherboard(
+                        top_width, bottom_width, board_height, board_length
                     )
                 
-                # Extrude profile along wall length to create board
-                # Profile is in XZ plane: X = width, Z = height (negative), normal = Y
-                # When extruded from XZ plane, extends in Y direction by default
-                if face in ["front", "rear"]:
-                    # Boards run horizontally along X axis (wall length)
-                    # Profile width should be in Y direction (perpendicular to wall)
-                    # Profile height is in Z direction (vertical)
-                    # Rotate profile 90° around Z to put width in Y direction
-                    # Then sweep along X axis path
-                    if face == "front":
-                        rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), -90)
-                    else:
-                        rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), 90)
-                    # Create path along X axis
-                    sweep_path = cq.Workplane("XY").moveTo(0, 0).lineTo(wall_length, 0)
-                    board = (
-                        rotated_profile
-                        .sweep(sweep_path)
-                        .translate((wall_center_x - wall_length / 2, base_y, board_center_z))
-                    )
-                    # Rotate board around X axis to accommodate bevel angle
-                    # This tilts the board so the beveled edge aligns properly when lapped
-                    # For lapped siding, the bottom (wider) should tilt outward
-                    # Front face: negative Y is outside, so rotate to tilt bottom outward
-                    # Rear face: positive Y is outside, so rotate opposite direction
-                    if face == "front":
-                        # Rotate negative to tilt bottom toward negative Y (outward)
-                        board = board.rotate((0,0,0), (0, 1, 0), bevel_angle_degrees)
-                    else:  # rear
-                        # Rotate positive to tilt bottom toward positive Y (outward)
-                        board = board.rotate((wall_center_x - wall_length / 2, base_y, board_center_z), (1, 0, 0), bevel_angle_degrees)
-                else:  # left, right
-                    # Boards run horizontally along Y axis (wall length)
-                    # Profile width should be in X direction (perpendicular to wall)
-                    # Profile height is in Z direction (vertical)
-                    # Profile is in XZ plane, so width is already in X
-                    # Extrude along Y (default direction for XZ workplane)
-
-                    # Rotate profile 90° around Z to put width in X direction
-                    if face == "left":
-                        rotated_profile = base_profile.rotate((0, 0, 0), (0, 0, 1), 180)
-                    else:
-                        rotated_profile = base_profile
-
-                    board = (
-                        rotated_profile
-                        .extrude(wall_length)  # Extrude along Y (wall length)
-                        .translate((base_x, wall_center_y + wall_length / 2, board_center_z))
-                    )
-                    # Rotate board around Y axis to accommodate bevel angle
-                    # This tilts the board so the beveled edge aligns properly when lapped
-                    # For lapped siding, the bottom (wider) should tilt outward
-                    # Left face: negative X is outside, so rotate to tilt bottom outward
-                    # Right face: positive X is outside, so rotate opposite direction
-                    if face == "left":
-                        # Rotate negative to tilt bottom toward negative X (outward)
-                        board = board.rotate((base_x, wall_center_y + wall_length / 2, board_center_z), (0, 1, 0), -bevel_angle_degrees)
-                    else:  # right
-                        # Rotate positive to tilt bottom toward positive X (outward)
-                        board = board.rotate((base_x, wall_center_y + wall_length / 2, board_center_z), (0, 1, 0), bevel_angle_degrees)
+                board = board.translate((board_x, board_y, board_z)).rotateAboutCenter((0,1,0), bevel_angle_degrees)
                 
                 # Add board to assembly as individual component with color
                 board_name = f"sheathing_{face}_board{board_index}"

@@ -108,7 +108,8 @@ class BuildingBuilder:
                 dimensions,
                 floorplan.stories,
                 floorplan.ceiling_heights,
-                floorplan.joist_heights
+                floorplan.joist_heights,
+                floorplan
             )
             
             # Add all sheathing boards to the main assembly as individual components
