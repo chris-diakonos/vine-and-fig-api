@@ -33,7 +33,7 @@ class FoundationBuilder:
         total_foundation_height = foundation.foundation_courses * course_height
         
         # Foundation should be slightly wider than building
-        foundation_overhang = 12  # inches
+        foundation_overhang = 0  # inches
         
         foundation_width = dimensions.front + (2 * foundation_overhang)
         foundation_depth = dimensions.left + (2 * foundation_overhang)
@@ -42,7 +42,7 @@ class FoundationBuilder:
         foundation_obj = (
             cq.Workplane("XY")
             .box(foundation_width, foundation_depth, total_foundation_height)
-            .translate((0, 0, -total_foundation_height / 2))
+            .translate((foundation_width/2, -foundation_depth/2, -total_foundation_height / 2))
         )
         
         # Add visual texture for blocks (simplified representation)

@@ -181,9 +181,15 @@ class SheathingBuilder:
                 
                 current_board_height += board_exposure
                 board_length = wall_length
-                board_z = current_board_height - (board_height / 2)
-                print(f"Board number: {q+1}")
-                print(f"Board z: {board_z}")
+                # Calculate bottom edge Z position (top is at current_board_height)
+                bottom_edge_z = current_board_height - board_height
+                # Translate moves the geometric center, so calculate center position
+                board_z = bottom_edge_z + (board_height / 2)
+                print(f"Face: {face}")
+                print(f"Board number: {q}")
+                print(f"Top edge z: {current_board_height}")
+                print(f"Bottom edge z: {bottom_edge_z}")
+                print(f"Board z (center): {board_z}")
                 
                 # Create 2D profile based on sheathing type
                 # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
@@ -201,17 +207,29 @@ class SheathingBuilder:
                         top_width, bottom_width, board_height, board_length
                     )
                 
+                # Rotate the board first
                 if face == "front":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((0,0,1), -bevel_angle_degrees).translate((board_x, board_y, board_z))
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((0,0,1), -bevel_angle_degrees)
                 elif face == "rear":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((0,0,1), bevel_angle_degrees).translate((board_x, board_y, board_z))
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((0,0,1), bevel_angle_degrees)
                 elif face == "left":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees).translate((board_x, board_y, board_z))
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees)
                 elif face == "right":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees)
+                
+                # Get the bounding box after rotation to find actual bottom position
+                bbox = board.val().BoundingBox()
+                current_bottom_z = bbox.zmin
+                
+                # Calculate offset needed to position bottom edge at bottom_edge_z
+                # Translate by the difference to move bottom edge to desired position
+                z_offset = bottom_edge_z - current_bottom_z
+                
+                # Translate to final position (X, Y from board_x/board_y, Z offset to position bottom edge)
+                board = board.translate((board_x, board_y, z_offset))
                 
                 # Add board to assembly as individual component with color
-                board_name = f"sheathing_{face}_board{q+1}"
+                board_name = f"sheathing_{face}_board{q}"
                 sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         return sheathing_assembly
