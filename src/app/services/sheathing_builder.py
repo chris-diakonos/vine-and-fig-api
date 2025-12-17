@@ -141,7 +141,7 @@ class SheathingBuilder:
         bevel_angle_degrees = 4
         
         # Stud dimensions (from framing)
-        stud_depth = 5
+        stud_depth = 6
         
         # Create assembly to hold individual boards
         sheathing_assembly = cq.Assembly()
@@ -209,9 +209,9 @@ class SheathingBuilder:
                 
                 # Rotate the board first
                 if face == "front":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((1,0,0), -bevel_angle_degrees)
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((1,0,0), bevel_angle_degrees)
                 elif face == "rear":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((1,0,0), bevel_angle_degrees)
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((1,0,0), -bevel_angle_degrees)
                 elif face == "left":
                     board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees)
                 elif face == "right":
