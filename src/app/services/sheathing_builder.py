@@ -211,7 +211,7 @@ class SheathingBuilder:
                     board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees).translate((board_x, board_y, board_z))
                 
                 # Add board to assembly as individual component with color
-                board_name = f"sheathing_{face}_board{board_index}"
+                board_name = f"sheathing_{face}_board{q+1}"
                 sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         return sheathing_assembly
