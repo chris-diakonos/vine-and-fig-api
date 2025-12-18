@@ -183,7 +183,7 @@ class SheathingBuilder:
                     if bay == 1:
                         board_length = bays[0] - (bay_width / 2)
                         print(f"Board length: {board_length}")
-                        board_x_position = bays[bay - 1]
+                        board_x_position = 0 + (board_length / 2)
                         print(f"Board x position: {board_x_position}")
                         board_x_positions.append(board_x_position)
                     elif bay == horizontal_quantity:
@@ -201,7 +201,7 @@ class SheathingBuilder:
                         board_length = current_bay - previous_bay
                         print(f"Board length: {board_length}")
                         board_lengths.append(board_length)
-                        board_x_position = bays[bay - 1]
+                        board_x_position = previous_bay + (board_length / 2)
                         print(f"Board x position: {board_x_position}")
                         board_x_positions.append(board_x_position)
 
@@ -239,10 +239,12 @@ class SheathingBuilder:
                     print(f"Col: {col}")
                     if horizontal_quantity == 1:
                         board_length = wall_length
+                        board_x_position = wall_length / 2
                     else:
                         board_length = board_lengths[col - 1]
+                        board_x_position = board_x_positions[col - 1]
+
                     print(f"Board length: {board_length}")
-                    board_x_position = board_x_positions[col - 1] - (board_length / 2)
                     print(f"Board x position: {board_x_position}")
                     face_quantity += 1
                     total_quantity += 1
