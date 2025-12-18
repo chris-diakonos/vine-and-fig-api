@@ -237,7 +237,10 @@ class SheathingBuilder:
                 for col in range(1, horizontal_quantity + 1):
 
                     print(f"Col: {col}")
-                    board_length = board_lengths[col - 1]
+                    if horizontal_quantity == 1:
+                        board_length = wall_length
+                    else:
+                        board_length = board_lengths[col - 1]
                     print(f"Board length: {board_length}")
                     board_x_position = board_x_positions[col - 1]
                     print(f"Board x position: {board_x_position}")
