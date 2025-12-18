@@ -105,7 +105,7 @@ class BuildingBuilder:
         
         floorplan = structure.floorplan
         dimensions = floorplan.dimensions
-        bay_width = structure.windows.bay_width
+        bay_width = structure.windows[0].bay_width
         chair_rail_height = 30 #inches
         bay_height = chair_rail_height + 72 # inches
         
