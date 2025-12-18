@@ -231,59 +231,59 @@ class SheathingBuilder:
                     face_quantity += 1
                     total_quantity += 1
 
-                if face == "front":
-                    board_x = board_x_position
-                    board_y = 0 + stud_depth
-                elif face == "rear":
-                    board_x = board_x_position
-                    board_y = -dimensions.right - stud_depth
-                elif face == "left":
-                    board_x = 0 - (stud_depth / 2)
-                    board_y = -board_x_position
-                elif face == "right":
-                    board_x = dimensions.front + (stud_depth / 2)
-                    board_y = -board_x_position
-                
-                # Create 2D profile based on sheathing type
-                # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
-                if sheathing.sheathing_type == "beveled-weatherboard":
-                    board = SheathingBuilder._bevel_weatherboard(
-                        top_width, bottom_width, board_height, board_length
-                    )
-                elif sheathing.sheathing_type == "beaded-weatherboard":
-                    board = SheathingBuilder._beaded_weatherboard(
-                        top_width, bottom_width, board_height, board_length
-                    )
-                else:
-                    # Fallback to beveled if unknown type
-                    board = SheathingBuilder._bevel_weatherboard(
-                        top_width, bottom_width, board_height, board_length
-                    )
-                
-                # Rotate the board first
-                if face == "front":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((1,0,0), bevel_angle_degrees)
-                elif face == "rear":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((1,0,0), -bevel_angle_degrees)
-                elif face == "left":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees)
-                elif face == "right":
-                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees)
-                
-                # Get the bounding box after rotation to find actual bottom position
-                bbox = board.val().BoundingBox()
-                current_bottom_z = bbox.zmin
-                
-                # Calculate offset needed to position bottom edge at bottom_edge_z
-                # Translate by the difference to move bottom edge to desired position
-                z_offset = bottom_edge_z - current_bottom_z
-                
-                # Translate to final position (X, Y from board_x/board_y, Z offset to position bottom edge)
-                board = board.translate((board_x, board_y, z_offset))
-                
-                # Add board to assembly as individual component with color
-                board_name = f"sheathing_{face}_board{face_quantity}"
-                sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
+                    if face == "front":
+                        board_x = board_x_position
+                        board_y = 0 + stud_depth
+                    elif face == "rear":
+                        board_x = board_x_position
+                        board_y = -dimensions.right - stud_depth
+                    elif face == "left":
+                        board_x = 0 - (stud_depth / 2)
+                        board_y = -board_x_position
+                    elif face == "right":
+                        board_x = dimensions.front + (stud_depth / 2)
+                        board_y = -board_x_position
+                    
+                    # Create 2D profile based on sheathing type
+                    # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
+                    if sheathing.sheathing_type == "beveled-weatherboard":
+                        board = SheathingBuilder._bevel_weatherboard(
+                            top_width, bottom_width, board_height, board_length
+                        )
+                    elif sheathing.sheathing_type == "beaded-weatherboard":
+                        board = SheathingBuilder._beaded_weatherboard(
+                            top_width, bottom_width, board_height, board_length
+                        )
+                    else:
+                        # Fallback to beveled if unknown type
+                        board = SheathingBuilder._bevel_weatherboard(
+                            top_width, bottom_width, board_height, board_length
+                        )
+                    
+                    # Rotate the board first
+                    if face == "front":
+                        board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 90).rotateAboutCenter((1,0,0), bevel_angle_degrees)
+                    elif face == "rear":
+                        board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), -90).rotateAboutCenter((1,0,0), -bevel_angle_degrees)
+                    elif face == "left":
+                        board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees)
+                    elif face == "right":
+                        board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees)
+                    
+                    # Get the bounding box after rotation to find actual bottom position
+                    bbox = board.val().BoundingBox()
+                    current_bottom_z = bbox.zmin
+                    
+                    # Calculate offset needed to position bottom edge at bottom_edge_z
+                    # Translate by the difference to move bottom edge to desired position
+                    z_offset = bottom_edge_z - current_bottom_z
+                    
+                    # Translate to final position (X, Y from board_x/board_y, Z offset to position bottom edge)
+                    board = board.translate((board_x, board_y, z_offset))
+                    
+                    # Add board to assembly as individual component with color
+                    board_name = f"sheathing_{face}_board{face_quantity}"
+                    sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         return sheathing_assembly
 
