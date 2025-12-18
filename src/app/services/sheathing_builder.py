@@ -154,6 +154,7 @@ class SheathingBuilder:
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = highest_floor_height - lowest_floor_height
         vertical_quantity = math.ceil(vertical_coverage / board_exposure)
+        total_quantity = 0
         
         # Create sheathing boards for each face
         for face in ["front", "rear", "left", "right"]:
@@ -166,6 +167,7 @@ class SheathingBuilder:
             print(f"Bays: {bays}")
             board_lengths = []
             board_x_positions = []
+            face_quantity = 0
 
             if bay_count == 0:
                 horizontal_quantity = 1
@@ -174,6 +176,7 @@ class SheathingBuilder:
                 board_x_positions.append(wall_length / 2)
             else:
                 horizontal_quantity = (bay_count + 1)
+                total_quantity += horizontal_quantity
                 print(f"Horizontal quantity: {horizontal_quantity}")
 
                 for bay in range(1, horizontal_quantity + 1):
@@ -225,6 +228,8 @@ class SheathingBuilder:
 
                     board_length = board_lengths[col - 1]
                     board_x_position = board_x_positions[col - 1]
+                    face_quantity += 1
+                    total_quantity += 1
 
                 if face == "front":
                     board_x = board_x_position
@@ -277,7 +282,7 @@ class SheathingBuilder:
                 board = board.translate((board_x, board_y, z_offset))
                 
                 # Add board to assembly as individual component with color
-                board_name = f"sheathing_{face}_board{q}"
+                board_name = f"sheathing_{face}_board{face_quantity}"
                 sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         return sheathing_assembly
