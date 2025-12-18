@@ -160,6 +160,7 @@ class SheathingBuilder:
 
             current_board_height = lowest_floor_height
             bays = getattr(floorplan.bays, face, [])
+            wall_length = getattr(dimensions, face)
             bay_count = len(bays)
             print(f"Bay count: {bay_count}")
             print(f"Bays: {bays}")
@@ -226,19 +227,15 @@ class SheathingBuilder:
                     board_x_position = board_x_positions[col - 1]
 
                 if face == "front":
-                    wall_length = dimensions.front
                     board_x = board_x_position
                     board_y = 0 + stud_depth
                 elif face == "rear":
-                    wall_length = dimensions.rear
                     board_x = board_x_position
                     board_y = -dimensions.right - stud_depth
                 elif face == "left":
-                    wall_length = dimensions.left
                     board_x = 0 - (stud_depth / 2)
                     board_y = -board_x_position
                 elif face == "right":
-                    wall_length = dimensions.right
                     board_x = dimensions.front + (stud_depth / 2)
                     board_y = -board_x_position
                 
