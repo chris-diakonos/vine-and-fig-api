@@ -188,7 +188,7 @@ class SheathingBuilder:
                         board_x_positions.append(board_x_position)
                         board_lengths.append(board_length)
                     elif bay == horizontal_quantity:
-                        previous_bay = board_x_positions[bay - 2] + (bay_width / 2)
+                        previous_bay = bays[bay - 2] + (bay_width / 2)
                         current_bay = wall_length
                         board_length = current_bay - previous_bay
                         print(f"Board length: {board_length}")
@@ -197,7 +197,7 @@ class SheathingBuilder:
                         print(f"Board x position: {board_x_position}")
                         board_x_positions.append(board_x_position)
                     elif bay > 1 and bay < horizontal_quantity:
-                        previous_bay = board_x_positions[bay - 2] + (bay_width / 2)
+                        previous_bay = bays[bay - 2] + (bay_width / 2)
                         current_bay = bays[bay - 1] - (bay_width / 2)
                         board_length = current_bay - previous_bay
                         print(f"Board length: {board_length}")
