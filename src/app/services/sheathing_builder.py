@@ -172,13 +172,14 @@ class SheathingBuilder:
             else:
                 horizontal_quantity = (bay_count + 1)
 
-                for bay in range(1,bay_count + 1):
+                for bay in range(1, horizontal_quantity + 1):
 
                     if bay == 1:
                         board_length = bays[0] - (bay_width / 2)
+                        board_x_positions.append(bays[0])
                     elif bay > 1:
-                        previous_bay = bays[bay - 1] + (bay_width / 2)
-                        current_bay = bays[bay] - (bay_width / 2)
+                        previous_bay = board_x_positions[bay - 2] + (bay_width / 2)
+                        current_bay = bays[bay - 1] - (bay_width / 2)
                         board_length = current_bay - previous_bay
                         board_lengths.append(board_length)
                         board_x_positions.append(bays[bay - 1])
