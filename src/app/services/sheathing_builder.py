@@ -101,9 +101,9 @@ class SheathingBuilder:
         stories: int,
         floor_heights: List[float],
         floorplan: Optional[Floorplan] = None,
-        bay_width: float = 0,
-        bay_height: float = 0,
-        chair_rail_height: float = 0
+        bay_width: float = 41,
+        bay_height: float = 72,
+        chair_rail_height: float = 30
     ) -> cq.Assembly:
         """
         Build exterior sheathing boards positioned on the outside of studs.
