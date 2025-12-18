@@ -100,7 +100,10 @@ class SheathingBuilder:
         dimensions: Dimensions,
         stories: int,
         floor_heights: List[float],
-        floorplan: Optional[Floorplan] = None
+        floorplan: Optional[Floorplan] = None,
+        bay_width: float = 0,
+        bay_height: float = 0,
+        chair_rail_height: float = 0
     ) -> cq.Assembly:
         """
         Build exterior sheathing boards positioned on the outside of studs.
@@ -115,7 +118,9 @@ class SheathingBuilder:
             stories: Number of stories
             floor_heights: Pre-calculated floor heights for each story
             floorplan: Optional floorplan for bay information
-            
+            bay_width: Width of the bay in inches
+            bay_height: Height of the bay in inches
+            chair_rail_height: Height of the chair rail in inches
         Returns:
             CadQuery Assembly with individual sheathing boards as separate components
         """
@@ -148,48 +153,75 @@ class SheathingBuilder:
         
         # Calculate number of boards needed vertically (continuous lapping)
         vertical_coverage = highest_floor_height - lowest_floor_height
-        quantity = math.ceil(vertical_coverage / board_exposure)
+        vertical_quantity = math.ceil(vertical_coverage / board_exposure)
         
         # Create sheathing boards for each face
         for face in ["front", "rear", "left", "right"]:
 
             current_board_height = lowest_floor_height
+            bays = getattr(Floorplan.bays, face, [])
+            bay_count = len(bays)
+            board_lengths = []
+            board_x_positions = []
 
-            if face == "front":
-                wall_length = dimensions.front
-                bays = floorplan.bays.front if floorplan and floorplan.bays else []
-                board_x = wall_length / 2
-                board_y = 0 + stud_depth
-            elif face == "rear":
-                wall_length = dimensions.rear
-                bays = floorplan.bays.rear if floorplan and floorplan.bays else []
-                board_x = wall_length / 2
-                board_y = -dimensions.right - stud_depth
-            elif face == "left":
-                wall_length = dimensions.left
-                bays = floorplan.bays.left if floorplan and floorplan.bays else []
-                board_x = 0 - (stud_depth / 2)
-                board_y = -wall_length / 2
-            elif face == "right":
-                wall_length = dimensions.right
-                bays = floorplan.bays.right if floorplan and floorplan.bays else []
-                board_x = dimensions.front + (stud_depth / 2)
-                board_y = -wall_length / 2
+            if bay_count == 0:
+                horizontal_quantity = 1
+                board_length = wall_length
+                board_lengths.append(board_length)
+                board_x_positions.append(wall_length / 2)
+            else:
+                horizontal_quantity = (bay_count + 1)
+
+                for bay in range(1,bay_count + 2):
+
+                    if bay == 1:
+                        board_length = bays[0] - (bay_width / 2)
+                    elif bay > 1:
+                        previous_bay = bays[bay - 2] + (bay_width / 2)
+                        current_bay = bays[bay - 1] - (bay_width / 2)
+                        board_length = current_bay - previous_bay
+                        board_lengths.append(board_length)
+                        board_x_positions.append(bays[bay - 1])
 
             # Create individual sheathing boards lapping continuously from bottom to top
-            for q in range(1, quantity + 1):
+            for row in range(1, vertical_quantity + 1):
                 
+                # Calculate the vertical position of the board
                 current_board_height += board_exposure
-                board_length = wall_length
                 # Calculate bottom edge Z position (top is at current_board_height)
                 bottom_edge_z = current_board_height - board_height
                 # Translate moves the geometric center, so calculate center position
                 board_z = bottom_edge_z + (board_height / 2)
-                print(f"Face: {face}")
-                print(f"Board number: {q}")
-                print(f"Top edge z: {current_board_height}")
-                print(f"Bottom edge z: {bottom_edge_z}")
-                print(f"Board z (center): {board_z}")
+
+                # Determine if the board is a single board or a multiple board
+                if len(board_lengths) == 1:
+                    horizontal_quantity = 1
+                elif current_board_height < chair_rail_height or current_board_height > bay_height:
+                    horizontal_quantity = 1
+                else:
+                    horizontal_quantity = len(board_lengths)
+
+                for col in range(1, horizontal_quantity + 1):
+
+                    board_length = board_lengths[col - 1]
+                    board_x_position = board_x_positions[col - 1]
+
+                if face == "front":
+                    wall_length = dimensions.front
+                    board_x = board_x_position
+                    board_y = 0 + stud_depth
+                elif face == "rear":
+                    wall_length = dimensions.rear
+                    board_x = board_x_position
+                    board_y = -dimensions.right - stud_depth
+                elif face == "left":
+                    wall_length = dimensions.left
+                    board_x = 0 - (stud_depth / 2)
+                    board_y = -board_x_position
+                elif face == "right":
+                    wall_length = dimensions.right
+                    board_x = dimensions.front + (stud_depth / 2)
+                    board_y = -board_x_position
                 
                 # Create 2D profile based on sheathing type
                 # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
