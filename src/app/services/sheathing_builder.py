@@ -159,7 +159,7 @@ class SheathingBuilder:
         for face in ["front", "rear", "left", "right"]:
 
             current_board_height = lowest_floor_height
-            bays = floorplan.bays.get(face, [])
+            bays = getattr(floorplan.bays, face, [])
             bay_count = len(bays)
             board_lengths = []
             board_x_positions = []
