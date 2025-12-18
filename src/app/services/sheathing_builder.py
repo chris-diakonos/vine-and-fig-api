@@ -176,7 +176,6 @@ class SheathingBuilder:
                 board_x_positions.append(wall_length / 2)
             else:
                 horizontal_quantity = (bay_count + 1)
-                total_quantity += horizontal_quantity
                 print(f"Horizontal quantity: {horizontal_quantity}")
 
                 for bay in range(1, horizontal_quantity + 1):
@@ -208,9 +207,12 @@ class SheathingBuilder:
 
             # Create individual sheathing boards lapping continuously from bottom to top
             for row in range(1, vertical_quantity + 1):
+
+                print(f"Row: {row}")
                 
                 # Calculate the vertical position of the board
                 current_board_height += board_exposure
+                print(f"Current board height: {current_board_height}")
                 # Calculate bottom edge Z position (top is at current_board_height)
                 bottom_edge_z = current_board_height - board_height
                 # Translate moves the geometric center, so calculate center position
@@ -219,17 +221,25 @@ class SheathingBuilder:
                 # Determine if the board is a single board or a multiple board
                 if len(board_lengths) == 1:
                     horizontal_quantity = 1
+                    print("Single board")
                 elif current_board_height < chair_rail_height or current_board_height > bay_height:
                     horizontal_quantity = 1
+                    print("Single board")
                 else:
+                    print("Multiple boards")
                     horizontal_quantity = len(board_lengths)
 
                 for col in range(1, horizontal_quantity + 1):
 
+                    print(f"Col: {col}")
                     board_length = board_lengths[col - 1]
+                    print(f"Board length: {board_length}")
                     board_x_position = board_x_positions[col - 1]
+                    print(f"Board x position: {board_x_position}")
                     face_quantity += 1
                     total_quantity += 1
+
+                    print(f"Face quantity: {face_quantity}")
 
                     if face == "front":
                         board_x = board_x_position
