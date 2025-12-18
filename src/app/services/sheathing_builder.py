@@ -222,7 +222,7 @@ class SheathingBuilder:
                 if len(board_lengths) == 1:
                     horizontal_quantity = 1
                     print("Single board")
-                elif current_board_height < chair_rail_height or current_board_height > bay_height:
+                elif current_board_height < chair_rail_height and current_board_height > bay_height:
                     horizontal_quantity = 1
                     print("Single board")
                 else:
