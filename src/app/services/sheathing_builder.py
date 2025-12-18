@@ -161,6 +161,8 @@ class SheathingBuilder:
             current_board_height = lowest_floor_height
             bays = getattr(floorplan.bays, face, [])
             bay_count = len(bays)
+            print(f"Bay count: {bay_count}")
+            print(f"Bays: {bays}")
             board_lengths = []
             board_x_positions = []
 
@@ -171,18 +173,25 @@ class SheathingBuilder:
                 board_x_positions.append(wall_length / 2)
             else:
                 horizontal_quantity = (bay_count + 1)
+                print(f"Horizontal quantity: {horizontal_quantity}")
 
                 for bay in range(1, horizontal_quantity + 1):
-
+                    print(f"Bay: {bay}")
                     if bay == 1:
                         board_length = bays[0] - (bay_width / 2)
-                        board_x_positions.append(bays[0])
+                        print(f"Board length: {board_length}")
+                        board_x_position = bays[bay - 1]
+                        print(f"Board x position: {board_x_position}")
+                        board_x_positions.append(board_x_position)
                     elif bay > 1:
                         previous_bay = board_x_positions[bay - 2] + (bay_width / 2)
                         current_bay = bays[bay - 1] - (bay_width / 2)
                         board_length = current_bay - previous_bay
+                        print(f"Board length: {board_length}")
                         board_lengths.append(board_length)
-                        board_x_positions.append(bays[bay - 1])
+                        board_x_position = bays[bay - 1]
+                        print(f"Board x position: {board_x_position}")
+                        board_x_positions.append(board_x_position)
 
             # Create individual sheathing boards lapping continuously from bottom to top
             for row in range(1, vertical_quantity + 1):
