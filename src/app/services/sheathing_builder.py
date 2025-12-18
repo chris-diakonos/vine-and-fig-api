@@ -242,7 +242,7 @@ class SheathingBuilder:
                     else:
                         board_length = board_lengths[col - 1]
                     print(f"Board length: {board_length}")
-                    board_x_position = board_x_positions[col - 1]
+                    board_x_position = board_x_positions[col - 1] - (board_length / 2)
                     print(f"Board x position: {board_x_position}")
                     face_quantity += 1
                     total_quantity += 1
