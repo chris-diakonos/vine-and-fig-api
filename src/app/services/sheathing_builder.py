@@ -222,9 +222,12 @@ class SheathingBuilder:
                 if len(board_lengths) == 1:
                     horizontal_quantity = 1
                     print("No windows in this row")
-                elif current_board_height < chair_rail_height and current_board_height > bay_height:
+                elif current_board_height < chair_rail_height:
                     horizontal_quantity = 1
-                    print("Single board above or below window")
+                    print("Single board below window")
+                elif current_board_height > bay_height:
+                    horizontal_quantity = 1
+                    print("Single board above window")
                 else:
                     print("Multiple boards in this row")
                     horizontal_quantity = len(board_lengths)
