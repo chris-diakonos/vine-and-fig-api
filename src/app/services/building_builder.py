@@ -130,13 +130,12 @@ class BuildingBuilder:
         calculated_bay_heights = []
         calculated_bay_widths = []
 
-        for floor in calculated_floor_heights:
-
-            chair_rail_height = structure.windows[floor].chair_rail_height
+        for idx, floor_height in enumerate(calculated_floor_heights):
+            chair_rail_height = structure.windows[idx].chair_rail_height
             bay_height = chair_rail_height + 72
-            bay_width = structure.windows[floor].bay_width
-            calculated_chair_rail_heights.append(floor + chair_rail_height)
-            calculated_bay_heights.append(floor + bay_height)
+            bay_width = structure.windows[idx].bay_width
+            calculated_chair_rail_heights.append(floor_height + chair_rail_height)
+            calculated_bay_heights.append(floor_height + bay_height)
             calculated_bay_widths.append(bay_width)
 
         # Create main building assembly
