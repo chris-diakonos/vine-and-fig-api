@@ -206,10 +206,10 @@ class BuildingBuilder:
                 dimensions,
                 stories,
                 calculated_floor_heights,
-                floorplan,
                 calculated_chair_rail_heights,
                 calculated_bay_heights,
-                calculated_bay_widths
+                calculated_bay_widths,
+                floorplan
             )
             
             # Add all sheathing boards to the main assembly as individual components
