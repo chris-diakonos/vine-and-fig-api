@@ -105,9 +105,6 @@ class BuildingBuilder:
         
         floorplan = structure.floorplan
         dimensions = floorplan.dimensions
-        bay_width = structure.windows[0].bay_width
-        chair_rail_height = 30 #inches
-        bay_height = chair_rail_height + 72 # inches
         
         
         # Get floorplan values with defaults
@@ -121,12 +118,27 @@ class BuildingBuilder:
             joist_heights,
             raw_ceiling_heights
         )
+
         calculated_floor_heights = BuildingBuilder.calculate_floor_heights(
             stories,
             joist_heights,
             raw_ceiling_heights
         )
-        
+
+        # Calculate chair rail heights
+        calculated_chair_rail_heights = []
+        calculated_bay_heights = []
+        calculated_bay_widths = []
+
+        for floor in calculated_floor_heights:
+
+            chair_rail_height = structure.windows[floor].chair_rail_height
+            bay_height = chair_rail_height + 72
+            bay_width = structure.windows[floor].bay_width
+            calculated_chair_rail_heights.append(floor + chair_rail_height)
+            calculated_bay_heights.append(floor + bay_height)
+            calculated_bay_widths.append(bay_width)
+
         # Create main building assembly
         building_assembly = cq.Assembly()
         
@@ -196,9 +208,9 @@ class BuildingBuilder:
                 stories,
                 calculated_floor_heights,
                 floorplan,
-                bay_width,
-                chair_rail_height,
-                bay_height
+                calculated_chair_rail_heights,
+                calculated_bay_heights,
+                calculated_bay_widths
             )
             
             # Add all sheathing boards to the main assembly as individual components

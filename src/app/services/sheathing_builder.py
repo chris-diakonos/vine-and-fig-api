@@ -100,10 +100,10 @@ class SheathingBuilder:
         dimensions: Dimensions,
         stories: int,
         floor_heights: List[float],
-        floorplan: Optional[Floorplan] = None,
-        bay_width: float = 41,
-        bay_height: float = 72,
-        chair_rail_height: float = 30
+        calculated_chair_rail_heights: List[float],
+        calculated_bay_heights: List[float],
+        calculated_bay_widths: List[float],
+        floorplan: Optional[Floorplan] = None
     ) -> cq.Assembly:
         """
         Build exterior sheathing boards positioned on the outside of studs.
@@ -169,12 +169,35 @@ class SheathingBuilder:
             board_x_positions = []
             face_quantity = 0
 
+            # Helper function to get story index based on current height
+            def get_story_index(current_height: float) -> int:
+                """Determine which story index to use based on current height.
+                
+                Returns the index into the calculated lists (0 = first story, etc.)
+                The lists have one entry per story plus one for attic (stories+1 total).
+                floor_heights[i] is the elevation of floor i.
+                Story i spans from floor_heights[i] up to (but not including) floor_heights[i+1].
+                The attic is above the top floor.
+                """
+                # Find which story interval the current height falls into
+                for i in range(len(floor_heights) - 1):
+                    if floor_heights[i] <= current_height < floor_heights[i + 1]:
+                        return i
+                # If at or above the top floor, use the last index (attic)
+                # Ensure we don't go beyond the list bounds
+                max_idx = len(calculated_chair_rail_heights) - 1
+                return min(len(floor_heights) - 1, max_idx) if max_idx >= 0 else 0
+            
             if bay_count == 0:
                 horizontal_quantity = 1
                 board_length = wall_length
                 board_lengths.append(board_length)
                 board_x_positions.append(wall_length / 2)
             else:
+                # Use the first story's bay_width for initial board layout
+                story_idx = 0
+                bay_width = calculated_bay_widths[story_idx] if story_idx < len(calculated_bay_widths) else calculated_bay_widths[-1]
+                
                 horizontal_quantity = (bay_count + 1)
                 print(f"Horizontal quantity: {horizontal_quantity}")
 
@@ -214,6 +237,15 @@ class SheathingBuilder:
                 # Calculate the vertical position of the board
                 current_board_height += board_exposure
                 print(f"Current board height: {current_board_height}")
+                
+                # Determine which story we're in and get story-specific values
+                story_idx = get_story_index(current_board_height)
+                chair_rail_height = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else calculated_chair_rail_heights[-1]
+                bay_height = calculated_bay_heights[story_idx] if story_idx < len(calculated_bay_heights) else calculated_bay_heights[-1]
+                bay_width = calculated_bay_widths[story_idx] if story_idx < len(calculated_bay_widths) else calculated_bay_widths[-1]
+                
+                print(f"Story index: {story_idx}, Chair rail: {chair_rail_height}, Bay height: {bay_height}, Bay width: {bay_width}")
+                
                 # Calculate bottom edge Z position (top is at current_board_height)
                 bottom_edge_z = current_board_height - board_height
                 # Translate moves the geometric center, so calculate center position
@@ -223,10 +255,10 @@ class SheathingBuilder:
                 if len(board_lengths) == 1:
                     horizontal_quantity = 1
                     print("No windows in this row")
-                elif current_board_height < 30:
+                elif current_board_height < chair_rail_height:
                     horizontal_quantity = 1
                     print("Single board below window")
-                elif current_board_height > 96:
+                elif current_board_height > bay_height:
                     horizontal_quantity = 1
                     print("Single board above window")
                 else:
