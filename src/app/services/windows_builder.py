@@ -203,45 +203,57 @@ class WindowsBuilder:
         # Create window frame assembly
         window_frame = cq.Assembly()
         
-        # Frame center point for rotation
-        frame_center = (center_x, center_y, center_z)
-        
-        # For now, create simplified frames without complex joinery to avoid geometry errors
-        # Left window frame (left side of opening, not left wall)
-        left_x = center_x - (header_length / 2)
-        left_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-        left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((left_x, center_y, left_z))
+        # For left/right walls, we need to swap X and Y positioning
+        # Header/sill run along Y axis instead of X axis for left/right walls
         if face in ["left", "right"]:
-            # Rotate 90 degrees around Z axis at the frame center to align with wall
-            left_frame = left_frame.rotate(frame_center, (0, 0, 1), 90)
-        window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
-        
-        # Right window frame (right side of opening, not right wall)
-        right_x = center_x + (header_length / 2) - frame_width
-        right_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-        right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((right_x, center_y, right_z))
-        if face in ["left", "right"]:
-            right_frame = right_frame.rotate(frame_center, (0, 0, 1), 90)
-        window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
-        
-        # Top window frame
-        top_z = center_z + ((pulley_stile_length + frame_width) / 2)
-        top_x = center_x - (header_length / 2)
-        top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((top_x, center_y, top_z))
-        if face in ["left", "right"]:
-            top_frame = top_frame.rotate(frame_center, (0, 0, 1), 90)
-        window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
-        
-        # Bottom window frame (sill)
-        # The sill sits at the bottom of the opening
-        # pulley_stile_length represents the full opening height
-        bottom_x = center_x - (header_length / 2)
-        # Position sill center at center_z - (pulley_stile_length / 2) so bottom aligns with opening bottom
-        bottom_z = center_z - (pulley_stile_length / 2)
-        bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
-        if face in ["left", "right"]:
-            bottom_frame = bottom_frame.rotate(frame_center, (0, 0, 1), 90)
-        window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
+            # Swap coordinates: header/sill extend along Y, stiles positioned along Y
+            # Left stile (left side of opening)
+            stile_pos_left = center_y - (header_length / 2)
+            stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
+            left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, stile_pos_left, stile_z))
+            window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
+            
+            # Right stile (right side of opening)
+            stile_pos_right = center_y + (header_length / 2) - frame_width
+            right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, stile_pos_right, stile_z))
+            window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
+            
+            # Top header - runs along Y axis
+            header_z = center_z + ((pulley_stile_length + frame_width) / 2)
+            header_y_start = center_y - (header_length / 2)
+            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, header_y_start, header_z))
+            window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
+            
+            # Bottom sill - runs along Y axis
+            sill_z = center_z - (pulley_stile_length / 2)
+            sill_y_start = center_y - (header_length / 2)
+            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, sill_y_start, sill_z))
+            window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
+        else:
+            # Front/rear walls: header/sill run along X axis, stiles positioned along X
+            # Left stile (left side of opening)
+            left_x = center_x - (header_length / 2)
+            left_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
+            left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((left_x, center_y, left_z))
+            window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
+            
+            # Right stile (right side of opening)
+            right_x = center_x + (header_length / 2) - frame_width
+            right_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
+            right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((right_x, center_y, right_z))
+            window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
+            
+            # Top header - runs along X axis
+            top_z = center_z + ((pulley_stile_length + frame_width) / 2)
+            top_x = center_x - (header_length / 2)
+            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((top_x, center_y, top_z))
+            window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
+            
+            # Bottom sill - runs along X axis
+            bottom_x = center_x - (header_length / 2)
+            bottom_z = center_z - (pulley_stile_length / 2)
+            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
+            window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
     
