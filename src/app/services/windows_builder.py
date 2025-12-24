@@ -196,41 +196,30 @@ class WindowsBuilder:
         # Create window frame assembly
         window_frame = cq.Assembly()
         
+        # For now, create simplified frames without complex joinery to avoid geometry errors
         # Left window frame
         left_x = center_x - (header_length / 2)
         left_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-        left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((center_x, center_y, center_z), (1, 0, 0), 90).translate((left_x, center_y, left_z))
-        left_tenon_a = left_frame.faces(">Z").workplane().center(left_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width)
-        left_tenon_b = left_tenon_a.faces("<Z").workplane().rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width - 2)
-        window_frame.add(left_tenon_b, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
+        left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((left_x, center_y, left_z))
+        window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Right window frame
         right_x = center_x + (header_length / 2) - frame_width
         right_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-        right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((center_x, center_y, center_z), (1, 0, 0), 90).translate((right_x, center_y, right_z))
-        right_tenon_a = right_frame.faces(">Z").workplane().center(right_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width)
-        right_tenon_b = right_tenon_a.faces("<Z").workplane().rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width - 2)
-        window_frame.add(right_tenon_b, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
+        right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((right_x, center_y, right_z))
+        window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Top window frame
         top_z = center_z + ((pulley_stile_length + frame_width) / 2)
         top_x = center_x - (header_length / 2)
-        top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((center_x, center_y, center_z), (0, 0, 1), 90).translate((top_x, center_y, top_z))
-        top_mortise_a = top_frame.faces("<Z").workplane().center(right_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
-        top_mortise_b = top_mortise_a.faces("<Z").workplane().center(left_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
-        top_tenon_a = top_mortise_b.faces("<X").workplane().center(1, center_z + lap_size / 2 + 1).rect(lap_thickness, frame_depth, forConstruction=True).wires().toPending().extrude(frame_depth)
-        top_tenon_b = top_tenon_a.faces(">X").workplane().rect(lap_thickness, frame_depth, forConstruction=True).wires().toPending().extrude(frame_depth)
-        window_frame.add(top_tenon_b, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
+        top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((top_x, center_y, top_z))
+        window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bottom window frame (sill)
         bottom_x = center_x - (header_length / 2)
         bottom_z = center_z - ((pulley_stile_length + frame_width) / 2)
-        bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((center_x, center_y, center_z), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
-        bottom_mortise_a = bottom_frame.faces("<Z").workplane().center(right_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
-        bottom_mortise_b = bottom_mortise_a.faces("<Z").workplane().center(left_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
-        bottom_tenon_a = bottom_mortise_b.faces("<X").workplane().center(-7, center_z + lap_size / 2).rect(lap_thickness, lap_size, forConstruction=True).wires().toPending().extrude(frame_depth)
-        bottom_tenon_b = bottom_tenon_a.faces(">X").workplane().rect(lap_thickness, lap_size, forConstruction=True).wires().toPending().extrude(frame_depth)
-        window_frame.add(bottom_tenon_b, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
+        bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
+        window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
     
