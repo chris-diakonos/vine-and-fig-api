@@ -134,7 +134,8 @@ class WindowsBuilder:
         window: Window,
         center_x: float,
         center_y: float,
-        chair_rail_bottom_z: float
+        chair_rail_bottom_z: float,
+        face: str
     ) -> cq.Assembly:
         """
         Create a window frame with bottom of opening at chair_rail_bottom_z.
@@ -144,6 +145,7 @@ class WindowsBuilder:
             center_x: X coordinate of opening center
             center_y: Y coordinate of opening center
             chair_rail_bottom_z: Z coordinate of bottom of opening (chair rail height)
+            face: Wall face ("front", "rear", "left", "right") - determines rotation
             
         Returns:
             CadQuery Assembly with window frame components
@@ -201,23 +203,33 @@ class WindowsBuilder:
         # Create window frame assembly
         window_frame = cq.Assembly()
         
+        # Frame center point for rotation
+        frame_center = (center_x, center_y, center_z)
+        
         # For now, create simplified frames without complex joinery to avoid geometry errors
-        # Left window frame
+        # Left window frame (left side of opening, not left wall)
         left_x = center_x - (header_length / 2)
         left_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
         left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((left_x, center_y, left_z))
+        if face in ["left", "right"]:
+            # Rotate 90 degrees around Z axis at the frame center to align with wall
+            left_frame = left_frame.rotate(frame_center, (0, 0, 1), 90)
         window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
-        # Right window frame
+        # Right window frame (right side of opening, not right wall)
         right_x = center_x + (header_length / 2) - frame_width
         right_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
         right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((right_x, center_y, right_z))
+        if face in ["left", "right"]:
+            right_frame = right_frame.rotate(frame_center, (0, 0, 1), 90)
         window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Top window frame
         top_z = center_z + ((pulley_stile_length + frame_width) / 2)
         top_x = center_x - (header_length / 2)
         top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((top_x, center_y, top_z))
+        if face in ["left", "right"]:
+            top_frame = top_frame.rotate(frame_center, (0, 0, 1), 90)
         window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bottom window frame (sill)
@@ -227,6 +239,8 @@ class WindowsBuilder:
         # Position sill center at center_z - (pulley_stile_length / 2) so bottom aligns with opening bottom
         bottom_z = center_z - (pulley_stile_length / 2)
         bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
+        if face in ["left", "right"]:
+            bottom_frame = bottom_frame.rotate(frame_center, (0, 0, 1), 90)
         window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
@@ -323,7 +337,8 @@ class WindowsBuilder:
                         window,
                         window_center_x,
                         window_center_y,
-                        chair_rail_height_z
+                        chair_rail_height_z,
+                        face
                     )
                     
                     # Add all frame components to the windows assembly
