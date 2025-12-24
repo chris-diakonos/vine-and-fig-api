@@ -246,6 +246,7 @@ class BuildingBuilder:
                 dimensions,
                 stories,
                 calculated_floor_heights,
+                calculated_chair_rail_heights,
                 floorplan
             )
             if windows_assembly is not None:

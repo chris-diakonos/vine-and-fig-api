@@ -158,8 +158,8 @@ class WindowsBuilder:
         bottom_sash_lights = int(configuration_parts[1])
         
         # Frame parameters - use values from Window model or defaults
-        frame_depth = window.thickness  # Use window thickness as frame depth
-        frame_width = window.stile_width  # Use stile_width as frame width
+        frame_depth = 4
+        frame_width = 5
         top_rail_width = window.rail_width
         bottom_rail_width = window.rail_width
         meeting_rail_width = window.meeting_rail_width
@@ -229,6 +229,7 @@ class WindowsBuilder:
         dimensions: Dimensions,
         stories: int,
         floor_heights: List[float],
+        calculated_chair_rail_heights: List[float],
         floorplan: Optional[Floorplan] = None
     ) -> Optional[cq.Assembly]:
         """
@@ -239,6 +240,7 @@ class WindowsBuilder:
             dimensions: Building dimensions
             stories: Number of stories
             floor_heights: Pre-calculated floor heights for each story
+            calculated_chair_rail_heights: Pre-calculated chair rail heights for each story
             floorplan: Optional floorplan for bay information
             
         Returns:
@@ -254,8 +256,9 @@ class WindowsBuilder:
             if story_idx >= len(floor_heights):
                 break  # Skip if we don't have floor height for this story
             
-            # Get floor height for this story
+            # Get floor height and chair rail height for this story
             floor_height = floor_heights[story_idx]
+            chair_rail_height_z = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else floor_height + 30.0
             
             # Parse window size to get dimensions
             size_parts = window.size.split('x')
@@ -266,8 +269,7 @@ class WindowsBuilder:
                 window_width, window_height = 24, 36  # Default size
             
             # Calculate window center Z position (chair rail height + half window height)
-            chair_rail_height = 30.0  # Default, could come from structure
-            window_center_z = floor_height + chair_rail_height + (window_height / 2)
+            window_center_z = chair_rail_height_z + (window_height / 2)
             
             # Get bays for each face
             for face in ["front", "rear", "left", "right"]:
@@ -279,24 +281,29 @@ class WindowsBuilder:
                 
                 wall_length = getattr(dimensions, face)
                 
-                # Stud depth (windows are positioned in wall openings)
-                stud_depth = 6  # Standard 2x6 stud depth
+                # Frame depth - back of frame should be flush with inside of stud wall
+                frame_depth = 4  # Frame depth in inches
                 
                 # Create window at each bay center
                 for bay_idx, bay_position in enumerate(bays):
                     # Calculate window center coordinates based on face
-                    # Windows are positioned at the wall face (exterior side of studs)
+                    # Frame back (interior side) should be flush with inside of stud wall
+                    # Frame extends from inside (back) to outside (front) by frame_depth
                     if face == "front":
+                        # Back of frame at Y=0 (inside of wall), center at Y=frame_depth/2
                         window_center_x = bay_position
-                        window_center_y = stud_depth  # On exterior face of front wall
+                        window_center_y = frame_depth / 2
                     elif face == "rear":
+                        # Back of frame at Y=-dimensions.right (inside of wall), center at Y=-dimensions.right + frame_depth/2
                         window_center_x = bay_position
-                        window_center_y = -dimensions.right - stud_depth  # On exterior face of rear wall
+                        window_center_y = -dimensions.right + frame_depth / 2
                     elif face == "left":
-                        window_center_x = -stud_depth / 2  # On exterior face of left wall
+                        # Back of frame at X=0 (inside of wall), center at X=frame_depth/2
+                        window_center_x = frame_depth / 2
                         window_center_y = -bay_position
                     elif face == "right":
-                        window_center_x = dimensions.front + stud_depth / 2  # On exterior face of right wall
+                        # Back of frame at X=dimensions.front (inside of wall), center at X=dimensions.front + frame_depth/2
+                        window_center_x = dimensions.front + frame_depth / 2
                         window_center_y = -bay_position
                     else:
                         continue
