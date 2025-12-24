@@ -134,16 +134,16 @@ class WindowsBuilder:
         window: Window,
         center_x: float,
         center_y: float,
-        center_z: float
+        chair_rail_bottom_z: float
     ) -> cq.Assembly:
         """
-        Create a window frame at the specified center coordinates.
+        Create a window frame with bottom of opening at chair_rail_bottom_z.
         
         Args:
             window: Window specification
             center_x: X coordinate of opening center
             center_y: Y coordinate of opening center
-            center_z: Z coordinate of opening center
+            chair_rail_bottom_z: Z coordinate of bottom of opening (chair rail height)
             
         Returns:
             CadQuery Assembly with window frame components
@@ -193,6 +193,11 @@ class WindowsBuilder:
         rail_length = (light_width * 3) + (frame_width * 2) + (muntin_width * 2) - (glazing_rabbet * 6) + tenon_adjustment
         header_length = (frame_width * 2) + rail_length
         
+        # Calculate the center Z position based on the actual opening height
+        # The bottom of the opening (where sill sits) should be at chair_rail_bottom_z
+        # So the center is at: bottom + (opening_height / 2)
+        center_z = chair_rail_bottom_z + (pulley_stile_length / 2)
+        
         # Create window frame assembly
         window_frame = cq.Assembly()
         
@@ -216,8 +221,11 @@ class WindowsBuilder:
         window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bottom window frame (sill)
+        # The sill sits at the bottom of the opening
+        # pulley_stile_length represents the full opening height
         bottom_x = center_x - (header_length / 2)
-        bottom_z = center_z - ((pulley_stile_length + frame_width) / 2)
+        # Position sill center at center_z - (pulley_stile_length / 2) so bottom aligns with opening bottom
+        bottom_z = center_z - (pulley_stile_length / 2)
         bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
         window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
@@ -258,6 +266,7 @@ class WindowsBuilder:
             
             # Get floor height and chair rail height for this story
             floor_height = floor_heights[story_idx]
+            # calculated_chair_rail_heights already includes floor_height + chair_rail_height
             chair_rail_height_z = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else floor_height + 30.0
             
             # Parse window size to get dimensions
@@ -268,8 +277,8 @@ class WindowsBuilder:
             else:
                 window_width, window_height = 24, 36  # Default size
             
-            # Calculate window center Z position (chair rail height + half window height)
-            window_center_z = chair_rail_height_z + (window_height / 2)
+            # chair_rail_height_z is where the bottom of the opening (sill) should be
+            # We'll pass this to _window_frame which will calculate the center using the actual opening height
             
             # Get bays for each face
             for face in ["front", "rear", "left", "right"]:
@@ -309,11 +318,12 @@ class WindowsBuilder:
                         continue
                     
                     # Create window frame
+                    # Pass chair_rail_height_z so the bottom of the opening aligns with it
                     frame_assembly = WindowsBuilder._window_frame(
                         window,
                         window_center_x,
                         window_center_y,
-                        window_center_z
+                        chair_rail_height_z
                     )
                     
                     # Add all frame components to the windows assembly
