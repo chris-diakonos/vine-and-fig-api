@@ -8,7 +8,8 @@ from app.services.foundation_builder import FoundationBuilder
 from app.services.floor_builder import FloorBuilder
 from app.services.sheathing_builder import SheathingBuilder
 from app.services.roof_builder import RoofBuilder
-from app.services.openings_builder import OpeningsBuilder
+from app.services.windows_builder import WindowsBuilder
+from app.services.doors_builder import DoorsBuilder
 from app.services.framing_builder import FramingBuilder
 
 
@@ -240,9 +241,15 @@ class BuildingBuilder:
         
         # Add windows if specified
         if component_visibility.windows and structure.windows:
-            windows_assembly = OpeningsBuilder.build_windows(structure.windows, dimensions)
+            windows_assembly = WindowsBuilder.build(
+                structure.windows,
+                dimensions,
+                stories,
+                calculated_floor_heights,
+                floorplan
+            )
             if windows_assembly is not None:
-                # Add all windows to the main assembly (colors are already set in openings_builder)
+                # Add all windows to the main assembly (colors are already set in windows_builder)
                 for name, obj_data in windows_assembly.traverse():
                     if hasattr(obj_data, 'obj') and obj_data.obj is not None:
                         component_name = name if name else f"window_{len(building_assembly.children)}"
@@ -250,9 +257,9 @@ class BuildingBuilder:
         
         # Add doors if specified
         if component_visibility.doors and structure.doors:
-            doors_assembly = OpeningsBuilder.build_doors(structure.doors, dimensions)
+            doors_assembly = DoorsBuilder.build(structure.doors, dimensions)
             if doors_assembly is not None:
-                # Add all doors to the main assembly (colors are already set in openings_builder)
+                # Add all doors to the main assembly (colors are already set in doors_builder)
                 for name, obj_data in doors_assembly.traverse():
                     if hasattr(obj_data, 'obj') and obj_data.obj is not None:
                         component_name = name if name else f"door_{len(building_assembly.children)}"

@@ -1,0 +1,333 @@
+"""
+Windows builder service using CadQuery.
+"""
+import cadquery as cq
+import math
+from typing import List, Optional
+from app.models.openings import Window
+from app.models.floorplan import Dimensions, Floorplan
+
+
+class WindowsBuilder:
+    """Builds window geometry using CadQuery."""
+    
+    @staticmethod
+    def _beaded_board(width: float, height: float, bead_size: float) -> cq.Workplane:
+        """
+        Create a beaded board profile.
+        
+        Args:
+            width: Width of the board
+            height: Height of the board
+            bead_size: Size of the bead
+            
+        Returns:
+            2D CadQuery Workplane profile
+        """
+        profile_points = []
+        segments = 32
+        increment = 180 / segments
+
+        # Define the bead
+        bead_diameter = bead_size
+        bead_radius = bead_diameter / 2
+        board_height = height - bead_diameter
+        board_width = width
+        center_x = board_width - bead_radius
+        center_y = -height + bead_radius
+
+        # Add initial point
+        profile_points.append((0, 0))
+        profile_points.append((board_width, 0))
+        profile_points.append((board_width, -board_height))
+
+        # Add the bead points from 90 to 270 degrees
+        for segment in range(1, segments):
+            if segment <= (segments / 2):
+                angle_degrees = 90 - (segment * increment)
+            else:
+                segment_counter = segment - (segments / 2)
+                angle_degrees = 360 - (segment_counter * increment)
+
+            angle_radians = math.radians(angle_degrees)
+            
+            bead_x = center_x + (bead_radius * math.cos(angle_radians))
+            bead_y = center_y + (bead_radius * math.sin(angle_radians))
+
+            profile_points.append((bead_x, bead_y))
+
+        # Add the board corners
+        profile_points.append((0, -height))
+
+        # Create the 2D profile
+        profile = cq.Workplane("XZ").polyline(profile_points).close()
+
+        return profile
+    
+    @staticmethod
+    def _beaded_sill(width: float, inside_height: float, outside_height: float, bead_size: float) -> cq.Workplane:
+        """
+        Create a beaded sill profile.
+        
+        Args:
+            width: Width of the sill
+            inside_height: Inside height of the sill
+            outside_height: Outside height of the sill
+            bead_size: Size of the bead
+            
+        Returns:
+            2D CadQuery Workplane profile
+        """
+        profile_points = []
+        segments = 32
+        increment = 180 / segments
+
+        # Define the bead
+        bead_diameter = bead_size
+        bead_radius = bead_diameter / 2
+        board_height = inside_height - bead_diameter
+        board_width = width
+        center_x = board_width - bead_radius
+        center_y = -inside_height + bead_radius
+        rain_stem = 0.5
+        rain_slope = (inside_height - outside_height)
+        siding_notch = 0.375
+        wall_width = 4.00
+        siding_notch_x = wall_width + siding_notch
+
+        # Add initial point
+        profile_points.append((0, 0))
+        profile_points.append((rain_stem, 0))
+        profile_points.append((rain_stem, -rain_stem))
+        profile_points.append((board_width, -rain_slope))
+        profile_points.append((board_width, -board_height))
+
+        # Add the bead points from 90 to 270 degrees
+        for segment in range(1, segments):
+            if segment <= (segments / 2):
+                angle_degrees = 90 - (segment * increment)
+            else:
+                segment_counter = segment - (segments / 2)
+                angle_degrees = 360 - (segment_counter * increment)
+
+            angle_radians = math.radians(angle_degrees)
+            
+            bead_x = center_x + (bead_radius * math.cos(angle_radians))
+            bead_y = center_y + (bead_radius * math.sin(angle_radians))
+
+            profile_points.append((bead_x, bead_y))
+
+        # Add the board corners
+        profile_points.append((siding_notch_x, -inside_height))
+        profile_points.append((siding_notch_x, -inside_height + siding_notch))
+        profile_points.append((wall_width, -inside_height + siding_notch))
+        profile_points.append((wall_width, -inside_height))
+        profile_points.append((0, -inside_height))
+
+        # Create the 2D profile
+        profile = cq.Workplane("XZ").polyline(profile_points).close()
+
+        return profile
+    
+    @staticmethod
+    def _window_frame(
+        window: Window,
+        center_x: float,
+        center_y: float,
+        center_z: float
+    ) -> cq.Assembly:
+        """
+        Create a window frame at the specified center coordinates.
+        
+        Args:
+            window: Window specification
+            center_x: X coordinate of opening center
+            center_y: Y coordinate of opening center
+            center_z: Z coordinate of opening center
+            
+        Returns:
+            CadQuery Assembly with window frame components
+        """
+        # Parse window size and configuration
+        size_parts = window.size.split('x')
+        light_width = float(size_parts[0])
+        light_height = float(size_parts[1])
+        
+        configuration_parts = window.configuration.split("/")
+        top_sash_lights = int(configuration_parts[0])
+        bottom_sash_lights = int(configuration_parts[1])
+        
+        # Frame parameters - use values from Window model or defaults
+        frame_depth = window.thickness  # Use window thickness as frame depth
+        frame_width = window.stile_width  # Use stile_width as frame width
+        top_rail_width = window.rail_width
+        bottom_rail_width = window.rail_width
+        meeting_rail_width = window.meeting_rail_width
+        muntin_width = window.muntin_width
+        
+        # Sill parameters (fixed values - could be made configurable)
+        sill_inside_height = 5.0
+        sill_outside_height = 3.0
+        sill_width = 5.0
+        
+        # Joint parameters (fixed values - standard joinery)
+        bead_size = 0.625
+        tenon_size = 2.0
+        tenon_type = "blind"  # Could be made configurable
+        lap_thickness = 1.0
+        lap_size = 3.0
+        
+        # Precalculate part lengths
+        glazing_rabbet = 0.25
+        top_stile_length = ((top_sash_lights / 3) * (light_height - (glazing_rabbet * 2))) + top_rail_width + meeting_rail_width + (((top_sash_lights / 3) - 1) * muntin_width)
+        bottom_stile_length = ((bottom_sash_lights / 3) * (light_height - (glazing_rabbet * 2))) + bottom_rail_width + meeting_rail_width + (((bottom_sash_lights / 3) - 1) * muntin_width)
+        pulley_stile_length = top_stile_length + bottom_stile_length - meeting_rail_width
+        
+        if tenon_type == "blind":
+            tenon_adjustment = -1
+            tenon_length = frame_width + (tenon_adjustment / 2)
+        else:
+            tenon_adjustment = 0
+            tenon_length = frame_width
+        
+        rail_length = (light_width * 3) + (frame_width * 2) + (muntin_width * 2) - (glazing_rabbet * 6) + tenon_adjustment
+        header_length = (frame_width * 2) + rail_length
+        
+        # Create window frame assembly
+        window_frame = cq.Assembly()
+        
+        # Left window frame
+        left_x = center_x - (header_length / 2)
+        left_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
+        left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((center_x, center_y, center_z), (1, 0, 0), 90).translate((left_x, center_y, left_z))
+        left_tenon_a = left_frame.faces(">Z").workplane().center(left_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width)
+        left_tenon_b = left_tenon_a.faces("<Z").workplane().rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width - 2)
+        window_frame.add(left_tenon_b, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Right window frame
+        right_x = center_x + (header_length / 2) - frame_width
+        right_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
+        right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((center_x, center_y, center_z), (1, 0, 0), 90).translate((right_x, center_y, right_z))
+        right_tenon_a = right_frame.faces(">Z").workplane().center(right_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width)
+        right_tenon_b = right_tenon_a.faces("<Z").workplane().rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().extrude(frame_width - 2)
+        window_frame.add(right_tenon_b, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Top window frame
+        top_z = center_z + ((pulley_stile_length + frame_width) / 2)
+        top_x = center_x - (header_length / 2)
+        top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((center_x, center_y, center_z), (0, 0, 1), 90).translate((top_x, center_y, top_z))
+        top_mortise_a = top_frame.faces("<Z").workplane().center(right_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
+        top_mortise_b = top_mortise_a.faces("<Z").workplane().center(left_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
+        top_tenon_a = top_mortise_b.faces("<X").workplane().center(1, center_z + lap_size / 2 + 1).rect(lap_thickness, frame_depth, forConstruction=True).wires().toPending().extrude(frame_depth)
+        top_tenon_b = top_tenon_a.faces(">X").workplane().rect(lap_thickness, frame_depth, forConstruction=True).wires().toPending().extrude(frame_depth)
+        window_frame.add(top_tenon_b, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Bottom window frame (sill)
+        bottom_x = center_x - (header_length / 2)
+        bottom_z = center_z - ((pulley_stile_length + frame_width) / 2)
+        bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((center_x, center_y, center_z), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
+        bottom_mortise_a = bottom_frame.faces("<Z").workplane().center(right_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
+        bottom_mortise_b = bottom_mortise_a.faces("<Z").workplane().center(left_x + (frame_width / 2), center_y + tenon_size).rect(tenon_size, tenon_size, forConstruction=True).wires().toPending().cutBlind(frame_width)
+        bottom_tenon_a = bottom_mortise_b.faces("<X").workplane().center(-7, center_z + lap_size / 2).rect(lap_thickness, lap_size, forConstruction=True).wires().toPending().extrude(frame_depth)
+        bottom_tenon_b = bottom_tenon_a.faces(">X").workplane().rect(lap_thickness, lap_size, forConstruction=True).wires().toPending().extrude(frame_depth)
+        window_frame.add(bottom_tenon_b, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
+        
+        return window_frame
+    
+    @staticmethod
+    def build(
+        windows: List[Window],
+        dimensions: Dimensions,
+        stories: int,
+        floor_heights: List[float],
+        floorplan: Optional[Floorplan] = None
+    ) -> Optional[cq.Assembly]:
+        """
+        Build window frames at each bay on each story.
+        
+        Args:
+            windows: List of window specifications (one per story + attic)
+            dimensions: Building dimensions
+            stories: Number of stories
+            floor_heights: Pre-calculated floor heights for each story
+            floorplan: Optional floorplan for bay information
+            
+        Returns:
+            CadQuery Assembly with window frames, or None if no windows
+        """
+        if not windows:
+            return None
+        
+        windows_assembly = cq.Assembly()
+        
+        # Iterate through each story (and attic)
+        for story_idx, window in enumerate(windows):
+            if story_idx >= len(floor_heights):
+                break  # Skip if we don't have floor height for this story
+            
+            # Get floor height for this story
+            floor_height = floor_heights[story_idx]
+            
+            # Parse window size to get dimensions
+            size_parts = window.size.split('x')
+            if len(size_parts) == 2:
+                window_width = float(size_parts[0])
+                window_height = float(size_parts[1])
+            else:
+                window_width, window_height = 24, 36  # Default size
+            
+            # Calculate window center Z position (chair rail height + half window height)
+            chair_rail_height = 30.0  # Default, could come from structure
+            window_center_z = floor_height + chair_rail_height + (window_height / 2)
+            
+            # Get bays for each face
+            for face in ["front", "rear", "left", "right"]:
+                bays = getattr(floorplan.bays, face, []) if floorplan and floorplan.bays else []
+                
+                if not bays:
+                    # No bays on this face, skip
+                    continue
+                
+                wall_length = getattr(dimensions, face)
+                
+                # Stud depth (windows are positioned in wall openings)
+                stud_depth = 6  # Standard 2x6 stud depth
+                
+                # Create window at each bay center
+                for bay_idx, bay_position in enumerate(bays):
+                    # Calculate window center coordinates based on face
+                    # Windows are positioned at the wall face (exterior side of studs)
+                    if face == "front":
+                        window_center_x = bay_position
+                        window_center_y = stud_depth  # On exterior face of front wall
+                    elif face == "rear":
+                        window_center_x = bay_position
+                        window_center_y = -dimensions.right - stud_depth  # On exterior face of rear wall
+                    elif face == "left":
+                        window_center_x = -stud_depth / 2  # On exterior face of left wall
+                        window_center_y = -bay_position
+                    elif face == "right":
+                        window_center_x = dimensions.front + stud_depth / 2  # On exterior face of right wall
+                        window_center_y = -bay_position
+                    else:
+                        continue
+                    
+                    # Create window frame
+                    frame_assembly = WindowsBuilder._window_frame(
+                        window,
+                        window_center_x,
+                        window_center_y,
+                        window_center_z
+                    )
+                    
+                    # Add all frame components to the windows assembly
+                    for name, obj_data in frame_assembly.traverse():
+                        if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                            component_name = f"window_{face}_story{story_idx}_bay{bay_position}_{name}"
+                            windows_assembly.add(
+                                obj_data.obj,
+                                name=component_name,
+                                color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6)
+                            )
+        
+        return windows_assembly if windows_assembly.children else None
