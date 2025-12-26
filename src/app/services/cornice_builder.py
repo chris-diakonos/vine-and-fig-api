@@ -462,7 +462,7 @@ class CorniceBuilder:
             # Flip to face outward (180° rotation around the face's horizontal axis)
             if face == "front":
                 # Front face: flip around X axis to face +Y (outward)
-                component = component.rotate((0, 0, 0), (1, 0, 0), 180).rotate((0, 0, 0), (0, 0, 1), 90)
+                component = component.rotate((0, 0, 0), (1, 0, 0), 180).rotateAboutCenter((1, 0, 0), 90)
             elif face == "rear":
                 # Rear face: flip around X axis to face -Y (outward)
                 component = component.rotate((0, 0, 0), (1, 0, 0), 180)
