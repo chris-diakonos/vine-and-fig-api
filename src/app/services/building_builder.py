@@ -268,7 +268,7 @@ class BuildingBuilder:
                         building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.5, 0.3, 0.2))
         
         # Build cornice at the top of the building
-        cornice_assembly = CorniceBuilder.build(dimensions, dimensions.building_height)
+        cornice_assembly = CorniceBuilder.build(dimensions, dimensions.building_height, structure.roof.roof_type)
         if cornice_assembly is not None:
             # Add all cornice components to the main assembly (colors are already set in cornice_builder)
             for name, obj_data in cornice_assembly.traverse():

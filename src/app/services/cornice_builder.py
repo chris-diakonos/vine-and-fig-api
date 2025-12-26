@@ -325,7 +325,8 @@ class CorniceBuilder:
     @staticmethod
     def build(
         dimensions: Dimensions,
-        building_height: float
+        building_height: float,
+        roof_type: str
     ) -> Optional[cq.Assembly]:
         """
         Build Georgian cornice around the perimeter of the building.
@@ -333,6 +334,7 @@ class CorniceBuilder:
         Args:
             dimensions: Building dimensions
             building_height: Total building height in inches (Z coordinate for top of building)
+            roof_type: Type of roof ("side-gable", "front-gable", "hipped-gable", "side-gable-with-shed")
             
         Returns:
             CadQuery Assembly with cornice components, or None if dimensions are invalid
@@ -342,6 +344,20 @@ class CorniceBuilder:
         
         # Create the cornice assembly
         cornice = cq.Assembly()
+        
+        # Determine which faces get cornice based on roof type
+        if roof_type == "side-gable" or roof_type == "side-gable-with-shed":
+            # Side gable: cornice on front and rear faces only
+            faces_to_build = ["front", "rear"]
+        elif roof_type == "front-gable":
+            # Front gable: cornice on left and right faces only
+            faces_to_build = ["left", "right"]
+        elif roof_type == "hipped-gable":
+            # Hipped roof: cornice on all 4 faces
+            faces_to_build = ["front", "rear", "left", "right"]
+        else:
+            # Default to all faces if unknown roof type
+            faces_to_build = ["front", "rear", "left", "right"]
         
         # Stud depth (standard)
         stud_depth = 6
@@ -369,7 +385,8 @@ class CorniceBuilder:
             "right": (dimensions.right, -90, dimensions.front - stud_depth / 2, dimensions.right / 2, 0)
         }
         
-        for face, (length, rotation, trans_x, trans_y, trans_z) in face_map.items():
+        for face in faces_to_build:
+            length, rotation, trans_x, trans_y, trans_z = face_map[face]
             if length > 0:
                 CorniceBuilder._build_face_cornice(
                     cornice,
@@ -424,13 +441,14 @@ class CorniceBuilder:
             trans_y: Y translation
         """
         # Helper to apply rotation and translation to a component
-        def transform_component(component, z_pos_offset=0):
-            """Apply rotation around origin, then translate."""
+        # Components are built along X axis, then rotated around origin, then translated
+        def transform_component(component):
+            """Apply rotation around origin, then translate to face position."""
             if rotation != 0:
                 component = component.rotate((0, 0, 0), (0, 0, 1), rotation)
-            return component.translate((trans_x, trans_y, z_pos_offset))
+            return component.translate((trans_x, trans_y, 0))
         
-        # Crown
+        # Crown - built along X axis, then transformed
         crown = CorniceBuilder._crown_molding(crown_width, crown_height).extrude(length).translate((4.25, 0, crown_z_position))
         crown = transform_component(crown)
         assembly.add(crown, name=f"{face}_crown", color=cq.Color(0.8, 0.7, 0.6))
@@ -441,12 +459,12 @@ class CorniceBuilder:
         assembly.add(cavetto, name=f"{face}_cavetto", color=cq.Color(0.8, 0.7, 0.6))
         
         # Corona - Fascia
-        fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, -0.8))
+        fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, corona_z_position - 0.8))
         fascia = transform_component(fascia)
         assembly.add(fascia, name=f"{face}_fascia", color=cq.Color(0.8, 0.7, 0.6))
         
         # Modillion backing
-        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
+        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19, 0, corona_z_position - 3.5)).rotateAboutCenter((0, 1, 0), 90)
         modillion_backing = transform_component(modillion_backing)
         assembly.add(modillion_backing, name=f"{face}_modillion_backing", color=cq.Color(0.8, 0.7, 0.6))
         
@@ -454,15 +472,15 @@ class CorniceBuilder:
         modillion_count = math.floor(length / modillion_spacing)
         for modillion_idx in range(0, modillion_count):
             modillion_x = length - (modillion_idx * modillion_spacing)
-            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25, -modillion_x + modillion_spacing, -4))
+            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25, -modillion_x + modillion_spacing, corona_z_position - 4))
             modillion = transform_component(modillion)
             assembly.add(modillion, name=f"{face}_modillion_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
             
-            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12, -modillion_x + modillion_spacing, -1.5))
+            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12, -modillion_x + modillion_spacing, corona_z_position - 1.5))
             modillion_band = transform_component(modillion_band)
             assembly.add(modillion_band, name=f"{face}_modillion_band_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bedmold
-        bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18, 0, -bed_molding_height))
+        bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18, 0, crown_z_position - bed_molding_height))
         bed = transform_component(bed)
         assembly.add(bed, name=f"{face}_bed_molding", color=cq.Color(0.8, 0.7, 0.6))
