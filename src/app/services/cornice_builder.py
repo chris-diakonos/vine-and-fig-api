@@ -378,11 +378,14 @@ class CorniceBuilder:
         bed_molding_height = 5.5
         
         # Build cornice for each face
+        # Cornice is extruded along Y by default (from XZ plane profile)
+        # Front/rear faces need it along X (rotate 90° around Z)
+        # Left/right faces need it along Y (no rotation needed)
         face_map = {
-            "front": (dimensions.front, 0, dimensions.front / 2, stud_depth / 2, 0),
-            "rear": (dimensions.rear, 180, dimensions.front / 2, -dimensions.right - stud_depth / 2, 0),
-            "left": (dimensions.left, 90, stud_depth / 2, dimensions.left / 2, 0),
-            "right": (dimensions.right, -90, dimensions.front - stud_depth / 2, dimensions.right / 2, 0)
+            "front": (dimensions.front, 90, dimensions.front / 2, stud_depth / 2, 0),
+            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - stud_depth / 2, 0),
+            "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0),
+            "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0)
         }
         
         for face in faces_to_build:
