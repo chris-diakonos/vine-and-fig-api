@@ -224,24 +224,24 @@ class WindowsBuilder:
         # Left stile (vertical piece)
         stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
         left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        if face == "rear":
-            # Rotate 180 degrees around Y axis to face outward
-            left_frame = left_frame.rotate(frame_center, (0, 1, 0), 180)
         if face in ["left", "right"]:
             left_frame = left_frame.translate((header_sill_const, stile_pos_left, stile_z))
         else:
             left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
+        if face == "rear":
+            # Rotate 180 degrees around Y axis at frame center to face outward
+            left_frame = left_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Right stile (vertical piece)
         right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        if face == "rear":
-            # Rotate 180 degrees around Y axis to face outward
-            right_frame = right_frame.rotate(frame_center, (0, 1, 0), 180)
         if face in ["left", "right"]:
             right_frame = right_frame.translate((header_sill_const, stile_pos_right, stile_z))
         else:
             right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
+        if face == "rear":
+            # Rotate 180 degrees around Y axis at frame center to face outward
+            right_frame = right_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Top header (horizontal piece)
@@ -254,10 +254,10 @@ class WindowsBuilder:
         else:
             # For front/rear walls, header extends in X, rotate around Z
             top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90)
-            if face == "rear":
-                # Rotate 180 degrees around Y axis to face outward
-                top_frame = top_frame.rotate(frame_center, (0, 1, 0), 180)
             top_frame = top_frame.translate((header_sill_start, header_sill_const, header_z))
+            if face == "rear":
+                # Rotate 180 degrees around Y axis at frame center to face outward
+                top_frame = top_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bottom sill (horizontal piece)
@@ -269,10 +269,10 @@ class WindowsBuilder:
         else:
             # For front/rear walls, sill extends in X, rotate around Z
             bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90)
-            if face == "rear":
-                # Rotate 180 degrees around Y axis to face outward
-                bottom_frame = bottom_frame.rotate(frame_center, (0, 1, 0), 180)
             bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
+            if face == "rear":
+                # Rotate 180 degrees around Y axis at frame center to face outward
+                bottom_frame = bottom_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
@@ -349,13 +349,10 @@ class WindowsBuilder:
                         window_center_x = bay_position
                         window_center_y = frame_depth / 2
                     elif face == "rear":
-                        # Move frame to exterior face (stud_depth outward from inside of wall)
-                        # Rotate 180 degrees around Y axis to face outward
-                        stud_depth = 6  # Standard stud depth
+                        # Back of frame at Y=-dimensions.right (inside of wall), center at Y=-dimensions.right + frame_depth/2
+                        # Will rotate 180 degrees around Y axis to face outward
                         window_center_x = bay_position
-                        # Position at exterior face: inside wall at -dimensions.right, exterior at -dimensions.right - stud_depth
-                        # Frame center should be at exterior face - frame_depth/2 (so back is flush with exterior)
-                        window_center_y = -dimensions.right - stud_depth - frame_depth / 2
+                        window_center_y = -dimensions.right + frame_depth / 2
                     elif face == "left":
                         # Back of frame at X=0 (inside of wall), center at X=frame_depth/2
                         window_center_x = frame_depth / 2
