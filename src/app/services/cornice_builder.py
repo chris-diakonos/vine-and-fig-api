@@ -366,10 +366,10 @@ class CorniceBuilder:
         # Crown molding parameters
         crown_width = 1.0
         crown_height = 6.0
-        crown_z_position = building_height - 18.0 # Position at top of building
+        crown_z_position = building_height - 2.0 # Position at top of building
         
         # Corona (cavetto + fascia) parameters
-        corona_z_position = building_height - 18.0
+        corona_z_position = building_height - 6.0
         fascia_height = 0.75
         
         # Modillion spacing
@@ -466,7 +466,7 @@ class CorniceBuilder:
                 component = component.rotate((0, 0, 0), (1, 0, 0), 180).rotate((0,0,0),(0,1,0),180)
             elif face == "rear":
                 # Rear face: flip around X axis to face -Y (outward)
-                component = component.rotate((0, 0, 0), (1, 0, 0), 180)
+                component = component.rotate((0, 0, 0), (1, 0, 0), 180).rotate((0,0,0),(0,1,0),180)
             elif face == "left":
                 # Left face: flip around Y axis to face -X (outward)
                 component = component.rotate((0, 0, 0), (0, 1, 0), 180)
