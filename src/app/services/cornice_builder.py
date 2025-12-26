@@ -443,15 +443,39 @@ class CorniceBuilder:
             trans_x: X translation
             trans_y: Y translation
         """
-        # Helper to apply rotation and translation to a component
-        # Components are built along X axis, then rotated around origin, then translated
+        # Helper to apply rotation, flip, centering, and translation to a component
+        # Components are built along Y axis (extrusion), need to:
+        # 1. Center them by shifting -length/2 in Y
+        # 2. Rotate around Z to align with face
+        # 3. Flip 180° around appropriate axis to face outward
+        # 4. Translate to face position
         def transform_component(component):
-            """Apply rotation around origin, then translate to face position."""
+            """Apply centering, rotation, flip, and translation to face position."""
+            # Center the component (shift by -length/2 in Y since extrusion starts at origin)
+            component = component.translate((0, -length / 2, 0))
+            
+            # Rotate around Z to align with face orientation
             if rotation != 0:
                 component = component.rotate((0, 0, 0), (0, 0, 1), rotation)
+            
+            # Flip to face outward (180° rotation around the face's horizontal axis)
+            if face == "front":
+                # Front face: flip around X axis to face +Y (outward)
+                component = component.rotate((0, 0, 0), (1, 0, 0), 180)
+            elif face == "rear":
+                # Rear face: flip around X axis to face -Y (outward)
+                component = component.rotate((0, 0, 0), (1, 0, 0), 180)
+            elif face == "left":
+                # Left face: flip around Y axis to face -X (outward)
+                component = component.rotate((0, 0, 0), (0, 1, 0), 180)
+            elif face == "right":
+                # Right face: flip around Y axis to face +X (outward)
+                component = component.rotate((0, 0, 0), (0, 1, 0), 180)
+            
+            # Translate to face position
             return component.translate((trans_x, trans_y, 0))
         
-        # Crown - built along X axis, then transformed
+        # Crown - built along Y axis (extrusion), then transformed
         crown = CorniceBuilder._crown_molding(crown_width, crown_height).extrude(length).translate((4.25, 0, crown_z_position))
         crown = transform_component(crown)
         assembly.add(crown, name=f"{face}_crown", color=cq.Color(0.8, 0.7, 0.6))
