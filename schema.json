@@ -51,7 +51,7 @@
                     "joist_spacing": { "type": "number", "minimum": 21, "maximum": 24},
                     "rafter_spacing": { "type": "number", "minimum": 21, "maximum": 24},
                     "bay_width": { "type": "number", "minimum": 30, "maximum": 48},
-                    "pile_width": { "type": "number", "minimum": 192, "maximum": 240}
+                    "pile_width": { "type": "number", "maximum": 240}
                 }
             },
             "bays": {
