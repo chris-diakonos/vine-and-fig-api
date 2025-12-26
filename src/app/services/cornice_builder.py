@@ -453,7 +453,7 @@ class CorniceBuilder:
         def transform_component(component, z_pos):
             """Apply centering, rotation, flip, and translation to face position."""
             # Center the component (shift by -length/2 in Y since extrusion starts at origin)
-            component = component.translate((0, -length / 2, 0))
+            component = component.translate((0, length / 2, 0))
             
             # Rotate around Z to align with face orientation
             if rotation != 0:
