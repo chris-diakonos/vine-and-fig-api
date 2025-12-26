@@ -203,57 +203,77 @@ class WindowsBuilder:
         # Create window frame assembly
         window_frame = cq.Assembly()
         
-        # For left/right walls, we need to swap X and Y positioning
-        # Header/sill run along Y axis instead of X axis for left/right walls
+        # For left/right walls, swap X and Y translation coordinates only
+        # Keep all rotations the same - just swap which axis we use for positioning
         if face in ["left", "right"]:
-            # Swap coordinates: header/sill extend along Y, stiles positioned along Y
-            # Left stile (left side of opening)
+            # Swap coordinates: stiles positioned along Y, header/sill along Y
             stile_pos_left = center_y - (header_length / 2)
-            stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-            left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, stile_pos_left, stile_z))
-            window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
-            
-            # Right stile (right side of opening)
             stile_pos_right = center_y + (header_length / 2) - frame_width
-            right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, stile_pos_right, stile_z))
-            window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
-            
-            # Top header - runs along Y axis
-            header_z = center_z + ((pulley_stile_length + frame_width) / 2)
-            header_y_start = center_y - (header_length / 2)
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, header_y_start, header_z))
-            window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
-            
-            # Bottom sill - runs along Y axis
-            sill_z = center_z - (pulley_stile_length / 2)
-            sill_y_start = center_y - (header_length / 2)
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((center_x, sill_y_start, sill_z))
-            window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
+            header_sill_const = center_x
+            header_sill_start = center_y - (header_length / 2)
         else:
-            # Front/rear walls: header/sill run along X axis, stiles positioned along X
-            # Left stile (left side of opening)
-            left_x = center_x - (header_length / 2)
-            left_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-            left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((left_x, center_y, left_z))
-            window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
-            
-            # Right stile (right side of opening)
-            right_x = center_x + (header_length / 2) - frame_width
-            right_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-            right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90).translate((right_x, center_y, right_z))
-            window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
-            
-            # Top header - runs along X axis
-            top_z = center_z + ((pulley_stile_length + frame_width) / 2)
-            top_x = center_x - (header_length / 2)
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((top_x, center_y, top_z))
-            window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
-            
-            # Bottom sill - runs along X axis
-            bottom_x = center_x - (header_length / 2)
-            bottom_z = center_z - (pulley_stile_length / 2)
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90).translate((bottom_x, center_y, bottom_z))
-            window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
+            # Front/rear: stiles positioned along X, header/sill along X
+            stile_pos_left = center_x - (header_length / 2)
+            stile_pos_right = center_x + (header_length / 2) - frame_width
+            header_sill_const = center_y
+            header_sill_start = center_x - (header_length / 2)
+        
+        # Frame center point for rotation
+        frame_center = (center_x, center_y, center_z)
+        
+        # Left stile (vertical piece)
+        stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
+        left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
+        if face == "rear":
+            # Rotate 180 degrees around Y axis to face outward
+            left_frame = left_frame.rotate(frame_center, (0, 1, 0), 180)
+        if face in ["left", "right"]:
+            left_frame = left_frame.translate((header_sill_const, stile_pos_left, stile_z))
+        else:
+            left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
+        window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Right stile (vertical piece)
+        right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
+        if face == "rear":
+            # Rotate 180 degrees around Y axis to face outward
+            right_frame = right_frame.rotate(frame_center, (0, 1, 0), 180)
+        if face in ["left", "right"]:
+            right_frame = right_frame.translate((header_sill_const, stile_pos_right, stile_z))
+        else:
+            right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
+        window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Top header (horizontal piece)
+        header_z = center_z + ((pulley_stile_length + frame_width) / 2)
+        if face in ["left", "right"]:
+            # For left/right walls, header extends in Y (extrusion direction), no Z rotation needed
+            # But need to rotate to stand it up (rotate around X to make it horizontal)
+            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90)
+            top_frame = top_frame.translate((header_sill_const, header_sill_start, header_z))
+        else:
+            # For front/rear walls, header extends in X, rotate around Z
+            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90)
+            if face == "rear":
+                # Rotate 180 degrees around Y axis to face outward
+                top_frame = top_frame.rotate(frame_center, (0, 1, 0), 180)
+            top_frame = top_frame.translate((header_sill_start, header_sill_const, header_z))
+        window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Bottom sill (horizontal piece)
+        sill_z = center_z - (pulley_stile_length / 2)
+        if face in ["left", "right"]:
+            # For left/right walls, sill extends in Y, rotate around X to make it horizontal
+            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90)
+            bottom_frame = bottom_frame.translate((header_sill_const, header_sill_start, sill_z))
+        else:
+            # For front/rear walls, sill extends in X, rotate around Z
+            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90)
+            if face == "rear":
+                # Rotate 180 degrees around Y axis to face outward
+                bottom_frame = bottom_frame.rotate(frame_center, (0, 1, 0), 180)
+            bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
+        window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
     
@@ -329,9 +349,13 @@ class WindowsBuilder:
                         window_center_x = bay_position
                         window_center_y = frame_depth / 2
                     elif face == "rear":
-                        # Back of frame at Y=-dimensions.right (inside of wall), center at Y=-dimensions.right + frame_depth/2
+                        # Move frame to exterior face (stud_depth outward from inside of wall)
+                        # Rotate 180 degrees around Y axis to face outward
+                        stud_depth = 6  # Standard stud depth
                         window_center_x = bay_position
-                        window_center_y = -dimensions.right + frame_depth / 2
+                        # Position at exterior face: inside wall at -dimensions.right, exterior at -dimensions.right - stud_depth
+                        # Frame center should be at exterior face - frame_depth/2 (so back is flush with exterior)
+                        window_center_y = -dimensions.right - stud_depth - frame_depth / 2
                     elif face == "left":
                         # Back of frame at X=0 (inside of wall), center at X=frame_depth/2
                         window_center_x = frame_depth / 2
