@@ -382,9 +382,10 @@ class CorniceBuilder:
         # Cornice is extruded along Y by default (from XZ plane profile)
         # Front/rear faces need it along X (rotate 90° around Z)
         # Left/right faces need it along Y (no rotation needed)
+        # Added 10 inches to the front and rear faces to account for the stud depth
         face_map = {
-            "front": (dimensions.front, 90, dimensions.front / 2, stud_depth / 2, 0),
-            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - stud_depth / 2, 0),
+            "front": (dimensions.front, 90, dimensions.front / 2, 10, 0),
+            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right + 10, 0),
             "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0),
             "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0)
         }
