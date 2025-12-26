@@ -247,9 +247,8 @@ class WindowsBuilder:
         # Top header (horizontal piece)
         header_z = center_z + ((pulley_stile_length + frame_width) / 2)
         if face in ["left", "right"]:
-            # For left/right walls, header extends in Y (extrusion direction), no Z rotation needed
-            # But need to rotate to stand it up (rotate around X to make it horizontal)
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90)
+            # For left/right walls, header extends in Y, rotate around Y to make it perpendicular to wall
+            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 1, 0), 90)
             top_frame = top_frame.translate((header_sill_const, header_sill_start, header_z))
         else:
             # For front/rear walls, header extends in X, rotate around Z
@@ -263,8 +262,8 @@ class WindowsBuilder:
         # Bottom sill (horizontal piece)
         sill_z = center_z - (pulley_stile_length / 2)
         if face in ["left", "right"]:
-            # For left/right walls, sill extends in Y, rotate around X to make it horizontal
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90)
+            # For left/right walls, sill extends in Y, rotate around Y to make it perpendicular to wall
+            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 1, 0), 90)
             bottom_frame = bottom_frame.translate((header_sill_const, header_sill_start, sill_z))
         else:
             # For front/rear walls, sill extends in X, rotate around Z
@@ -305,10 +304,13 @@ class WindowsBuilder:
         
         windows_assembly = cq.Assembly()
         
-        # Iterate through each story (and attic)
+        # Iterate through each story (skip attic/dormers for now)
+        # Only create windows for stories up to the stories parameter (excludes attic)
         for story_idx, window in enumerate(windows):
             if story_idx >= len(floor_heights):
                 break  # Skip if we don't have floor height for this story
+            if story_idx >= stories:
+                break  # Skip attic/dormer windows (handle separately in future)
             
             # Get floor height and chair rail height for this story
             floor_height = floor_heights[story_idx]
