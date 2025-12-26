@@ -281,6 +281,7 @@ class CorniceBuilder:
         profile_points.append((0, 0))
         profile_points.append((width, 0))
         
+        
         # Cyma reversa parameters
         cyma_reversa_height = (2 / 3) * height
         cyma_reversa_radius = cyma_reversa_height / 2
@@ -445,11 +446,11 @@ class CorniceBuilder:
         """
         # Helper to apply rotation, flip, centering, and translation to a component
         # Components are built along Y axis (extrusion), need to:
-        # 1. Center them by shifting -length/2 in Y
+        # 1. Center them by shifting -length/2 in the extrusion direction (Y before rotation)
         # 2. Rotate around Z to align with face
         # 3. Flip 180° around appropriate axis to face outward
-        # 4. Translate to face position
-        def transform_component(component):
+        # 4. Translate to face position (preserving Z coordinate)
+        def transform_component(component, z_pos):
             """Apply centering, rotation, flip, and translation to face position."""
             # Center the component (shift by -length/2 in Y since extrusion starts at origin)
             component = component.translate((0, -length / 2, 0))
@@ -472,42 +473,42 @@ class CorniceBuilder:
                 # Right face: flip around Y axis to face +X (outward)
                 component = component.rotate((0, 0, 0), (0, 1, 0), 180)
             
-            # Translate to face position
-            return component.translate((trans_x, trans_y, 0))
+            # Translate to face position (preserve Z coordinate from original component)
+            return component.translate((trans_x, trans_y, z_pos))
         
         # Crown - built along Y axis (extrusion), then transformed
-        crown = CorniceBuilder._crown_molding(crown_width, crown_height).extrude(length).translate((4.25, 0, crown_z_position))
-        crown = transform_component(crown)
+        crown = CorniceBuilder._crown_molding(crown_width, crown_height).extrude(length).translate((4.25, 0, 0))
+        crown = transform_component(crown, crown_z_position)
         assembly.add(crown, name=f"{face}_crown", color=cq.Color(0.8, 0.7, 0.6))
         
         # Corona - Cavetto (note: original code had rotateAboutCenter(180) which is part of the cavetto positioning)
-        cavetto = CorniceBuilder._cavetto_board().extrude(length).translate((8, 0, corona_z_position)).rotateAboutCenter((0, 0, 1), 180)
-        cavetto = transform_component(cavetto)
+        cavetto = CorniceBuilder._cavetto_board().extrude(length).translate((8, 0, 0)).rotateAboutCenter((0, 0, 1), 180)
+        cavetto = transform_component(cavetto, corona_z_position)
         assembly.add(cavetto, name=f"{face}_cavetto", color=cq.Color(0.8, 0.7, 0.6))
         
         # Corona - Fascia
-        fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, corona_z_position - 0.8))
-        fascia = transform_component(fascia)
+        fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, -0.8))
+        fascia = transform_component(fascia, corona_z_position)
         assembly.add(fascia, name=f"{face}_fascia", color=cq.Color(0.8, 0.7, 0.6))
         
         # Modillion backing
-        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19, 0, corona_z_position - 3.5)).rotateAboutCenter((0, 1, 0), 90)
-        modillion_backing = transform_component(modillion_backing)
+        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
+        modillion_backing = transform_component(modillion_backing, corona_z_position)
         assembly.add(modillion_backing, name=f"{face}_modillion_backing", color=cq.Color(0.8, 0.7, 0.6))
         
         # Modillions
         modillion_count = math.floor(length / modillion_spacing)
         for modillion_idx in range(0, modillion_count):
             modillion_x = length - (modillion_idx * modillion_spacing)
-            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25, -modillion_x + modillion_spacing, corona_z_position - 4))
-            modillion = transform_component(modillion)
+            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25, -modillion_x + modillion_spacing, -4))
+            modillion = transform_component(modillion, corona_z_position)
             assembly.add(modillion, name=f"{face}_modillion_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
             
-            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12, -modillion_x + modillion_spacing, corona_z_position - 1.5))
-            modillion_band = transform_component(modillion_band)
+            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12, -modillion_x + modillion_spacing, -1.5))
+            modillion_band = transform_component(modillion_band, corona_z_position)
             assembly.add(modillion_band, name=f"{face}_modillion_band_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bedmold
-        bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18, 0, crown_z_position - bed_molding_height))
-        bed = transform_component(bed)
+        bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18, 0, -bed_molding_height))
+        bed = transform_component(bed, crown_z_position)
         assembly.add(bed, name=f"{face}_bed_molding", color=cq.Color(0.8, 0.7, 0.6))
