@@ -366,10 +366,10 @@ class CorniceBuilder:
         # Crown molding parameters
         crown_width = 1.0
         crown_height = 6.0
-        crown_z_position = building_height + 6.0  # Position at top of building
+        crown_z_position = building_height - 18.0 # Position at top of building
         
         # Corona (cavetto + fascia) parameters
-        corona_z_position = building_height + 6.0
+        corona_z_position = building_height - 18.0
         fascia_height = 0.75
         
         # Modillion spacing
@@ -384,8 +384,8 @@ class CorniceBuilder:
         # Left/right faces need it along Y (no rotation needed)
         # Added 10 inches to the front and rear faces to account for the stud depth
         face_map = {
-            "front": (dimensions.front, 90, dimensions.front / 2, 10, 0),
-            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right + 10, 0),
+            "front": (dimensions.front, 90, dimensions.front / 2, 20, 0),
+            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - 20, 0),
             "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0),
             "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0)
         }
