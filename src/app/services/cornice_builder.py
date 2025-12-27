@@ -366,12 +366,12 @@ class CorniceBuilder:
         # Crown molding parameters
         crown_width = 1.0
         crown_height = 6.0
-        crown_z_position = building_height - 2.0 # Position at top of building
+        crown_z_position = building_height # Position at top of building
         
         # Corona (cavetto + fascia) parameters
-        corona_z_position = building_height - 6.0
+        corona_z_position = building_height - 3.0
         fascia_height = 0.75
-        fascia_z_position = building_height
+        fascia_z_position = building_height - 9.0
         
         # Modillion spacing
         modillion_spacing = 9.0
