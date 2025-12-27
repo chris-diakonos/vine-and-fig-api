@@ -366,18 +366,22 @@ class CorniceBuilder:
         # Crown molding parameters
         crown_width = 1.0
         crown_height = 6.0
-        crown_z_position = building_height # Position at top of building
         
-        # Corona (cavetto + fascia) parameters
-        corona_z_position = building_height - 3.0
+        
+        # Corona (cavetto + fascia) parameter
         fascia_height = 0.75
-        fascia_z_position = building_height - 9.0
         
         # Modillion spacing
         modillion_spacing = 9.0
         
         # Bed molding parameters
         bed_molding_height = 5.5
+
+        # Z positions
+        crown_z_position = building_height # Position at top of building
+        corona_z_position = building_height - 2.0
+        fascia_z_position = building_height - 8.0
+        modillion_z_position = building_height - 12.0
         
         # Build cornice for each face
         # Cornice is extruded along Y by default (from XZ plane profile)
@@ -403,6 +407,7 @@ class CorniceBuilder:
                     crown_z_position + trans_z,
                     corona_z_position + trans_z,
                     fascia_z_position + trans_z,
+                    modillion_z_position + trans_z,
                     fascia_height,
                     modillion_spacing,
                     bed_molding_height,
@@ -423,6 +428,7 @@ class CorniceBuilder:
         crown_z_position: float,
         corona_z_position: float,
         fascia_z_position: float,
+        modillion_z_position: float,
         fascia_height: float,
         modillion_spacing: float,
         bed_molding_height: float,
@@ -442,6 +448,7 @@ class CorniceBuilder:
             crown_z_position: Z position for crown molding
             corona_z_position: Z position for corona
             fascia_z_position: Z position for fascia
+            modillion_z_position: Z position for modillions
             fascia_height: Height of fascia
             modillion_spacing: Spacing between modillions
             bed_molding_height: Height of bed molding
@@ -497,20 +504,20 @@ class CorniceBuilder:
         assembly.add(fascia, name=f"{face}_fascia", color=cq.Color(0.8, 0.7, 0.6))
         
         # Modillion backing
-        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
-        modillion_backing = transform_component(modillion_backing, corona_z_position)
+        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((22, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
+        modillion_backing = transform_component(modillion_backing, modillion_z_position)
         assembly.add(modillion_backing, name=f"{face}_modillion_backing", color=cq.Color(0.8, 0.7, 0.6))
         
         # Modillions
         modillion_count = math.floor(length / modillion_spacing)
         for modillion_idx in range(0, modillion_count):
             modillion_x = length - (modillion_idx * modillion_spacing)
-            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25, -modillion_x + modillion_spacing, -4))
-            modillion = transform_component(modillion, corona_z_position)
+            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((22, -modillion_x + modillion_spacing, -4))
+            modillion = transform_component(modillion, modillion_z_position)
             assembly.add(modillion, name=f"{face}_modillion_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
             
-            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12, -modillion_x + modillion_spacing, -1.5))
-            modillion_band = transform_component(modillion_band, corona_z_position)
+            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((22, -modillion_x + modillion_spacing, -1.5))
+            modillion_band = transform_component(modillion_band, modillion_z_position)
             assembly.add(modillion_band, name=f"{face}_modillion_band_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bedmold
