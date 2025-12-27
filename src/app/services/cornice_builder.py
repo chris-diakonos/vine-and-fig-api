@@ -371,6 +371,7 @@ class CorniceBuilder:
         # Corona (cavetto + fascia) parameters
         corona_z_position = building_height - 6.0
         fascia_height = 0.75
+        fascia_z_position = building_height
         
         # Modillion spacing
         modillion_spacing = 9.0
@@ -401,6 +402,7 @@ class CorniceBuilder:
                     crown_height,
                     crown_z_position + trans_z,
                     corona_z_position + trans_z,
+                    fascia_z_position + trans_z,
                     fascia_height,
                     modillion_spacing,
                     bed_molding_height,
@@ -420,6 +422,7 @@ class CorniceBuilder:
         crown_height: float,
         crown_z_position: float,
         corona_z_position: float,
+        fascia_z_position: float,
         fascia_height: float,
         modillion_spacing: float,
         bed_molding_height: float,
@@ -438,6 +441,7 @@ class CorniceBuilder:
             crown_height: Height of crown molding
             crown_z_position: Z position for crown molding
             corona_z_position: Z position for corona
+            fascia_z_position: Z position for fascia
             fascia_height: Height of fascia
             modillion_spacing: Spacing between modillions
             bed_molding_height: Height of bed molding
@@ -489,7 +493,7 @@ class CorniceBuilder:
         
         # Corona - Fascia
         fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, -0.8))
-        fascia = transform_component(fascia, corona_z_position)
+        fascia = transform_component(fascia, fascia_z_position)
         assembly.add(fascia, name=f"{face}_fascia", color=cq.Color(0.8, 0.7, 0.6))
         
         # Modillion backing
