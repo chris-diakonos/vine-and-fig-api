@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vine & Fig GLB Viewer</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  </head>
+  <body>
+    <main class="viewer-shell">
+      <header class="topbar">
+        <div>
+          <h1>Vine & Fig GLB Viewer</h1>
+          <p id="artifact-label">Loading model manifest...</p>
+        </div>
+        <a id="download-link" class="download-link" href="#" rel="noreferrer">Download GLB</a>
+      </header>
+
+      <section class="stage" aria-label="3D model preview">
+        <model-viewer
+          id="model-viewer"
+          camera-controls
+          auto-rotate
+          shadow-intensity="0.7"
+          exposure="0.9"
+          ar
+        >
+          <div class="model-status" slot="poster">Loading GLB...</div>
+        </model-viewer>
+        <div id="error-message" class="error-message" hidden></div>
+      </section>
+
+      <footer class="metadata">
+        <span id="structure-hash">Structure hash unavailable</span>
+        <a id="bom-link" href="#" rel="noreferrer">BOM JSON</a>
+        <a id="manifest-link" href="./manifest.json">Manifest JSON</a>
+      </footer>
+    </main>
+
+    <script src="./viewer.js"></script>
+  </body>
+</html>
