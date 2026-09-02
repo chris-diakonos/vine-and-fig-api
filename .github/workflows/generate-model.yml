@@ -1,6 +1,14 @@
 name: Generate Model
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/generate-model.yml
+      - Dockerfile.cli
+      - requirements-cli.txt
+      - src/**
   workflow_dispatch:
     inputs:
       definition_path:
