@@ -73,7 +73,10 @@ jobs:
             artifact_key="github-runs/${GITHUB_RUN_ID}"
           fi
 
+          mkdir -p .generated/model
+
           docker run --rm \
+            --user "$(id -u):$(id -g)" \
             -e S3_BUCKET_NAME \
             -e S3_ENDPOINT_URL \
             -e S3_ACCESS_KEY_ID \
