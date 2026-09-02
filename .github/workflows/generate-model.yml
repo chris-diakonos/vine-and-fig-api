@@ -58,6 +58,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          definition_path="${INPUT_DEFINITION_PATH:-example_request.json}"
           artifact_key="${INPUT_ARTIFACT_KEY}"
           if [ -z "${artifact_key}" ]; then
             artifact_key="github-runs/${GITHUB_RUN_ID}"
@@ -71,5 +72,5 @@ jobs:
             -e S3_REGION_NAME \
             -e S3_PREFIX="${INPUT_S3_PREFIX}" \
             -v "${GITHUB_WORKSPACE}:/workspace:ro" \
-            vine-and-fig-cli generate "/workspace/${INPUT_DEFINITION_PATH}" \
+            vine-and-fig-cli generate "/workspace/${definition_path}" \
               --artifact-key "${artifact_key}"
