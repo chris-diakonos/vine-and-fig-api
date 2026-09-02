@@ -22,6 +22,7 @@ class S3Storage:
         secret_access_key: Optional[str] = None,
         region_name: Optional[str] = None,
         prefix: Optional[str] = None,
+        public_base_url: Optional[str] = None,
     ):
         self.bucket_name = bucket_name or settings.s3_bucket_name
         self.endpoint_url = endpoint_url or settings.s3_endpoint_url or None
@@ -29,6 +30,7 @@ class S3Storage:
         self.secret_access_key = secret_access_key or settings.s3_secret_access_key or None
         self.region_name = region_name or settings.s3_region_name
         self.prefix = prefix if prefix is not None else settings.s3_prefix
+        self.public_base_url = public_base_url or settings.s3_public_base_url or None
 
         if not self.bucket_name:
             raise ValueError("S3 bucket name is required. Set S3_BUCKET_NAME or pass --bucket.")
@@ -73,6 +75,8 @@ class S3Storage:
         return self.object_url(object_key)
 
     def object_url(self, object_key: str) -> str:
+        if self.public_base_url:
+            return f"{self.public_base_url.rstrip('/')}/{quote(object_key)}"
         if self.endpoint_url:
             return f"{self.endpoint_url.rstrip('/')}/{self.bucket_name}/{quote(object_key)}"
         return f"s3://{self.bucket_name}/{object_key}"

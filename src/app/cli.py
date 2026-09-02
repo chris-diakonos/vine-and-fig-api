@@ -70,6 +70,7 @@ def generate_command(args: argparse.Namespace) -> int:
         secret_access_key=args.secret_access_key,
         region_name=args.region,
         prefix=args.prefix,
+        public_base_url=args.public_base_url,
     )
 
     artifact_root = args.artifact_key or structure_hash
@@ -119,6 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--secret-access-key", help="S3 secret key; defaults to S3_SECRET_ACCESS_KEY")
     generate.add_argument("--region", help="S3 region; defaults to S3_REGION_NAME")
     generate.add_argument("--prefix", help="Global object-key prefix; defaults to S3_PREFIX")
+    generate.add_argument("--public-base-url", help="Public base URL for artifact links; defaults to S3_PUBLIC_BASE_URL")
     generate.set_defaults(func=generate_command)
 
     return parser

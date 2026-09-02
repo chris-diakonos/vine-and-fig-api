@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = os.getenv("S3_SECRET_ACCESS_KEY", "")
     s3_region_name: str = os.getenv("S3_REGION_NAME", "us-east-1")
     s3_prefix: str = os.getenv("S3_PREFIX", "")
+    s3_public_base_url: str = os.getenv("S3_PUBLIC_BASE_URL", "")
     
     # Base URL for serving files
     # Can be overridden via BASE_URL environment variable
