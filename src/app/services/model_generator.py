@@ -2,8 +2,9 @@
 Main model generation service that orchestrates the entire process.
 """
 from pathlib import Path
-from typing import Tuple, Literal
+from typing import Tuple, Literal, Optional, Dict, Any
 import logging
+import json
 
 from app.models.structure import Structure, ComponentVisibility
 from app.models.responses import ModelResponse
@@ -11,12 +12,63 @@ from app.services.building_builder import BuildingBuilder
 from app.services.export_service import ExportService
 from app.utils.file_manager import FileManager
 from app.utils.view_projections import get_projection_settings
+from app.utils.bom_data_manager import BOMDataManager
+from app.utils.hash_utils import calculate_structure_hash
 
 logger = logging.getLogger(__name__)
 
 
 class ModelGenerator:
     """Main service for generating building models and drawings."""
+
+    @staticmethod
+    def generate_glb_artifacts(
+        structure: Structure,
+        output_dir: Path,
+        structure_hash: Optional[str] = None,
+        component_visibility: Optional[ComponentVisibility] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate local GLB and BOM artifacts for headless workflows.
+
+        This reuses the same CadQuery builder as the API path, but leaves upload
+        decisions to callers such as the CLI.
+        """
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if structure_hash is None:
+            structure_hash = calculate_structure_hash(structure.model_dump())
+
+        building_model, bom_data = BuildingBuilder.build(
+            structure,
+            structure_hash,
+            component_visibility=component_visibility
+        )
+        if bom_data is None:
+            bom_data = {
+                "materials": [],
+                "bom_components": {},
+                "bom_quantities": {},
+                "bom_levels": {},
+            }
+
+        glb_path = Path(
+            ExportService.export_glb(
+                building_model,
+                output_dir / "model.glb",
+                upload_to_storage=False
+            )
+        )
+        bom_path = output_dir / "bom.json"
+        serialized_bom = BOMDataManager.serialize_bom_data(bom_data)
+        with open(bom_path, "w", encoding="utf-8") as handle:
+            json.dump(serialized_bom, handle, indent=2, ensure_ascii=False)
+
+        return {
+            "structure_hash": structure_hash,
+            "glb_path": glb_path,
+            "bom_path": bom_path,
+            "bom_data": serialized_bom,
+        }
     
     @staticmethod
     def generate(

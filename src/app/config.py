@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     azure_storage_container_name: str = os.getenv("AZURE_STORAGE_CONTAINER_NAME", "vine-and-fig")
     azure_models_prefix: str = "models/"
     azure_drawings_prefix: str = "drawings/"
+
+    # S3-compatible storage settings for CLI artifact publishing
+    s3_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "")
+    s3_bucket_name: str = os.getenv("S3_BUCKET_NAME", "")
+    s3_access_key_id: str = os.getenv("S3_ACCESS_KEY_ID", "")
+    s3_secret_access_key: str = os.getenv("S3_SECRET_ACCESS_KEY", "")
+    s3_region_name: str = os.getenv("S3_REGION_NAME", "us-east-1")
+    s3_prefix: str = os.getenv("S3_PREFIX", "")
     
     # Base URL for serving files
     # Can be overridden via BASE_URL environment variable

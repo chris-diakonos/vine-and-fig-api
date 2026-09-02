@@ -21,7 +21,7 @@ class ExportService:
     """Handles exporting CadQuery models to different file formats."""
     
     @staticmethod
-    def export_gltf(model, output_path: Path, upload_to_storage: bool = True) -> str:
+    def export_gltf(model, output_path: Path, upload_to_storage: bool = True, binary: bool = False) -> str:
         """
         Export model to glTF format for 3D visualization.
         Note: CadQuery only supports glTF export for Assembly objects.
@@ -158,14 +158,14 @@ class ExportService:
             # Debug: Log summary
             logger.info(f"glTF Export Summary: {workplane_count} workplanes, {solid_count} total solids, {empty_count} empty components")
             
-            # Export to glTF (use .gltf extension for text format, .glb for binary)
-            gltf_path = output_path.with_suffix('.gltf')
+            # Export to glTF. CadQuery writes binary GLB when the path uses .glb.
+            gltf_path = output_path.with_suffix('.glb' if binary else '.gltf')
             
             # Log scaled assembly info
             scaled_components = list(scaled_assembly.traverse())
             logger.info(f"Scaled assembly has {len(scaled_components)} components (converted from inches to meters)")
             
-            scaled_assembly.save(str(gltf_path), exportType='GLTF')
+            scaled_assembly.save(str(gltf_path), exportType='GLB' if binary else 'GLTF')
             logger.info(f"Exported glTF to local path: {gltf_path}")
             
             # Debug: Check file size
@@ -187,7 +187,8 @@ class ExportService:
             if upload_to_storage:
                 # Upload glTF file
                 blob_name = f"models/{gltf_path.name}"
-                url = FileManager.save_file(gltf_path, blob_name, content_type="model/gltf+json")
+                content_type = "model/gltf-binary" if binary else "model/gltf+json"
+                url = FileManager.save_file(gltf_path, blob_name, content_type=content_type)
                 
                 # Upload any associated .bin files
                 for bin_file in bin_files:
@@ -201,6 +202,21 @@ class ExportService:
         except Exception as e:
             logger.error(f"Failed to export to glTF: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to export to glTF: {str(e)}")
+
+    @staticmethod
+    def export_glb(model, output_path: Path, upload_to_storage: bool = True) -> str:
+        """
+        Export model to binary GLB format.
+
+        Args:
+            model: CadQuery Workplane or Assembly object
+            output_path: Path where the file should be saved
+            upload_to_storage: Whether to upload using the existing storage path
+
+        Returns:
+            URL or local path to the exported file
+        """
+        return ExportService.export_gltf(model, output_path, upload_to_storage=upload_to_storage, binary=True)
     
     @staticmethod
     def export_step(model: cq.Workplane, output_path: Path) -> Path:
@@ -408,7 +424,7 @@ class ExportService:
     def export_by_type(
         model: cq.Workplane,
         output_path: Path,
-        export_type: Literal["gltf", "step", "svg", "stl", "dxf"],
+        export_type: Literal["gltf", "glb", "step", "svg", "stl", "dxf"],
         **kwargs
     ) -> Path:
         """
@@ -425,6 +441,7 @@ class ExportService:
         """
         export_methods = {
             "gltf": ExportService.export_gltf,
+            "glb": ExportService.export_glb,
             "step": ExportService.export_step,
             "svg": ExportService.export_svg,
             "stl": ExportService.export_stl,
