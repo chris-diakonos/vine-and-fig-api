@@ -1,0 +1,11 @@
+# CAD generation
+cadquery==2.4.0
+
+# Data validation and settings
+pydantic==2.5.3
+pydantic-settings==2.1.0
+pydantic[email]==2.5.3
+
+# Environment and S3-compatible storage
+python-dotenv==1.0.0
+boto3==1.34.34
