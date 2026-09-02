@@ -6,106 +6,182 @@
   "structure": {
     "floorplan": {
       "floorplan_type": "center-hall",
-      "depth": "double-pile",
+      "depth": "single-pile",
       "stories": 2,
-      "hall_offset": 0,
-      "hall_width": 96,
-      "ceiling_heights": [120, 108],
-      "joist_heights": [10, 10, 10],
+      "hall_offset": 0.0,
+      "hall_width": 96.0,
+      "ceiling_heights": [
+        120.0,
+        108.0
+      ],
+      "joist_heights": [
+        10.0,
+        9.0,
+        8.0
+      ],
       "dimensions": {
-        "front": 480,
-        "rear": 480,
-        "left": 360,
-        "right": 360,
-        "building_height": 240
+        "front": 480.0,
+        "rear": 480.0,
+        "left": 240.0,
+        "right": 240.0,
+        "building_height": 255.0
       },
       "spacing": {
-        "stud_spacing": 24,
-        "joist_spacing": 24,
-        "rafter_spacing": 24,
-        "bay_width": 48,
-        "pile_width": 192
+        "stud_spacing": 21.0,
+        "joist_spacing": 21.0,
+        "rafter_spacing": 21.0,
+        "pile_width": 240.0
       },
       "bays": {
-        "front": [96, 96, 96, 96, 96],
-        "rear": [96, 96, 96, 96, 96],
-        "left": [90, 90, 90, 90],
-        "right": [90, 90, 90, 90]
+        "front": [
+          64.0,
+          128.0,
+          240.0,
+          352.0,
+          416.0
+        ],
+        "rear": [
+          64.0,
+          128.0,
+          240.0,
+          352.0,
+          416.0
+        ],
+        "left": [
+          80.0,
+          160.0
+        ],
+        "right": [
+          80.0,
+          160.0
+        ]
       }
     },
     "foundation": {
       "foundation_type": "limestone-block",
-      "foundation_block_size": [16, 8, 8],
-      "foundation_courses": 4,
+      "foundation_block_size": [
+        40.0,
+        14.0,
+        14.0
+      ],
+      "foundation_courses": 2,
       "foundation_block_joint": 0.375
     },
     "roof": {
-      "roof_pitch": 36,
+      "roof_pitch": 37.0,
       "roof_type": "side-gable",
-      "roof_panel_type": "cf-panel",
+      "roof_panel_type": "ag-panel",
       "roof_panel_color": "charcoal-gray",
-      "roof_panel_exposure": 16
+      "roof_panel_exposure": 12,
+      "roof_overhang": 12.0
     },
     "sheathing": {
-      "sheathing_species": "pine",
+      "sheathing_species": "cypress",
       "sheathing_exposure": 6,
-      "sheathing_height": 8,
+      "sheathing_height": 7.25,
       "sheathing_type": "beveled-weatherboard"
     },
-    "flooring": {
-      "flooring_type": "tongue-and-groove",
-      "flooring_species": "pine",
-      "flooring_thickness": 1.0,
-      "flooring_width": 10,
-      "flooring_exposure": 9.5
-    },
+    "flooring": [
+      {
+        "flooring_type": "tongue-and-groove",
+        "flooring_species": "pine",
+        "flooring_thickness": 1.0,
+        "flooring_width": 10.0,
+        "flooring_exposure": 9.25
+      },
+      {
+        "flooring_type": "tongue-and-groove",
+        "flooring_species": "pine",
+        "flooring_thickness": 1.0,
+        "flooring_width": 10.0,
+        "flooring_exposure": 9.25
+      },
+      {
+        "flooring_type": "tongue-and-groove",
+        "flooring_species": "pine",
+        "flooring_thickness": 1.0,
+        "flooring_width": 10.0,
+        "flooring_exposure": 9.25
+      }
+    ],
     "windows": [
       {
-        "configuration": "6/6",
-        "operation": "double-hung",
+        "configuration": "6/9",
+        "operation": "single-hung",
         "window_species": "pine",
-        "size": "12x16",
+        "size": "10x12",
         "profile": "ovolo",
         "thickness": 1.375,
-        "stile_width": 2.25,
-        "rail_width": 3.5,
+        "stile_width": 2.0,
+        "rail_width": 3.0,
         "muntin_width": 1.0,
-        "meeting_rail_width": 1.5,
-        "wall": "front",
-        "position": 120,
-        "floor": 1
+        "meeting_rail_width": 1.0,
+        "bay_width": 37.25,
+        "wall": null,
+        "position": null,
+        "floor": null
       },
       {
         "configuration": "6/6",
-        "operation": "double-hung",
+        "operation": "single-hung",
         "window_species": "pine",
-        "size": "12x16",
+        "size": "10x12",
         "profile": "ovolo",
         "thickness": 1.375,
-        "stile_width": 2.25,
-        "rail_width": 3.5,
+        "stile_width": 2.0,
+        "rail_width": 3.0,
         "muntin_width": 1.0,
-        "meeting_rail_width": 1.5,
-        "wall": "front",
-        "position": 360,
-        "floor": 1
+        "meeting_rail_width": 1.0,
+        "bay_width": 37.25,
+        "wall": null,
+        "position": null,
+        "floor": null
+      },
+      {
+        "configuration": "6/6",
+        "operation": "single-hung",
+        "window_species": "pine",
+        "size": "10x12",
+        "profile": "ovolo",
+        "thickness": 1.375,
+        "stile_width": 2.0,
+        "rail_width": 3.0,
+        "muntin_width": 1.0,
+        "meeting_rail_width": 1.0,
+        "bay_width": 37.25,
+        "wall": null,
+        "position": null,
+        "floor": null
       }
     ],
     "doors": [
       {
         "configuration": "six-panel",
         "panel_type": "raised-panel",
-        "operation": "right-inswing",
+        "operation": "right-outswing",
         "door_species": "pine",
         "size": "32x96",
         "profile": "ovolo",
         "thickness": 1.75,
-        "stile_width": 2.25,
-        "rail_width": 3.5,
-        "meeting_rail_width": 1.5,
+        "stile_widths": [
+          4.5,
+          4.5,
+          4.5
+        ],
+        "rail_widths": [
+          4.5,
+          4.5,
+          11.0,
+          12.0
+        ],
+        "panel_widths": [
+          11.75,
+          11.75
+        ],
+        "bay_width": 41.0,
         "wall": "front",
-        "position": 240,
-        "floor": 1
+        "position": 240.0,
+        "floor": null
       }
     ]
   },
