@@ -1,5 +1,6 @@
 # CAD generation
 cadquery==2.4.0
+numpy<2
 
 # Data validation and settings
 pydantic==2.5.3
