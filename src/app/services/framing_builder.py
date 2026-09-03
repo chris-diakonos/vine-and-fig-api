@@ -963,7 +963,10 @@ class FramingBuilder:
             quantity = math.ceil(front_dimension / rafter_spacing) + 1
             total_quantity += quantity
             
-            rafter_run = (right_dimension / 2) + roof_overhang
+            # Rafter extends from ridge to 12" past weatherboard face
+            # Weatherboard extends 0.625" past stud face
+            weatherboard_thickness = 0.625
+            rafter_run = (right_dimension / 2) + weatherboard_thickness + roof_overhang
             roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
             rafter_cos = math.cos(roof_pitch_radians)
             rafter_sin = math.sin(roof_pitch_radians)

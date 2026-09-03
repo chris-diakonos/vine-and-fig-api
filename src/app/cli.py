@@ -102,6 +102,13 @@ def generate_command(args: argparse.Namespace) -> int:
     glb_url = storage.upload_file(glb_path, f"{artifact_root}/model.glb", "model/gltf-binary")
     bom_url = storage.upload_file(bom_path, f"{artifact_root}/bom.json", "application/json")
     
+    # Parse metadata first so we can fall back to it for commit_sha
+    try:
+        metadata = _parse_metadata(args.metadata)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    
     # Get git commit SHA
     try:
         commit_sha = subprocess.check_output(
@@ -110,7 +117,8 @@ def generate_command(args: argparse.Namespace) -> int:
             text=True
         ).strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
-        commit_sha = "unknown"
+        # Fall back to metadata.run.commit_sha if available
+        commit_sha = metadata.get("run", {}).get("commit_sha", "unknown") if metadata else "unknown"
     
     # Calculate mesh hash (SHA256 of GLB bytes)
     try:
@@ -118,12 +126,6 @@ def generate_command(args: argparse.Namespace) -> int:
             mesh_sha256 = hashlib.sha256(f.read()).hexdigest()
     except Exception:
         mesh_sha256 = "unknown"
-    
-    try:
-        metadata = _parse_metadata(args.metadata)
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
 
     manifest = {
         "structure_hash": structure_hash,
