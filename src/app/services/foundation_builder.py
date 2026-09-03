@@ -21,35 +21,80 @@ class FoundationBuilder:
         Returns:
             CadQuery Assembly with foundation geometry and color
         """
-        # Calculate foundation height based on courses
-        # Each course includes block height + joint thickness
-        if foundation.foundation_block_size:
-            block_height = foundation.foundation_block_size[2] if len(foundation.foundation_block_size) > 2 else 8
+        # Get block dimensions
+        if foundation.foundation_block_size and len(foundation.foundation_block_size) >= 3:
+            block_length = foundation.foundation_block_size[0]
+            block_width = foundation.foundation_block_size[1]
+            block_height = foundation.foundation_block_size[2]
         else:
-            # Default block sizes based on type
-            block_height = 8 if foundation.foundation_type == "limestone-block" else 8
+            block_length = 40.0
+            block_width = 14.0
+            block_height = 14.0
         
-        course_height = block_height + foundation.foundation_block_joint
-        total_foundation_height = foundation.foundation_courses * course_height
+        joint = foundation.foundation_block_joint
         
-        # Foundation should be slightly wider than building
-        foundation_overhang = 0  # inches
-        
-        foundation_width = dimensions.front + (2 * foundation_overhang)
-        foundation_depth = dimensions.left + (2 * foundation_overhang)
-        
-        # Create foundation as a box
-        foundation_obj = (
-            cq.Workplane("XY")
-            .box(foundation_width, foundation_depth, total_foundation_height)
-            .translate((foundation_width/2, -foundation_depth/2, -total_foundation_height / 2))
-        )
-        
-        # Add visual texture for blocks (simplified representation)
-        # In production, you could add actual block courses with joints
+        # Building dimensions
+        foundation_width = dimensions.front
+        foundation_depth = dimensions.left
         
         # Create assembly with color
         foundation_assembly = cq.Assembly()
-        foundation_assembly.add(foundation_obj, name="foundation", color=cq.Color(0.7, 0.7, 0.7))  # Gray
+        block_color = cq.Color(0.7, 0.7, 0.7)
+        
+        # Generate blocks for each course
+        for course_idx in range(foundation.foundation_courses):
+            z_offset = course_idx * (block_height + joint)
+            
+            # Front wall (along X axis)
+            x_pos = 0
+            block_idx = 0
+            while x_pos + block_length <= foundation_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_length, block_width, block_height)
+                    .translate((x_pos + block_length/2, block_width/2, z_offset + block_height/2))
+                )
+                foundation_assembly.add(block, name=f"front_c{course_idx}_b{block_idx}", color=block_color)
+                x_pos += block_length + joint
+                block_idx += 1
+            
+            # Rear wall (along X axis)
+            x_pos = 0
+            block_idx = 0
+            while x_pos + block_length <= foundation_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_length, block_width, block_height)
+                    .translate((x_pos + block_length/2, -foundation_depth + block_width/2, z_offset + block_height/2))
+                )
+                foundation_assembly.add(block, name=f"rear_c{course_idx}_b{block_idx}", color=block_color)
+                x_pos += block_length + joint
+                block_idx += 1
+            
+            # Left wall (along Y axis, excluding corners to avoid overlap)
+            y_pos = block_width + joint
+            block_idx = 0
+            while y_pos + block_length <= foundation_depth - block_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_width, block_length, block_height)
+                    .translate((block_width/2, -y_pos - block_length/2, z_offset + block_height/2))
+                )
+                foundation_assembly.add(block, name=f"left_c{course_idx}_b{block_idx}", color=block_color)
+                y_pos += block_length + joint
+                block_idx += 1
+            
+            # Right wall (along Y axis, excluding corners to avoid overlap)
+            y_pos = block_width + joint
+            block_idx = 0
+            while y_pos + block_length <= foundation_depth - block_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_width, block_length, block_height)
+                    .translate((foundation_width - block_width/2, -y_pos - block_length/2, z_offset + block_height/2))
+                )
+                foundation_assembly.add(block, name=f"right_c{course_idx}_b{block_idx}", color=block_color)
+                y_pos += block_length + joint
+                block_idx += 1
         
         return foundation_assembly
