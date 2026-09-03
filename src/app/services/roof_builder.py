@@ -308,9 +308,14 @@ class RoofBuilder:
             
             # For side-gable roofs, account for gable overhang on both ends
             if gable_direction == "side":
-                # Add gable overhang to both ends
-                effective_roof_length = roof_length + (2 * roof.roof_overhang)
-                gable_overhang_offset = -roof.roof_overhang
+                # Gable overhang should be 12" past weatherboard outer face, not building interior
+                # Weatherboard extends beyond building interior by stud_depth + weatherboard_thickness
+                stud_depth = 6
+                weatherboard_thickness = 0.625
+                weatherboard_extension = stud_depth + weatherboard_thickness
+                # Total roof length: building interior + weatherboard on both sides + overhang on both sides
+                effective_roof_length = roof_length + (2 * weatherboard_extension) + (2 * roof.roof_overhang)
+                gable_overhang_offset = -(weatherboard_extension + roof.roof_overhang)
                 
                 # Calculate panel quantity accounting for panel width
                 # First panel covers full profile width, subsequent panels add exposure width
@@ -338,21 +343,16 @@ class RoofBuilder:
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
-                    # Store target eave position for later adjustment
-                    # Weatherboard extends 0.625" past stud face
-                    stud_depth = 6
-                    weatherboard_thickness = 0.625
-                    target_eave_y = stud_depth + weatherboard_thickness + roof.roof_overhang
+                    # Target eave position: 12" past actual weatherboard outer face at y=2.674
+                    actual_weatherboard_outer_y = 2.674
+                    target_eave_y = actual_weatherboard_outer_y + roof.roof_overhang
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
-                    # Store target eave position for later adjustment
-                    # Weatherboard extends 0.625" past stud face
-                    stud_depth = 6
-                    weatherboard_thickness = 0.625
-                    dimension = right_dimension if gable_direction == "side" else front_dimension
-                    target_eave_y = -dimension - stud_depth - weatherboard_thickness - roof.roof_overhang
+                    # Target eave position: 12" past actual weatherboard outer face at y=-250.528
+                    actual_weatherboard_outer_y = -250.528
+                    target_eave_y = actual_weatherboard_outer_y - roof.roof_overhang
                 elif face == "left":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_z = base_elevation + panel_z_offset

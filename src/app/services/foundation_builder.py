@@ -59,7 +59,7 @@ class FoundationBuilder:
                     .box(block_length, block_width, block_height)
                     .translate((x_pos + block_length/2, block_width/2, z_offset))
                 )
-                foundation_assembly.add(block, name=f"front_c{course_idx}_b{block_idx}", color=block_color)
+                foundation_assembly.add(block, name=f"foundation_front_c{course_idx}_b{block_idx}", color=block_color)
                 x_pos += block_length + joint
                 block_idx += 1
             
@@ -70,7 +70,7 @@ class FoundationBuilder:
                     .box(block_length, block_width, block_height)
                     .translate((x_pos + block_length/2, block_width/2, z_offset))
                 )
-                foundation_assembly.add(block, name=f"front_c{course_idx}_b{block_idx}", color=block_color)
+                foundation_assembly.add(block, name=f"foundation_front_c{course_idx}_b{block_idx}", color=block_color)
             
             # Rear wall (along X axis)
             x_pos = 0
@@ -81,7 +81,7 @@ class FoundationBuilder:
                     .box(block_length, block_width, block_height)
                     .translate((x_pos + block_length/2, -foundation_depth + block_width/2, z_offset))
                 )
-                foundation_assembly.add(block, name=f"rear_c{course_idx}_b{block_idx}", color=block_color)
+                foundation_assembly.add(block, name=f"foundation_rear_c{course_idx}_b{block_idx}", color=block_color)
                 x_pos += block_length + joint
                 block_idx += 1
             
@@ -92,7 +92,7 @@ class FoundationBuilder:
                     .box(block_length, block_width, block_height)
                     .translate((x_pos + block_length/2, -foundation_depth + block_width/2, z_offset))
                 )
-                foundation_assembly.add(block, name=f"rear_c{course_idx}_b{block_idx}", color=block_color)
+                foundation_assembly.add(block, name=f"foundation_rear_c{course_idx}_b{block_idx}", color=block_color)
             
             # Left wall (along Y axis, extending full depth to close corners)
             y_pos = 0  # Start at front edge to close front corner
@@ -103,9 +103,18 @@ class FoundationBuilder:
                     .box(block_width, block_length, block_height)
                     .translate((block_width/2, -y_pos - block_length/2, z_offset))
                 )
-                foundation_assembly.add(block, name=f"left_c{course_idx}_b{block_idx}", color=block_color)
+                foundation_assembly.add(block, name=f"foundation_left_c{course_idx}_b{block_idx}", color=block_color)
                 y_pos += block_length + joint
                 block_idx += 1
+            
+            # Add one more block to close the rear corner gap
+            if y_pos < foundation_depth - block_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_width, block_length, block_height)
+                    .translate((block_width/2, -y_pos - block_length/2, z_offset))
+                )
+                foundation_assembly.add(block, name=f"foundation_left_c{course_idx}_b{block_idx}", color=block_color)
             
             # Right wall (along Y axis, extending full depth to close corners)
             y_pos = 0  # Start at front edge to close front corner
@@ -116,8 +125,17 @@ class FoundationBuilder:
                     .box(block_width, block_length, block_height)
                     .translate((foundation_width - block_width/2, -y_pos - block_length/2, z_offset))
                 )
-                foundation_assembly.add(block, name=f"right_c{course_idx}_b{block_idx}", color=block_color)
+                foundation_assembly.add(block, name=f"foundation_right_c{course_idx}_b{block_idx}", color=block_color)
                 y_pos += block_length + joint
                 block_idx += 1
+            
+            # Add one more block to close the rear corner gap
+            if y_pos < foundation_depth - block_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_width, block_length, block_height)
+                    .translate((foundation_width - block_width/2, -y_pos - block_length/2, z_offset))
+                )
+                foundation_assembly.add(block, name=f"foundation_right_c{course_idx}_b{block_idx}", color=block_color)
         
         return foundation_assembly
