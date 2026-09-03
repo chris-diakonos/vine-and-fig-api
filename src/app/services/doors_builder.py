@@ -116,8 +116,6 @@ class DoorsBuilder:
         panel_height = (height - top_rail - upper_mid_rail - lower_mid_rail - bottom_rail) / 3
         
         # Create panels for all six positions (3 rows x 2 columns)
-        panels = cq.Workplane("XY")
-        
         for row in range(3):
             if row == 0:
                 panel_z = top_panel_start - panel_height / 2
@@ -126,37 +124,43 @@ class DoorsBuilder:
             else:
                 panel_z = lower_mid_panel_start - panel_height / 2
             
-            # Left panel
+            # Left panel - cut recess and add raised center
             left_panel_x = -width / 2 + left_stile + left_panel_width / 2
-            panel = (
-                cq.Workplane("XY")
-                .box(left_panel_width, thickness - panel_depth, panel_height)
-                .translate((left_panel_x, 0, panel_z))
-            )
             
-            # Add raised center
-            raised = (
+            # Cut panel recess from door
+            panel_recess = (
                 cq.Workplane("XY")
-                .box(left_panel_width - 2, thickness - panel_depth + raised_height, panel_height - 2)
-                .translate((left_panel_x, raised_height / 2, panel_z))
+                .box(left_panel_width, panel_depth * 2, panel_height)
+                .translate((left_panel_x, thickness / 2 - panel_depth, panel_z))
             )
-            door_slab = door_slab.union(raised)
+            door_slab = door_slab.cut(panel_recess)
             
-            # Right panel
+            # Add raised panel center
+            raised_panel = (
+                cq.Workplane("XY")
+                .box(left_panel_width - 2, raised_height, panel_height - 2)
+                .translate((left_panel_x, thickness / 2 - panel_depth + raised_height / 2, panel_z))
+            )
+            door_slab = door_slab.union(raised_panel)
+            
+            # Right panel - cut recess and add raised center
             right_panel_x = width / 2 - right_stile - right_panel_width / 2
-            panel = (
-                cq.Workplane("XY")
-                .box(right_panel_width, thickness - panel_depth, panel_height)
-                .translate((right_panel_x, 0, panel_z))
-            )
             
-            # Add raised center
-            raised = (
+            # Cut panel recess from door
+            panel_recess = (
                 cq.Workplane("XY")
-                .box(right_panel_width - 2, thickness - panel_depth + raised_height, panel_height - 2)
-                .translate((right_panel_x, raised_height / 2, panel_z))
+                .box(right_panel_width, panel_depth * 2, panel_height)
+                .translate((right_panel_x, thickness / 2 - panel_depth, panel_z))
             )
-            door_slab = door_slab.union(raised)
+            door_slab = door_slab.cut(panel_recess)
+            
+            # Add raised panel center
+            raised_panel = (
+                cq.Workplane("XY")
+                .box(right_panel_width - 2, raised_height, panel_height - 2)
+                .translate((right_panel_x, thickness / 2 - panel_depth + raised_height / 2, panel_z))
+            )
+            door_slab = door_slab.union(raised_panel)
         
         return door_slab
     
