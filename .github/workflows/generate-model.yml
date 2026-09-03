@@ -11,10 +11,6 @@ on:
       - src/**
       - viewer/**
       - example_request.json
-
-concurrency:
-  group: github-pages-deploy
-  cancel-in-progress: true
   workflow_dispatch:
     inputs:
       definition_path:
@@ -29,6 +25,10 @@ concurrency:
         description: Global S3 object-key prefix
         required: false
         default: ""
+
+concurrency:
+  group: github-pages-deploy
+  cancel-in-progress: true
 
 jobs:
   generate:
