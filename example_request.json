@@ -106,7 +106,7 @@
     ],
     "windows": [
       {
-        "configuration": "6/9",
+        "configuration": "9/9",
         "operation": "single-hung",
         "window_species": "pine",
         "size": "10x12",
@@ -122,7 +122,7 @@
         "floor": null
       },
       {
-        "configuration": "6/6",
+        "configuration": "6/9",
         "operation": "single-hung",
         "window_species": "pine",
         "size": "10x12",

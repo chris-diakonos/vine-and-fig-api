@@ -241,9 +241,9 @@ class WindowsBuilder:
         # Top header (horizontal piece)
         header_z = center_z + ((pulley_stile_length + frame_width) / 2)
         if face in ["left", "right"]:
-            # For left/right walls, header extends in Y - use X rotation to keep profile aligned perpendicular to wall
-            # Create profile, extrude, rotate into horizontal position, then rotate to face along wall
-            top_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90)
+            # For left/right walls, header extends in Y
+            # Rotate around Y axis to get correct orientation: header_length along Y, frame_depth along X, frame_width along Z
+            top_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 1, 0), -90)
             top_frame = top_frame.translate((header_sill_const, header_sill_start, header_z))
         else:
             # For front/rear walls, header extends in X, rotate around Z
@@ -254,9 +254,9 @@ class WindowsBuilder:
         # Bottom sill (horizontal piece)
         sill_z = center_z - (pulley_stile_length / 2)
         if face in ["left", "right"]:
-            # For left/right walls, sill extends in Y - use X rotation to keep profile aligned perpendicular to wall
-            # Create profile, extrude, rotate into horizontal position, then rotate to face along wall
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90)
+            # For left/right walls, sill extends in Y
+            # Rotate around Y axis to get correct orientation
+            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 1, 0), -90)
             bottom_frame = bottom_frame.translate((header_sill_const, header_sill_start, sill_z))
         else:
             # For front/rear walls, sill extends in X, rotate around Z
