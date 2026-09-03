@@ -63,6 +63,15 @@ class FoundationBuilder:
                 x_pos += block_length + joint
                 block_idx += 1
             
+            # Add one more block to close the right corner gap
+            if x_pos < foundation_width - block_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_length, block_width, block_height)
+                    .translate((x_pos + block_length/2, block_width/2, z_offset))
+                )
+                foundation_assembly.add(block, name=f"front_c{course_idx}_b{block_idx}", color=block_color)
+            
             # Rear wall (along X axis)
             x_pos = 0
             block_idx = 0
@@ -75,6 +84,15 @@ class FoundationBuilder:
                 foundation_assembly.add(block, name=f"rear_c{course_idx}_b{block_idx}", color=block_color)
                 x_pos += block_length + joint
                 block_idx += 1
+            
+            # Add one more block to close the right corner gap
+            if x_pos < foundation_width - block_width:
+                block = (
+                    cq.Workplane("XY")
+                    .box(block_length, block_width, block_height)
+                    .translate((x_pos + block_length/2, -foundation_depth + block_width/2, z_offset))
+                )
+                foundation_assembly.add(block, name=f"rear_c{course_idx}_b{block_idx}", color=block_color)
             
             # Left wall (along Y axis, excluding corners to avoid overlap)
             y_pos = block_width + joint
