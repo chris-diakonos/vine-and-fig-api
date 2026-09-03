@@ -26,6 +26,10 @@ on:
         required: false
         default: ""
 
+concurrency:
+  group: github-pages-deploy
+  cancel-in-progress: true
+
 jobs:
   generate:
     runs-on: ubuntu-latest
