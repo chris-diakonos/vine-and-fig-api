@@ -301,30 +301,39 @@ class RoofBuilder:
             raise ValueError(f"Invalid gable direction: {gable_direction}")
 
         for face in faces:
+            
+            # For side-gable roofs, account for gable overhang on both ends
+            if gable_direction == "side":
+                # Add gable overhang to both ends
+                effective_roof_length = roof_length + (2 * roof.roof_overhang)
+                gable_overhang_offset = -roof.roof_overhang
+            else:
+                effective_roof_length = roof_length
+                gable_overhang_offset = 0
 
-            quantity = math.ceil(roof_length / roof_panel_exposure)
+            quantity = math.ceil(effective_roof_length / roof_panel_exposure)
 
             for q in range(quantity):
 
                 panel_counter = q + 1
 
                 if face == "front":
-                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_y = panel_y_offset - panel_run + roof.roof_overhang
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
                 elif face == "rear":
-                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_y = -panel_y_offset - panel_run + roof.roof_overhang
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
                 elif face == "left":
-                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_y = panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 90
                 elif face == "right":
-                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1))
+                    panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_y = -panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = -90

@@ -169,6 +169,10 @@ class FramingBuilder:
         self._add_false_plates(assembly, x_offset, y_offset)
         self._add_rafters(assembly, x_offset, y_offset)
         
+        # Add gable end framing (for side-gable roofs)
+        if self.roof and self.roof.roof_type == "side-gable":
+            self._add_gable_framing(assembly, x_offset, y_offset)
+        
         # Prepare BOM data
         bom_data = {
             "materials": self.materials,
@@ -999,4 +1003,80 @@ class FramingBuilder:
             component_id, self.structure_hash, total_quantity, 3,
             self.bom_quantities, self.bom_levels, self.bom_components
         )
+    
+    def _add_gable_framing(self, assembly: cq.Assembly, x_offset: float = 0, y_offset: float = 0) -> None:
+        """Add gable end framing for side-gable roofs."""
+        member_type = "gable_stud"
+        stud_width = 3
+        stud_depth = 6
+        stud_spacing = 21  # Match rafter spacing
+        total_quantity = 0
+        
+        floor_heights = self.calculated_floor_heights
+        stories = self.floorplan.stories
+        floor_height = floor_heights[stories]
+        
+        right_dimension = self.faces["right"]
+        front_dimension = self.faces["front"]
+        roof_overhang = self.roof_overhang
+        roof_pitch_degrees = self.roof_pitch_degrees
+        roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
+        
+        # Calculate ridge height
+        ridge_run = right_dimension / 2
+        ridge_height = floor_height + (ridge_run * math.tan(roof_pitch_radians))
+        
+        # Gable ends are at x=0 (left) and x=front_dimension (right)
+        # We need studs running up the rake from the wall to the ridge
+        # Studs should be spaced along the Y axis (depth of building)
+        
+        for face in ["left", "right"]:
+            # Number of studs along the gable face
+            quantity = math.ceil(front_dimension / stud_spacing) + 1
+            total_quantity += quantity
+            
+            # Determine X position based on face
+            # Adjust for 12" overhang on each end
+            if face == "left":
+                face_x = -roof_overhang + x_offset
+            else:  # right
+                face_x = front_dimension + roof_overhang + x_offset
+            
+            for q in range(quantity):
+                # Y position along the gable face
+                stud_y = (q * stud_spacing) + y_offset
+                
+                # Calculate the height of this stud based on its Y position
+                # Distance from center of building (where ridge is)
+                distance_from_center = abs(stud_y - y_offset + (right_dimension / 2))
+                
+                # Height at this point (accounting for roof slope)
+                if distance_from_center <= (right_dimension / 2):
+                    # Point is under the roof
+                    stud_top_z = floor_height + ((right_dimension / 2) - distance_from_center) * math.tan(roof_pitch_radians)
+                    stud_length = stud_top_z - floor_height
+                    
+                    if stud_length > 1:  # Only add stud if it's at least 1" tall
+                        stud_z = floor_height + (stud_length / 2)
+                        
+                        # Create stud
+                        stud = cq.Workplane('XY').box(stud_depth, stud_width, stud_length).translate((face_x, stud_y, stud_z))
+                        
+                        # Add to assembly
+                        assembly.add(stud, name=f"{member_type}_{face}_{q+1}", color=cq.Color(0.55, 0.45, 0.33))
+        
+        # Add BOM tracking
+        if total_quantity > 0:
+            avg_stud_length = (ridge_height - floor_height) / 2  # Approximate average
+            raw_material_id, component_id = add_framing_materials(
+                member_type, avg_stud_length / 12, stud_width, stud_depth, self.materials
+            )
+            add_production_bom_quantities(
+                component_id, raw_material_id, 1, 2,
+                self.bom_quantities, self.bom_levels, self.bom_components
+            )
+            add_sales_bom_quantities(
+                component_id, self.structure_hash, total_quantity, 3,
+                self.bom_quantities, self.bom_levels, self.bom_components
+            )
 

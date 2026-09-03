@@ -293,6 +293,23 @@ class BuildingBuilder:
                     # Use the original name from sheathing assembly or generate one
                     component_name = name if name else f"sheathing_{len(building_assembly.children)}"
                     building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.9, 0.85, 0.75))
+            
+            # Add gable sheathing for side-gable roofs
+            if structure.roof.roof_type == "side-gable":
+                gable_sheathing_assembly = SheathingBuilder.build_gable_sheathing(
+                    structure.sheathing,
+                    dimensions,
+                    stories,
+                    calculated_floor_heights,
+                    structure.roof.roof_pitch,
+                    structure.roof.roof_overhang
+                )
+                
+                # Add all gable sheathing boards to the main assembly
+                for name, obj_data in gable_sheathing_assembly.traverse():
+                    if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                        component_name = name if name else f"gable_sheathing_{len(building_assembly.children)}"
+                        building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.9, 0.85, 0.75))
         
         # Build roof
         if component_visibility.roof:
