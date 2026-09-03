@@ -19,13 +19,14 @@ from app.utils.materials_helper import (
 class FramingBuilder:
     """Builds framing geometry and tracks BOM data."""
     
-    def __init__(self, structure: Structure, structure_hash: str):
+    def __init__(self, structure: Structure, structure_hash: str, openings: Optional[List[Dict[str, Any]]] = None):
         """
         Initialize framing builder.
         
         Args:
             structure: Building structure specification
             structure_hash: Structure hash identifier for BOM tracking
+            openings: Optional list of door/window openings {wall, position, floor, type, height}
         """
         self.structure = structure
         self.structure_hash = structure_hash
@@ -33,6 +34,7 @@ class FramingBuilder:
         self.dimensions = structure.floorplan.dimensions
         self.building_height = structure.floorplan.dimensions.building_height
         self.roof = structure.roof
+        self.openings = openings or []
         
         # Extract dimensions
         self.faces = {
@@ -511,11 +513,27 @@ class FramingBuilder:
             for i, c in enumerate(centerline):
                 bay = i + 1
                 
+                # Check if this bay has a door or window opening on this floor
+                has_opening = False
+                for opening in self.openings:
+                    if (opening.get('wall') == face and 
+                        opening.get('position') == c and 
+                        opening.get('floor') == story):
+                        has_opening = True
+                        break
+                
                 # Determine if cripple stud is needed
-                if face in ["left", "right"] and bay in [1, 2]:
+                # Cripple studs support window sills, so skip them for door openings (which sit on floor)
+                if has_opening:
+                    # Check if it's a door (no cripple stud needed)
+                    is_door = any(opening.get('wall') == face and 
+                                 opening.get('position') == c and 
+                                 opening.get('floor') == story and
+                                 opening.get('type') == 'door' 
+                                 for opening in self.openings)
+                    cripple_flag = not is_door  # Windows get cripple studs, doors don't
+                elif face in ["left", "right"] and bay in [1, 2]:
                     cripple_flag = True
-                elif face == "front" and story == 1 and bay == 3:
-                    cripple_flag = False
                 elif face in ["rear", "front"]:
                     cripple_flag = True
                 else:
