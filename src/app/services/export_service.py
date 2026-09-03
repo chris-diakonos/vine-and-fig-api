@@ -105,12 +105,12 @@ class ExportService:
                                 # Create a scale transformation (uniform scale in all directions)
                                 try:
                                     # Import OCP (OpenCASCADE) for transformation
-                                    from OCP.gp import gp_Trsf, gp_XYZ
+                                    from OCP.gp import gp_Trsf, gp_Pnt
                                     from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
                                     
                                     # Create transformation
                                     trsf = gp_Trsf()
-                                    trsf.SetScale(gp_XYZ(0, 0, 0), INCHES_TO_METERS)
+                                    trsf.SetScale(gp_Pnt(0, 0, 0), INCHES_TO_METERS)
                                     
                                     # Apply transformation
                                     transform = BRepBuilderAPI_Transform(val.wrapped, trsf)
