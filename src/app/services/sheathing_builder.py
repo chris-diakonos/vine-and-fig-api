@@ -103,27 +103,31 @@ class SheathingBuilder:
         calculated_chair_rail_heights: List[float],
         calculated_bay_heights: List[float],
         calculated_bay_widths: List[float],
-        floorplan: Optional[Floorplan] = None
+        floorplan: Optional[Floorplan] = None,
+        openings: Optional[List[Dict[str, Any]]] = None
     ) -> cq.Assembly:
         """
         Build exterior sheathing boards positioned on the outside of studs.
         
         Creates individual sheathing boards based on exposure and height specifications,
         positioned on the exterior face of the wall studs. Boards lap continuously from
-        the lowest floor height to the highest floor height.
+        the lowest floor height to the highest floor height. Skips openings for doors/windows.
         
         Args:
             sheathing: Sheathing specification (exposure, height, type)
             dimensions: Building dimensions
             stories: Number of stories
             floor_heights: Pre-calculated floor heights for each story
+            calculated_chair_rail_heights: Pre-calculated chair rail heights for each story
+            calculated_bay_heights: Pre-calculated bay heights for each story
+            calculated_bay_widths: Pre-calculated bay widths for each story
             floorplan: Optional floorplan for bay information
-            bay_width: Width of the bay in inches
-            bay_height: Height of the bay in inches
-            chair_rail_height: Height of the chair rail in inches
+            openings: Optional list of door/window openings to skip
         Returns:
             CadQuery Assembly with individual sheathing boards as separate components
         """
+        
+        openings = openings or []
         
         # Determine the range: from lowest floor height to highest floor height
         lowest_floor_height = min(floor_heights)
@@ -250,11 +254,32 @@ class SheathingBuilder:
                 bottom_edge_z = current_board_height - board_height
                 # Translate moves the geometric center, so calculate center position
                 board_z = bottom_edge_z + (board_height / 2)
+                
+                # Check if this board row intersects with any openings on this face
+                # Opening vertical range is approximately chair_rail to bay_height (simplified)
+                board_intersects_opening = False
+                openings_at_bays = {}  # Map bay position to True if it has an opening in this row
+                
+                floor_number = story_idx + 1
+                for opening in openings:
+                    if opening.get('wall') == face and opening.get('floor') == floor_number:
+                        # Check if this board's vertical range intersects the opening
+                        # Doors start at floor, windows start at chair rail
+                        opening_bottom = floor_heights[story_idx] if opening.get('type') == 'door' else chair_rail_height
+                        opening_top = opening_bottom + opening.get('height', 80)
+                        
+                        if bottom_edge_z < opening_top and current_board_height > opening_bottom:
+                            board_intersects_opening = True
+                            openings_at_bays[opening.get('position')] = True
 
-                # Determine if the board is a single board or a multiple board
+                # Determine if the board is a single board or multiple boards
                 if len(board_lengths) == 1:
                     horizontal_quantity = 1
                     print("No windows in this row")
+                elif not board_intersects_opening:
+                    # No openings in this row, use single board
+                    horizontal_quantity = 1
+                    print("Single board - no opening intersection")
                 elif current_board_height < chair_rail_height:
                     horizontal_quantity = 1
                     print("Single board below window")

@@ -45,12 +45,14 @@ class DoorsBuilder:
             )
             
             # Position door on appropriate wall
-            if door.wall and door.position is not None and door.floor:
+            # Default floor to 1 (ground floor) if not specified
+            if door.wall and door.position is not None:
+                floor = door.floor if door.floor is not None else 1
                 positioned_door = DoorsBuilder._position_door(
                     door_obj,
                     door.wall,
                     door.position,
-                    door.floor,
+                    floor,
                     dimensions,
                     height
                 )

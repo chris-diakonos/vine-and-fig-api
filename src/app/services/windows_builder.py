@@ -283,10 +283,11 @@ class WindowsBuilder:
         stories: int,
         floor_heights: List[float],
         calculated_chair_rail_heights: List[float],
-        floorplan: Optional[Floorplan] = None
+        floorplan: Optional[Floorplan] = None,
+        door_openings: Optional[List[Dict[str, any]]] = None
     ) -> Optional[cq.Assembly]:
         """
-        Build window frames at each bay on each story.
+        Build window frames at specified locations or at bays, skipping door openings.
         
         Args:
             windows: List of window specifications (one per story + attic)
@@ -295,6 +296,7 @@ class WindowsBuilder:
             floor_heights: Pre-calculated floor heights for each story
             calculated_chair_rail_heights: Pre-calculated chair rail heights for each story
             floorplan: Optional floorplan for bay information
+            door_openings: Optional list of door opening locations (wall, position, floor)
             
         Returns:
             CadQuery Assembly with window frames, or None if no windows
@@ -304,86 +306,130 @@ class WindowsBuilder:
         
         windows_assembly = cq.Assembly()
         
-        # Iterate through each story (skip attic/dormers for now)
-        # Only create windows for stories up to the stories parameter (excludes attic)
-        for story_idx, window in enumerate(windows):
-            if story_idx >= len(floor_heights):
-                break  # Skip if we don't have floor height for this story
-            if story_idx >= stories:
-                break  # Skip attic/dormer windows (handle separately in future)
-            
-            # Get floor height and chair rail height for this story
-            floor_height = floor_heights[story_idx]
-            # calculated_chair_rail_heights already includes floor_height + chair_rail_height
-            chair_rail_height_z = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else floor_height + 30.0
-            
-            # Parse window size to get dimensions
-            size_parts = window.size.split('x')
-            if len(size_parts) == 2:
-                window_width = float(size_parts[0])
-                window_height = float(size_parts[1])
-            else:
-                window_width, window_height = 24, 36  # Default size
-            
-            # chair_rail_height_z is where the bottom of the opening (sill) should be
-            # We'll pass this to _window_frame which will calculate the center using the actual opening height
-            
-            # Get bays for each face
-            for face in ["front", "rear", "left", "right"]:
-                bays = getattr(floorplan.bays, face, []) if floorplan and floorplan.bays else []
+        # Build set of door locations for quick lookup (wall, position, floor)
+        door_locations = set()
+        if door_openings:
+            for door_info in door_openings:
+                door_locations.add((door_info['wall'], door_info['position'], door_info['floor']))
+        
+        # Check if windows have explicit locations
+        has_explicit_locations = any(w.wall and w.position is not None and w.floor is not None for w in windows)
+        
+        if has_explicit_locations:
+            # Honor explicit window locations
+            for i, window in enumerate(windows):
+                if not (window.wall and window.position is not None and window.floor is not None):
+                    continue  # Skip windows without explicit locations
                 
-                if not bays:
-                    # No bays on this face, skip
+                # Convert floor to 0-indexed story
+                story_idx = window.floor - 1
+                if story_idx < 0 or story_idx >= stories:
+                    continue  # Skip invalid floors
+                
+                # Get floor height and chair rail height for this story
+                floor_height = floor_heights[story_idx]
+                chair_rail_height_z = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else floor_height + 30.0
+                
+                # Frame depth
+                frame_depth = 4
+                
+                # Calculate window center coordinates based on face
+                if window.wall == "front":
+                    window_center_x = window.position
+                    window_center_y = frame_depth / 2
+                elif window.wall == "rear":
+                    window_center_x = window.position
+                    window_center_y = -dimensions.right + frame_depth / 2
+                elif window.wall == "left":
+                    window_center_x = frame_depth / 2
+                    window_center_y = -window.position
+                elif window.wall == "right":
+                    window_center_x = dimensions.front + frame_depth / 2
+                    window_center_y = -window.position
+                else:
                     continue
                 
-                wall_length = getattr(dimensions, face)
+                # Create window frame
+                frame_assembly = WindowsBuilder._window_frame(
+                    window,
+                    window_center_x,
+                    window_center_y,
+                    chair_rail_height_z,
+                    window.wall
+                )
                 
-                # Frame depth - back of frame should be flush with inside of stud wall
-                frame_depth = 4  # Frame depth in inches
+                # Add all frame components to the windows assembly
+                for name, obj_data in frame_assembly.traverse():
+                    if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                        component_name = f"window_{window.wall}_story{story_idx}_pos{window.position}_{name}"
+                        windows_assembly.add(
+                            obj_data.obj,
+                            name=component_name,
+                            color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6)
+                        )
+        else:
+            # Use automatic bay placement, but skip door openings
+            # Iterate through each story (skip attic/dormers for now)
+            for story_idx, window in enumerate(windows):
+                if story_idx >= len(floor_heights):
+                    break  # Skip if we don't have floor height for this story
+                if story_idx >= stories:
+                    break  # Skip attic/dormer windows (handle separately in future)
                 
-                # Create window at each bay center
-                for bay_idx, bay_position in enumerate(bays):
-                    # Calculate window center coordinates based on face
-                    # Frame back (interior side) should be flush with inside of stud wall
-                    # Frame extends from inside (back) to outside (front) by frame_depth
-                    if face == "front":
-                        # Back of frame at Y=0 (inside of wall), center at Y=frame_depth/2
-                        window_center_x = bay_position
-                        window_center_y = frame_depth / 2
-                    elif face == "rear":
-                        # Back of frame at Y=-dimensions.right (inside of wall), center at Y=-dimensions.right + frame_depth/2
-                        # Will rotate 180 degrees around Y axis to face outward
-                        window_center_x = bay_position
-                        window_center_y = -dimensions.right + frame_depth / 2
-                    elif face == "left":
-                        # Back of frame at X=0 (inside of wall), center at X=frame_depth/2
-                        window_center_x = frame_depth / 2
-                        window_center_y = -bay_position
-                    elif face == "right":
-                        # Back of frame at X=dimensions.front (inside of wall), center at X=dimensions.front + frame_depth/2
-                        window_center_x = dimensions.front + frame_depth / 2
-                        window_center_y = -bay_position
-                    else:
+                # Get floor height and chair rail height for this story
+                floor_height = floor_heights[story_idx]
+                chair_rail_height_z = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else floor_height + 30.0
+                
+                # Frame depth
+                frame_depth = 4
+                
+                # Get bays for each face
+                for face in ["front", "rear", "left", "right"]:
+                    bays = getattr(floorplan.bays, face, []) if floorplan and floorplan.bays else []
+                    
+                    if not bays:
                         continue
                     
-                    # Create window frame
-                    # Pass chair_rail_height_z so the bottom of the opening aligns with it
-                    frame_assembly = WindowsBuilder._window_frame(
-                        window,
-                        window_center_x,
-                        window_center_y,
-                        chair_rail_height_z,
-                        face
-                    )
-                    
-                    # Add all frame components to the windows assembly
-                    for name, obj_data in frame_assembly.traverse():
-                        if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                            component_name = f"window_{face}_story{story_idx}_bay{bay_position}_{name}"
-                            windows_assembly.add(
-                                obj_data.obj,
-                                name=component_name,
-                                color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6)
-                            )
+                    # Create window at each bay center, skipping door locations
+                    for bay_idx, bay_position in enumerate(bays):
+                        # Check if this bay has a door on this story
+                        floor_number = story_idx + 1
+                        if (face, bay_position, floor_number) in door_locations:
+                            continue  # Skip this bay - it has a door
+                        
+                        # Calculate window center coordinates based on face
+                        if face == "front":
+                            window_center_x = bay_position
+                            window_center_y = frame_depth / 2
+                        elif face == "rear":
+                            window_center_x = bay_position
+                            window_center_y = -dimensions.right + frame_depth / 2
+                        elif face == "left":
+                            window_center_x = frame_depth / 2
+                            window_center_y = -bay_position
+                        elif face == "right":
+                            window_center_x = dimensions.front + frame_depth / 2
+                            window_center_y = -bay_position
+                        else:
+                            continue
+                        
+                        # Create window frame
+                        frame_assembly = WindowsBuilder._window_frame(
+                            window,
+                            window_center_x,
+                            window_center_y,
+                            chair_rail_height_z,
+                            face
+                        )
+                        
+                        # Add all frame components to the windows assembly
+                        for name, obj_data in frame_assembly.traverse():
+                            if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                                component_name = f"window_{face}_story{story_idx}_bay{bay_position}_{name}"
+                                windows_assembly.add(
+                                    obj_data.obj,
+                                    name=component_name,
+                                    color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6)
+                                )
         
         return windows_assembly if windows_assembly.children else None

@@ -140,6 +140,77 @@ class BuildingBuilder:
             calculated_bay_heights.append(floor_height + bay_height)
             calculated_bay_widths.append(bay_width)
 
+        # Collect all opening locations (doors and windows) for framing and sheathing
+        openings = []
+        
+        # Collect door openings
+        if structure.doors:
+            for door in structure.doors:
+                if door.wall and door.position is not None:
+                    floor = door.floor if door.floor is not None else 1
+                    # Parse door size
+                    size_parts = door.size.split('x')
+                    width = float(size_parts[0]) if len(size_parts) == 2 else 36
+                    height = float(size_parts[1]) if len(size_parts) == 2 else 80
+                    openings.append({
+                        'wall': door.wall,
+                        'position': door.position,
+                        'floor': floor,
+                        'type': 'door',
+                        'width': width,
+                        'height': height
+                    })
+        
+        # Collect window openings
+        if structure.windows:
+            # Check if windows have explicit locations
+            has_explicit_locations = any(w.wall and w.position is not None and w.floor is not None for w in structure.windows)
+            
+            if has_explicit_locations:
+                # Add explicitly located windows
+                for window in structure.windows:
+                    if window.wall and window.position is not None and window.floor is not None:
+                        # Parse window size
+                        size_parts = window.size.split('x')
+                        width = float(size_parts[0]) if len(size_parts) == 2 else 24
+                        height = float(size_parts[1]) if len(size_parts) == 2 else 36
+                        openings.append({
+                            'wall': window.wall,
+                            'position': window.position,
+                            'floor': window.floor,
+                            'type': 'window',
+                            'width': width,
+                            'height': height
+                        })
+            else:
+                # Add windows at all bays except door bays
+                door_locations = {(d['wall'], d['position'], d['floor']) for d in openings}
+                
+                for story_idx in range(stories):
+                    if story_idx >= len(structure.windows):
+                        break
+                    window = structure.windows[story_idx]
+                    floor_number = story_idx + 1
+                    
+                    # Parse window size
+                    size_parts = window.size.split('x')
+                    width = float(size_parts[0]) if len(size_parts) == 2 else 24
+                    height = float(size_parts[1]) if len(size_parts) == 2 else 36
+                    
+                    # Add window at each bay on each face (except door bays)
+                    for face in ["front", "rear", "left", "right"]:
+                        bays = getattr(floorplan.bays, face, []) if floorplan.bays else []
+                        for bay_position in bays:
+                            if (face, bay_position, floor_number) not in door_locations:
+                                openings.append({
+                                    'wall': face,
+                                    'position': bay_position,
+                                    'floor': floor_number,
+                                    'type': 'window',
+                                    'width': width,
+                                    'height': height
+                                })
+
         # Create main building assembly
         building_assembly = cq.Assembly()
         
@@ -161,7 +232,7 @@ class BuildingBuilder:
         bom_data = None
         if component_visibility.framing and structure_hash:
             try:
-                framing_builder = FramingBuilder(structure, structure_hash)
+                framing_builder = FramingBuilder(structure, structure_hash, openings)
                 framing_assembly, bom_data = framing_builder.build(
                     calculated_ceiling_heights,
                     calculated_floor_heights
@@ -211,7 +282,8 @@ class BuildingBuilder:
                 calculated_chair_rail_heights,
                 calculated_bay_heights,
                 calculated_bay_widths,
-                floorplan
+                floorplan,
+                openings=openings
             )
             
             # Add all sheathing boards to the main assembly as individual components
@@ -242,13 +314,26 @@ class BuildingBuilder:
         
         # Add windows if specified
         if component_visibility.windows and structure.windows:
+            # Collect door openings to avoid placing windows at door bays
+            door_openings = []
+            if structure.doors:
+                for door in structure.doors:
+                    if door.wall and door.position is not None:
+                        floor = door.floor if door.floor is not None else 1
+                        door_openings.append({
+                            'wall': door.wall,
+                            'position': door.position,
+                            'floor': floor
+                        })
+            
             windows_assembly = WindowsBuilder.build(
                 structure.windows,
                 dimensions,
                 stories,
                 calculated_floor_heights,
                 calculated_chair_rail_heights,
-                floorplan
+                floorplan,
+                door_openings=door_openings
             )
             if windows_assembly is not None:
                 # Add all windows to the main assembly (colors are already set in windows_builder)
