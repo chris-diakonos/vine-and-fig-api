@@ -320,7 +320,10 @@ class RoofBuilder:
                 else:
                     # First panel covers profile width, additional panels add exposure each
                     remaining_length = effective_roof_length - panel_profile_width
-                    additional_panels = math.ceil(remaining_length / roof_panel_exposure)
+                    # Use round() instead of ceil() to minimize overhang error
+                    # This gives the closest number of panels to desired coverage
+                    additional_panels_exact = remaining_length / roof_panel_exposure
+                    additional_panels = max(1, round(additional_panels_exact))
                     quantity = 1 + additional_panels
             else:
                 effective_roof_length = roof_length
@@ -336,16 +339,20 @@ class RoofBuilder:
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
                     # Store target eave position for later adjustment
+                    # Weatherboard extends 0.625" past stud face
                     stud_depth = 6
-                    target_eave_y = stud_depth + roof.roof_overhang
+                    weatherboard_thickness = 0.625
+                    target_eave_y = stud_depth + weatherboard_thickness + roof.roof_overhang
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
                     # Store target eave position for later adjustment
+                    # Weatherboard extends 0.625" past stud face
                     stud_depth = 6
+                    weatherboard_thickness = 0.625
                     dimension = right_dimension if gable_direction == "side" else front_dimension
-                    target_eave_y = -dimension - stud_depth - roof.roof_overhang
+                    target_eave_y = -dimension - stud_depth - weatherboard_thickness - roof.roof_overhang
                 elif face == "left":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_z = base_elevation + panel_z_offset

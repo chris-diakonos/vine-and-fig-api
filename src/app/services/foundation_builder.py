@@ -95,9 +95,9 @@ class FoundationBuilder:
                 foundation_assembly.add(block, name=f"rear_c{course_idx}_b{block_idx}", color=block_color)
             
             # Left wall (along Y axis, extending full depth to close corners)
-            y_pos = block_width  # Start after front corner
+            y_pos = 0  # Start at front edge to close front corner
             block_idx = 0
-            while y_pos + block_length <= foundation_depth - block_width:
+            while y_pos + block_length <= foundation_depth:
                 block = (
                     cq.Workplane("XY")
                     .box(block_width, block_length, block_height)
@@ -108,9 +108,9 @@ class FoundationBuilder:
                 block_idx += 1
             
             # Right wall (along Y axis, extending full depth to close corners)
-            y_pos = block_width  # Start after front corner
+            y_pos = 0  # Start at front edge to close front corner
             block_idx = 0
-            while y_pos + block_length <= foundation_depth - block_width:
+            while y_pos + block_length <= foundation_depth:
                 block = (
                     cq.Workplane("XY")
                     .box(block_width, block_length, block_height)
