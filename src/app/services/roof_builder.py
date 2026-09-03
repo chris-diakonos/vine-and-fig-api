@@ -311,11 +311,21 @@ class RoofBuilder:
                 # Add gable overhang to both ends
                 effective_roof_length = roof_length + (2 * roof.roof_overhang)
                 gable_overhang_offset = -roof.roof_overhang
+                
+                # Calculate panel quantity accounting for panel width
+                # First panel covers full profile width, subsequent panels add exposure width
+                panel_profile_width = 37.75  # AG panel profile width in inches
+                if effective_roof_length <= panel_profile_width:
+                    quantity = 1
+                else:
+                    # First panel covers profile width, additional panels add exposure each
+                    remaining_length = effective_roof_length - panel_profile_width
+                    additional_panels = math.ceil(remaining_length / roof_panel_exposure)
+                    quantity = 1 + additional_panels
             else:
                 effective_roof_length = roof_length
                 gable_overhang_offset = 0
-
-            quantity = math.ceil(effective_roof_length / roof_panel_exposure)
+                quantity = math.ceil(effective_roof_length / roof_panel_exposure)
 
             for q in range(quantity):
 
@@ -323,30 +333,29 @@ class RoofBuilder:
 
                 if face == "front":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
-                    # Position panel so eave edge is at stud_depth + roof_overhang from building origin
-                    stud_depth = 6
-                    panel_y = stud_depth + roof.roof_overhang + panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
+                    # Store target eave position for later adjustment
+                    stud_depth = 6
+                    target_eave_y = stud_depth + roof.roof_overhang
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
-                    # Position panel so eave edge is at -dimension - stud_depth - roof_overhang
-                    stud_depth = 6
-                    # For side-gable, rear wall is at -right_dimension; for front-gable, at -front_dimension
-                    dimension = right_dimension if gable_direction == "side" else front_dimension
-                    panel_y = -dimension - stud_depth - roof.roof_overhang - panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
+                    # Store target eave position for later adjustment
+                    stud_depth = 6
+                    dimension = right_dimension if gable_direction == "side" else front_dimension
+                    target_eave_y = -dimension - stud_depth - roof.roof_overhang
                 elif face == "left":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
-                    panel_y = panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 90
+                    target_eave_y = panel_y_offset
                 elif face == "right":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
-                    panel_y = -panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = -90
+                    target_eave_y = -panel_y_offset
                 else:
                     raise ValueError(f"Invalid face: {face}")
 
@@ -364,14 +373,23 @@ class RoofBuilder:
                 # Rotate the panel first
                 panel = panel.rotateAboutCenter((1, 0, 0), roof_pitch)
                 
-                # Get the bounding box after rotation to find actual center Y position
-                # panel_y represents where the center should be after accounting for pitch
-                # After rotateAboutCenter, the center stays fixed, so we need to find where it is
+                # Get the bounding box after rotation to find eave edge position
                 bbox = panel.val().BoundingBox()
-                current_center_y = (bbox.ymin + bbox.ymax) / 2
                 
-                # Calculate offset needed to move center from current position to panel_y
-                y_offset = panel_y - current_center_y
+                # Position the panel so the eave edge is at target_eave_y
+                # For front/rear faces, eave is the edge closest to the wall
+                # Front panel slopes back (eave at max Y), rear slopes forward (eave at min Y)
+                if face == "front":
+                    current_eave_y = bbox.ymax
+                elif face == "rear":
+                    current_eave_y = bbox.ymin
+                elif face == "left":
+                    current_eave_y = bbox.ymax
+                elif face == "right":
+                    current_eave_y = bbox.ymin
+                
+                # Calculate offset to move eave to target position
+                y_offset = target_eave_y - current_eave_y
                 
                 # Translate to final position
                 panel = panel.translate((panel_x, y_offset, panel_z))

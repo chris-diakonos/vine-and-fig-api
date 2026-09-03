@@ -32,7 +32,9 @@ const LAYERS = [
 
 const container = document.getElementById("viewer-canvas");
 const artifactLabel = document.getElementById("artifact-label");
+const commitInfo = document.getElementById("commit-info");
 const structureHash = document.getElementById("structure-hash");
+const meshHash = document.getElementById("mesh-hash");
 const downloadLink = document.getElementById("download-link");
 const bomLink = document.getElementById("bom-link");
 const errorMessage = document.getElementById("error-message");
@@ -223,8 +225,13 @@ async function main() {
     }
 
     const hash = manifest.structure_hash || "unknown";
+    const commit = manifest.commit_sha || "unknown";
+    const meshHashValue = manifest.mesh_sha256 || "unknown";
+    
     artifactLabel.textContent = `Artifact ${hash}`;
+    commitInfo.textContent = `Commit: ${commit.substring(0, 8)}`;
     structureHash.textContent = `Structure hash: ${hash}`;
+    meshHash.textContent = `Mesh hash: ${meshHashValue.substring(0, 16)}...`;
 
     const loader = new GLTFLoader();
     const gltf = await loader.loadAsync(glbUrl, (event) => {
