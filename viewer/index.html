@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vine & Fig GLB Viewer</title>
     <link rel="stylesheet" href="./styles.css">
-    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
   </head>
   <body>
     <main class="viewer-shell">
@@ -18,16 +25,15 @@
       </header>
 
       <section class="stage" aria-label="3D model preview">
-        <model-viewer
-          id="model-viewer"
-          camera-controls
-          auto-rotate
-          shadow-intensity="0.7"
-          exposure="0.9"
-          ar
-        >
-          <div class="model-status" slot="poster">Loading GLB...</div>
-        </model-viewer>
+        <div id="viewer-canvas" class="viewer-canvas"></div>
+        <aside class="layer-panel" aria-label="Building layer controls">
+          <div class="layer-panel-header">
+            <span>Layers</span>
+            <button id="show-all" type="button">Show All</button>
+          </div>
+          <div id="layer-controls" class="layer-controls"></div>
+        </aside>
+        <div id="model-status" class="model-status">Loading GLB...</div>
         <div id="error-message" class="error-message" hidden></div>
       </section>
 
@@ -38,6 +44,6 @@
       </footer>
     </main>
 
-    <script src="./viewer.js"></script>
+    <script type="module" src="./viewer.js"></script>
   </body>
 </html>
