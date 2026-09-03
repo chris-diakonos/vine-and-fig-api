@@ -258,6 +258,7 @@ class SheathingBuilder:
                 # Check if this board row intersects with any openings on this face
                 # Opening vertical range is approximately chair_rail to bay_height (simplified)
                 board_intersects_opening = False
+                board_intersects_door = False
                 openings_at_bays = {}  # Map bay position to True if it has an opening in this row
                 
                 floor_number = story_idx + 1
@@ -270,6 +271,8 @@ class SheathingBuilder:
                         
                         if bottom_edge_z < opening_top and current_board_height > opening_bottom:
                             board_intersects_opening = True
+                            if opening.get('type') == 'door':
+                                board_intersects_door = True
                             openings_at_bays[opening.get('position')] = True
 
                 # Determine if the board is a single board or multiple boards
@@ -280,6 +283,10 @@ class SheathingBuilder:
                     # No openings in this row, use single board
                     horizontal_quantity = 1
                     print("Single board - no opening intersection")
+                elif board_intersects_door:
+                    # Door opening - always use multiple boards to cut around it
+                    horizontal_quantity = len(board_lengths)
+                    print("Multiple boards in this row (door opening)")
                 elif current_board_height < chair_rail_height:
                     horizontal_quantity = 1
                     print("Single board below window")
