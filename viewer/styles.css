@@ -110,6 +110,58 @@ p {
   box-shadow: 0 16px 40px rgba(31, 39, 37, 0.13);
 }
 
+.camera-panel {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: min(260px, calc(100% - 36px));
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 16px 40px rgba(31, 39, 37, 0.13);
+}
+
+.camera-panel-header {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 750;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.camera-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.camera-btn {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.camera-btn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.camera-btn:active {
+  transform: translateY(1px);
+}
+
+.fit-btn {
+  grid-column: span 3;
+}
+
 .layer-panel-header,
 .layer-toggle {
   display: flex;
@@ -197,6 +249,14 @@ button {
 
   .layer-panel {
     top: 12px;
+    right: 12px;
+    width: calc(100% - 24px);
+  }
+
+  .camera-panel {
+    top: auto;
+    bottom: 90px;
+    left: 12px;
     right: 12px;
     width: calc(100% - 24px);
   }

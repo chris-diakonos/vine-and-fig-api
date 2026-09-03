@@ -308,14 +308,12 @@ class RoofBuilder:
             
             # For side-gable roofs, account for gable overhang on both ends
             if gable_direction == "side":
-                # Gable overhang should be 12" past weatherboard outer face, not building interior
-                # Weatherboard extends beyond building interior by stud_depth + weatherboard_thickness
-                stud_depth = 6
-                weatherboard_thickness = 0.625
-                weatherboard_extension = stud_depth + weatherboard_thickness
-                # Total roof length: building interior + weatherboard on both sides + overhang on both sides
-                effective_roof_length = roof_length + (2 * weatherboard_extension) + (2 * roof.roof_overhang)
-                gable_overhang_offset = -(weatherboard_extension + roof.roof_overhang)
+                # Gable overhang should be exactly 12" past weatherboard outer face on both ends
+                # The weatherboard faces are at x=0 (left) and x=roof_length (right) after weatherboard extension
+                # We need roof to span: weatherboard_left - 12" to weatherboard_right + 12"
+                # So total roof length = roof_length + 24"
+                effective_roof_length = roof_length + (2 * roof.roof_overhang)
+                gable_overhang_offset = -roof.roof_overhang
                 
                 # Calculate panel quantity accounting for panel width
                 # First panel covers full profile width, subsequent panels add exposure width
@@ -325,10 +323,9 @@ class RoofBuilder:
                 else:
                     # First panel covers profile width, additional panels add exposure each
                     remaining_length = effective_roof_length - panel_profile_width
-                    # Use round() instead of ceil() to minimize overhang error
-                    # This gives the closest number of panels to desired coverage
+                    # Use ceil to ensure we cover at least the target length
                     additional_panels_exact = remaining_length / roof_panel_exposure
-                    additional_panels = max(1, round(additional_panels_exact))
+                    additional_panels = math.ceil(additional_panels_exact)
                     quantity = 1 + additional_panels
             else:
                 effective_roof_length = roof_length

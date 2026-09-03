@@ -965,24 +965,29 @@ class FramingBuilder:
             
             # Rafter extends from ridge to 12" past actual weatherboard outer faces
             # Actual weatherboard positions: front y=2.674, rear y=-250.528
+            # Match the eave positions used in roof_builder.py
             front_weatherboard_y = 2.674
             rear_weatherboard_y = -250.528
             centerline_y = -right_dimension / 2  # Building centerline (ridge)
-            # Calculate runs to each eave (12" past weatherboard)
-            front_rafter_run = (front_weatherboard_y + roof_overhang) - centerline_y
-            rear_rafter_run = centerline_y - (rear_weatherboard_y - roof_overhang)
-            # Use average for symmetric rafters
-            rafter_run = (front_rafter_run + rear_rafter_run) / 2
+            
+            # Calculate rafter run for this specific face to match eaves exactly
             roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
             rafter_cos = math.cos(roof_pitch_radians)
             rafter_sin = math.sin(roof_pitch_radians)
-            rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
             
             if face == "front":
+                # Front rafter: ridge to front eave (12" past front weatherboard)
+                target_eave_y = front_weatherboard_y + roof_overhang
+                rafter_run = target_eave_y - centerline_y
+                rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
                 new_x = +(right_dimension/2) + (rafter_length/2 * rafter_cos) + x_offset
                 roof_pitch = roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
             elif face == "rear":
+                # Rear rafter: ridge to rear eave (12" past rear weatherboard)
+                target_eave_y = rear_weatherboard_y - roof_overhang
+                rafter_run = centerline_y - target_eave_y
+                rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
                 new_x = +(right_dimension/2) - (rafter_length/2 * rafter_cos) + x_offset
                 roof_pitch = 180 - roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
