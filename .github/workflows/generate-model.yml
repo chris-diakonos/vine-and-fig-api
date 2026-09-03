@@ -88,7 +88,11 @@ jobs:
             -v "${GITHUB_WORKSPACE}:/workspace" \
             vine-and-fig-cli generate "/workspace/${definition_path}" \
               --artifact-key "${artifact_key}" \
-              --output-dir /workspace/.generated/model
+              --output-dir /workspace/.generated/model \
+              --metadata "run.github_run_id=${GITHUB_RUN_ID}" \
+              --metadata "run.commit_sha=${GITHUB_SHA}" \
+              --metadata "run.branch=${GITHUB_REF_NAME}" \
+              --metadata "run.workflow=${GITHUB_WORKFLOW}"
 
       - name: Build static viewer
         run: |

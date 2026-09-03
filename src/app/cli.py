@@ -32,6 +32,28 @@ def _write_json(path: Path, data: Dict[str, Any]) -> None:
         json.dump(data, handle, indent=2, ensure_ascii=False)
 
 
+def _parse_metadata(values: list[str] | None) -> Dict[str, Any]:
+    metadata: Dict[str, Any] = {}
+    for value in values or []:
+        if "=" not in value:
+            raise ValueError(f"Invalid metadata value '{value}'. Use key=value.")
+        key, raw_value = value.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError("Metadata keys cannot be empty.")
+
+        target = metadata
+        parts = key.split(".")
+        for part in parts[:-1]:
+            target = target.setdefault(part, {})
+        try:
+            target[parts[-1]] = json.loads(raw_value)
+        except json.JSONDecodeError:
+            target[parts[-1]] = raw_value
+
+    return metadata
+
+
 def generate_command(args: argparse.Namespace) -> int:
     from pydantic import ValidationError
 
@@ -77,6 +99,11 @@ def generate_command(args: argparse.Namespace) -> int:
     manifest_key = storage.object_key(f"{artifact_root}/manifest.json")
     glb_url = storage.upload_file(glb_path, f"{artifact_root}/model.glb", "model/gltf-binary")
     bom_url = storage.upload_file(bom_path, f"{artifact_root}/bom.json", "application/json")
+    try:
+        metadata = _parse_metadata(args.metadata)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
     manifest = {
         "structure_hash": structure_hash,
@@ -96,6 +123,9 @@ def generate_command(args: argparse.Namespace) -> int:
             },
         },
     }
+    if metadata:
+        manifest["metadata"] = metadata
+
     _write_json(manifest_path, manifest)
     storage.upload_file(manifest_path, f"{artifact_root}/manifest.json", "application/json")
 
@@ -121,6 +151,11 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--region", help="S3 region; defaults to S3_REGION_NAME")
     generate.add_argument("--prefix", help="Global object-key prefix; defaults to S3_PREFIX")
     generate.add_argument("--public-base-url", help="Public base URL for artifact links; defaults to S3_PUBLIC_BASE_URL")
+    generate.add_argument(
+        "--metadata",
+        action="append",
+        help="Additional manifest metadata as key=value. Dot-separated keys create nested objects.",
+    )
     generate.set_defaults(func=generate_command)
 
     return parser
