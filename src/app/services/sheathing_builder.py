@@ -4,7 +4,7 @@ Creates individual sheathing boards positioned on the exterior of studs.
 """
 import cadquery as cq
 import math
-from typing import List, Optional
+from typing import Dict, Any, List, Optional
 from app.models.building import Sheathing
 from app.models.floorplan import Dimensions, Floorplan
 

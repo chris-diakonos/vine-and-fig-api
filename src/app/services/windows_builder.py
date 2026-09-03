@@ -3,7 +3,7 @@ Windows builder service using CadQuery.
 """
 import cadquery as cq
 import math
-from typing import List, Optional
+from typing import Dict, Any, List, Optional
 from app.models.openings import Window
 from app.models.floorplan import Dimensions, Floorplan
 
@@ -284,7 +284,7 @@ class WindowsBuilder:
         floor_heights: List[float],
         calculated_chair_rail_heights: List[float],
         floorplan: Optional[Floorplan] = None,
-        door_openings: Optional[List[Dict[str, any]]] = None
+        door_openings: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[cq.Assembly]:
         """
         Build window frames at specified locations or at bays, skipping door openings.
