@@ -90,22 +90,25 @@ class DoorsBuilder:
         floor_height = 120  # Default story height
         z_pos = (floor - 1) * floor_height + door_height / 2
         
-        # Position based on wall
+        # Door depth for positioning
+        door_depth = 1.75  # Standard door thickness
+        
+        # Position based on wall (matching windows_builder coordinate system)
         if wall == "front":
-            x_pos = position - dimensions.front / 2
-            y_pos = -dimensions.left / 2
+            x_pos = position
+            y_pos = door_depth / 2
             door = door.translate((x_pos, y_pos, z_pos))
         elif wall == "rear":
-            x_pos = position - dimensions.rear / 2
-            y_pos = dimensions.left / 2
+            x_pos = position
+            y_pos = -dimensions.right + door_depth / 2
             door = door.translate((x_pos, y_pos, z_pos))
         elif wall == "left":
-            x_pos = -dimensions.front / 2
-            y_pos = position - dimensions.left / 2
+            x_pos = door_depth / 2
+            y_pos = -position
             door = door.translate((x_pos, y_pos, z_pos))
         elif wall == "right":
-            x_pos = dimensions.front / 2
-            y_pos = position - dimensions.right / 2
+            x_pos = dimensions.front + door_depth / 2
+            y_pos = -position
             door = door.translate((x_pos, y_pos, z_pos))
         
         return door
