@@ -228,9 +228,6 @@ class WindowsBuilder:
             left_frame = left_frame.translate((header_sill_const, stile_pos_left, stile_z))
         else:
             left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
-        if face == "rear":
-            # Rotate 180 degrees around Y axis at frame center to face outward
-            left_frame = left_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Right stile (vertical piece)
@@ -239,39 +236,32 @@ class WindowsBuilder:
             right_frame = right_frame.translate((header_sill_const, stile_pos_right, stile_z))
         else:
             right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
-        if face == "rear":
-            # Rotate 180 degrees around Y axis at frame center to face outward
-            right_frame = right_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Top header (horizontal piece)
         header_z = center_z + ((pulley_stile_length + frame_width) / 2)
         if face in ["left", "right"]:
-            # For left/right walls, header extends in Y, rotate around Y to make it perpendicular to wall
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 1, 0), 90)
+            # For left/right walls, header extends in Y - use X rotation to keep profile aligned perpendicular to wall
+            # Create profile, extrude, rotate into horizontal position, then rotate to face along wall
+            top_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90)
             top_frame = top_frame.translate((header_sill_const, header_sill_start, header_z))
         else:
             # For front/rear walls, header extends in X, rotate around Z
             top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90)
             top_frame = top_frame.translate((header_sill_start, header_sill_const, header_z))
-            if face == "rear":
-                # Rotate 180 degrees around Y axis at frame center to face outward
-                top_frame = top_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bottom sill (horizontal piece)
         sill_z = center_z - (pulley_stile_length / 2)
         if face in ["left", "right"]:
-            # For left/right walls, sill extends in Y, rotate around Y to make it perpendicular to wall
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 1, 0), 90)
+            # For left/right walls, sill extends in Y - use X rotation to keep profile aligned perpendicular to wall
+            # Create profile, extrude, rotate into horizontal position, then rotate to face along wall
+            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (1, 0, 0), 90).rotate((0, 0, 0), (0, 0, 1), 90)
             bottom_frame = bottom_frame.translate((header_sill_const, header_sill_start, sill_z))
         else:
             # For front/rear walls, sill extends in X, rotate around Z
             bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_length).rotate((0, 0, 0), (0, 0, 1), 90)
             bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
-            if face == "rear":
-                # Rotate 180 degrees around Y axis at frame center to face outward
-                bottom_frame = bottom_frame.rotate(frame_center, (0, 1, 0), 180)
         window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
