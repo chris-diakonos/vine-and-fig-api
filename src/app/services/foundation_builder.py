@@ -37,13 +37,18 @@ class FoundationBuilder:
         foundation_width = dimensions.front
         foundation_depth = dimensions.left
         
+        # Calculate total foundation height
+        total_foundation_height = foundation.foundation_courses * (block_height + joint)
+        
         # Create assembly with color
         foundation_assembly = cq.Assembly()
         block_color = cq.Color(0.7, 0.7, 0.7)
         
         # Generate blocks for each course
+        # Foundation extends downward from z=0, so blocks are positioned at negative z
         for course_idx in range(foundation.foundation_courses):
-            z_offset = course_idx * (block_height + joint)
+            # Calculate z position for this course (downward from top at z=0)
+            z_offset = -total_foundation_height + course_idx * (block_height + joint) + block_height/2
             
             # Front wall (along X axis)
             x_pos = 0
@@ -52,7 +57,7 @@ class FoundationBuilder:
                 block = (
                     cq.Workplane("XY")
                     .box(block_length, block_width, block_height)
-                    .translate((x_pos + block_length/2, block_width/2, z_offset + block_height/2))
+                    .translate((x_pos + block_length/2, block_width/2, z_offset))
                 )
                 foundation_assembly.add(block, name=f"front_c{course_idx}_b{block_idx}", color=block_color)
                 x_pos += block_length + joint
@@ -65,7 +70,7 @@ class FoundationBuilder:
                 block = (
                     cq.Workplane("XY")
                     .box(block_length, block_width, block_height)
-                    .translate((x_pos + block_length/2, -foundation_depth + block_width/2, z_offset + block_height/2))
+                    .translate((x_pos + block_length/2, -foundation_depth + block_width/2, z_offset))
                 )
                 foundation_assembly.add(block, name=f"rear_c{course_idx}_b{block_idx}", color=block_color)
                 x_pos += block_length + joint
@@ -78,7 +83,7 @@ class FoundationBuilder:
                 block = (
                     cq.Workplane("XY")
                     .box(block_width, block_length, block_height)
-                    .translate((block_width/2, -y_pos - block_length/2, z_offset + block_height/2))
+                    .translate((block_width/2, -y_pos - block_length/2, z_offset))
                 )
                 foundation_assembly.add(block, name=f"left_c{course_idx}_b{block_idx}", color=block_color)
                 y_pos += block_length + joint
@@ -91,7 +96,7 @@ class FoundationBuilder:
                 block = (
                     cq.Workplane("XY")
                     .box(block_width, block_length, block_height)
-                    .translate((foundation_width - block_width/2, -y_pos - block_length/2, z_offset + block_height/2))
+                    .translate((foundation_width - block_width/2, -y_pos - block_length/2, z_offset))
                 )
                 foundation_assembly.add(block, name=f"right_c{course_idx}_b{block_idx}", color=block_color)
                 y_pos += block_length + joint
