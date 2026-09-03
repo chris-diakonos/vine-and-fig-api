@@ -371,4 +371,128 @@ class SheathingBuilder:
                     sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
         
         return sheathing_assembly
+    
+    @staticmethod
+    def build_gable_sheathing(
+        sheathing: Sheathing,
+        dimensions: Dimensions,
+        stories: int,
+        floor_heights: List[float],
+        roof_pitch_degrees: float,
+        roof_overhang: float
+    ) -> cq.Assembly:
+        """
+        Build gable end sheathing for side-gable roofs.
+        
+        Creates sheathing boards on the gable ends (left and right walls) that extend
+        from the wall top up the rake to the ridge.
+        
+        Args:
+            sheathing: Sheathing specification (exposure, height, type)
+            dimensions: Building dimensions
+            stories: Number of stories
+            floor_heights: Pre-calculated floor heights for each story
+            roof_pitch_degrees: Roof pitch in degrees
+            roof_overhang: Roof overhang in inches
+            
+        Returns:
+            CadQuery Assembly with gable sheathing boards
+        """
+        gable_assembly = cq.Assembly()
+        
+        # Sheathing board specifications
+        board_exposure = sheathing.sheathing_exposure
+        board_height = sheathing.sheathing_height
+        top_width = 0.375
+        bottom_width = 0.625
+        bevel_angle_degrees = 4
+        
+        # Stud dimensions
+        stud_depth = 6
+        
+        # Calculate wall top and ridge height
+        wall_top = floor_heights[stories]
+        right_dimension = dimensions.right
+        roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
+        ridge_run = right_dimension / 2
+        ridge_height = wall_top + (ridge_run * math.tan(roof_pitch_radians))
+        
+        # Vertical coverage on gable face
+        gable_height = ridge_height - wall_top
+        
+        # For gable ends at x=0 (left) and x=front_dimension (right)
+        for face in ["left", "right"]:
+            face_quantity = 0
+            
+            # Determine X position with overhang
+            if face == "left":
+                face_x = -roof_overhang - (stud_depth / 2)
+            else:  # right
+                face_x = dimensions.front + roof_overhang + (stud_depth / 2)
+            
+            # Calculate number of horizontal courses of boards
+            # We'll place boards horizontally, spanning the width at each height
+            vertical_quantity = math.ceil(gable_height / board_exposure)
+            
+            for row in range(1, vertical_quantity + 1):
+                # Height of this row's bottom edge
+                row_bottom_z = wall_top + (row - 1) * board_exposure
+                row_top_z = row_bottom_z + board_height
+                
+                # At this height, calculate the width of the gable (how far the roof extends)
+                # The gable is a triangle, widest at the wall_top (full width) and narrowing to a point at ridge
+                height_above_wall = (row_bottom_z + row_top_z) / 2 - wall_top
+                
+                if height_above_wall >= gable_height:
+                    continue  # Above the ridge
+                
+                # Width at this height (symmetric triangle)
+                # At wall_top: width = right_dimension
+                # At ridge: width = 0
+                # width = right_dimension * (1 - height_above_wall / gable_height)
+                width_at_height = right_dimension * (1 - height_above_wall / gable_height)
+                
+                if width_at_height < board_exposure:
+                    continue  # Too narrow for a board
+                
+                # Board spans from -width_at_height/2 to +width_at_height/2 in Y direction
+                board_length = width_at_height
+                board_y_center = -width_at_height / 2
+                
+                face_quantity += 1
+                
+                # Create board
+                if sheathing.sheathing_type == "beveled-weatherboard":
+                    board = SheathingBuilder._bevel_weatherboard(
+                        top_width, bottom_width, board_height, board_length
+                    )
+                elif sheathing.sheathing_type == "beaded-weatherboard":
+                    board = SheathingBuilder._beaded_weatherboard(
+                        top_width, bottom_width, board_height, board_length
+                    )
+                else:
+                    board = SheathingBuilder._bevel_weatherboard(
+                        top_width, bottom_width, board_height, board_length
+                    )
+                
+                # Rotate and position the board
+                if face == "left":
+                    # Rotate to face outward (left wall)
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 180).rotateAboutCenter((0,1,0), bevel_angle_degrees)
+                else:  # right
+                    # Rotate to face outward (right wall)
+                    board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees)
+                
+                # Position the board
+                bbox = board.val().BoundingBox()
+                current_bottom_z = bbox.zmin
+                z_offset = row_bottom_z - current_bottom_z
+                
+                board = board.translate((face_x, board_y_center, z_offset))
+                
+                # Add to assembly
+                board_name = f"gable_sheathing_{face}_board{face_quantity}"
+                gable_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))
+        
+        return gable_assembly
 
