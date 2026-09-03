@@ -116,9 +116,13 @@ class ExportService:
                                     transform = BRepBuilderAPI_Transform(val.wrapped, trsf)
                                     scaled_shape = transform.Shape()
                                     
+                                    # Wrap the OCCT shape as a CadQuery Shape object
+                                    # This is critical - raw OCCT shapes cause empty GLB exports
+                                    scaled_cq_shape = cq.Shape.cast(scaled_shape)
+                                    
                                     # Create new workplane with scaled geometry
                                     scaled_obj = cq.Workplane("XY")
-                                    scaled_obj.objects = [scaled_shape]
+                                    scaled_obj.objects = [scaled_cq_shape]
                                 except ImportError:
                                     # OCP not available, try alternative method
                                     logger.debug(f"Component '{name}': OCP not available, trying Matrix transform")
@@ -130,6 +134,7 @@ class ExportService:
                                             [0, 0, INCHES_TO_METERS, 0],
                                             [0, 0, 0, 1]
                                         ])
+                                        # transformGeometry returns a CadQuery Shape, which is correct
                                         scaled_val = val.transformGeometry(scale_matrix)
                                         scaled_obj = cq.Workplane("XY")
                                         scaled_obj.objects = [scaled_val]
