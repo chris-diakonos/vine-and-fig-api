@@ -447,17 +447,18 @@ class SheathingBuilder:
                     continue  # Above the ridge
                 
                 # Width at this height (symmetric triangle)
-                # At wall_top: width = right_dimension
+                # At wall_top: width = right_dimension + 2*roof_overhang (includes gable overhang on both ends)
                 # At ridge: width = 0
-                # width = right_dimension * (1 - height_above_wall / gable_height)
-                width_at_height = right_dimension * (1 - height_above_wall / gable_height)
+                # The gable should be centered on the building depth (y = 0 to y = -right_dimension)
+                full_width_at_base = right_dimension + (2 * roof_overhang)
+                width_at_height = full_width_at_base * (1 - height_above_wall / gable_height)
                 
                 if width_at_height < board_exposure:
                     continue  # Too narrow for a board
                 
-                # Board spans from -width_at_height/2 to +width_at_height/2 in Y direction
+                # Board spans centered on the gable center at y = -right_dimension/2
                 board_length = width_at_height
-                board_y_center = -width_at_height / 2
+                board_y_center = -right_dimension / 2
                 
                 face_quantity += 1
                 

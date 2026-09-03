@@ -72,7 +72,9 @@ class RoofBuilder:
             total_wall_height,
             gable_direction,
             roof.roof_panel_exposure,
-            panel_run
+            panel_run,
+            right_dimension,
+            front_dimension
         )
         
         return roof_assembly
@@ -274,7 +276,9 @@ class RoofBuilder:
         base_elevation: float,
         gable_direction: str,
         roof_panel_exposure: float,
-        panel_run: float
+        panel_run: float,
+        right_dimension: float = None,
+        front_dimension: float = None
     ) -> cq.Workplane:
         """
         Build a gable roof using individual metal roofing panels.
@@ -319,12 +323,18 @@ class RoofBuilder:
 
                 if face == "front":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
-                    panel_y = panel_y_offset - panel_run + roof.roof_overhang
+                    # Position panel so eave edge is at stud_depth + roof_overhang from building origin
+                    stud_depth = 6
+                    panel_y = stud_depth + roof.roof_overhang + panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
-                    panel_y = -panel_y_offset - panel_run + roof.roof_overhang
+                    # Position panel so eave edge is at -dimension - stud_depth - roof_overhang
+                    stud_depth = 6
+                    # For side-gable, rear wall is at -right_dimension; for front-gable, at -front_dimension
+                    dimension = right_dimension if gable_direction == "side" else front_dimension
+                    panel_y = -dimension - stud_depth - roof.roof_overhang - panel_y_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
                 elif face == "left":
