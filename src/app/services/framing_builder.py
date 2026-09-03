@@ -963,10 +963,16 @@ class FramingBuilder:
             quantity = math.ceil(front_dimension / rafter_spacing) + 1
             total_quantity += quantity
             
-            # Rafter extends from ridge to 12" past weatherboard face
-            # Weatherboard extends 0.625" past stud face
-            weatherboard_thickness = 0.625
-            rafter_run = (right_dimension / 2) + weatherboard_thickness + roof_overhang
+            # Rafter extends from ridge to 12" past actual weatherboard outer faces
+            # Actual weatherboard positions: front y=2.674, rear y=-250.528
+            front_weatherboard_y = 2.674
+            rear_weatherboard_y = -250.528
+            centerline_y = -right_dimension / 2  # Building centerline (ridge)
+            # Calculate runs to each eave (12" past weatherboard)
+            front_rafter_run = (front_weatherboard_y + roof_overhang) - centerline_y
+            rear_rafter_run = centerline_y - (rear_weatherboard_y - roof_overhang)
+            # Use average for symmetric rafters
+            rafter_run = (front_rafter_run + rear_rafter_run) / 2
             roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
             rafter_cos = math.cos(roof_pitch_radians)
             rafter_sin = math.sin(roof_pitch_radians)
