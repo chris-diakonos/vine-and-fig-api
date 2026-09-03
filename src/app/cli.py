@@ -55,6 +55,8 @@ def _parse_metadata(values: list[str] | None) -> Dict[str, Any]:
 
 
 def generate_command(args: argparse.Namespace) -> int:
+    import hashlib
+    import subprocess
     from pydantic import ValidationError
 
     from app.config import settings
@@ -99,6 +101,24 @@ def generate_command(args: argparse.Namespace) -> int:
     manifest_key = storage.object_key(f"{artifact_root}/manifest.json")
     glb_url = storage.upload_file(glb_path, f"{artifact_root}/model.glb", "model/gltf-binary")
     bom_url = storage.upload_file(bom_path, f"{artifact_root}/bom.json", "application/json")
+    
+    # Get git commit SHA
+    try:
+        commit_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).parent.parent.parent,
+            text=True
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        commit_sha = "unknown"
+    
+    # Calculate mesh hash (SHA256 of GLB bytes)
+    try:
+        with open(glb_path, "rb") as f:
+            mesh_sha256 = hashlib.sha256(f.read()).hexdigest()
+    except Exception:
+        mesh_sha256 = "unknown"
+    
     try:
         metadata = _parse_metadata(args.metadata)
     except ValueError as exc:
@@ -107,6 +127,8 @@ def generate_command(args: argparse.Namespace) -> int:
 
     manifest = {
         "structure_hash": structure_hash,
+        "commit_sha": commit_sha,
+        "mesh_sha256": mesh_sha256,
         "input": str(input_path),
         "artifacts": {
             "glb": {

@@ -203,16 +203,16 @@ class WindowsBuilder:
         # Create window frame assembly
         window_frame = cq.Assembly()
         
-        # For left/right walls, swap X and Y translation coordinates only
-        # Keep all rotations the same - just swap which axis we use for positioning
+        # For left/right walls, jambs span in Y direction with rail_length spacing
+        # For front/rear walls, jambs span in X direction with header_length spacing
         if face in ["left", "right"]:
-            # Swap coordinates: stiles positioned along Y, header/sill along Y
-            stile_pos_left = center_y - (header_length / 2)
-            stile_pos_right = center_y + (header_length / 2) - frame_width
+            # Jambs positioned along Y axis, separated by rail_length
+            stile_pos_front = center_y - (rail_length / 2)
+            stile_pos_rear = center_y + (rail_length / 2) - frame_width
             header_sill_const = center_x
             header_sill_start = center_y - (header_length / 2)
         else:
-            # Front/rear: stiles positioned along X, header/sill along X
+            # Jambs positioned along X axis, separated by header_length
             stile_pos_left = center_x - (header_length / 2)
             stile_pos_right = center_x + (header_length / 2) - frame_width
             header_sill_const = center_y
@@ -221,19 +221,19 @@ class WindowsBuilder:
         # Frame center point for rotation
         frame_center = (center_x, center_y, center_z)
         
-        # Left stile (vertical piece)
+        # Left stile (vertical piece - front jamb for left/right walls)
         stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
         left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
         if face in ["left", "right"]:
-            left_frame = left_frame.translate((header_sill_const, stile_pos_left, stile_z))
+            left_frame = left_frame.translate((header_sill_const, stile_pos_front, stile_z))
         else:
             left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
         window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
-        # Right stile (vertical piece)
+        # Right stile (vertical piece - rear jamb for left/right walls)
         right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
         if face in ["left", "right"]:
-            right_frame = right_frame.translate((header_sill_const, stile_pos_right, stile_z))
+            right_frame = right_frame.translate((header_sill_const, stile_pos_rear, stile_z))
         else:
             right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
         window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
