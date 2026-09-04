@@ -1,0 +1,63 @@
+{
+  "defaults": {
+    "columns": 3,
+    "top_rail_width": 2.0,
+    "glazing_rabbet": 0.25,
+    "frame_depth": 4.0,
+    "frame_width": 5.0,
+    "sill_inside_height": 5.0,
+    "sill_outside_height": 3.0,
+    "sill_width": 5.0,
+    "sill_rain_stem": 0.5,
+    "sill_siding_notch": 0.375,
+    "sill_wall_width": 4.0,
+    "bead_size": 0.625,
+    "meeting_rail_thickness": 1.75,
+    "glass_thickness": 0.125
+  },
+  "joinery": {
+    "tenon_type": "through",
+    "tenon_size": 2.0,
+    "lap_thickness": 1.0,
+    "lap_size": 3.0
+  },
+  "profile": {
+    "segments": 32,
+    "bead_segments": 32,
+    "stem_width": 0.375,
+    "stem_height": 0.0625,
+    "stile_rabbet": 0.4375,
+    "stile_bevel": 0.625,
+    "meeting_rail_bevel": 0.25,
+    "bottom_meeting_rail_ogee_begin_x": 0.8125,
+    "bottom_meeting_rail_step_x": 0.5,
+    "bottom_meeting_rail_step_width": 0.1875
+  },
+  "muntin_profile": {
+    "start_x": 0.625,
+    "wing_drop": 0.25,
+    "bridge_width": 0.0625,
+    "reverse_offset": 0.1875,
+    "reverse_begin_y": -0.5
+  },
+  "placement_offsets": {
+    "frame_stile_z_lift": 1.5,
+    "frame_extra_stile_length": 5.0,
+    "top_frame_z_lift": 1.5,
+    "bottom_frame_z_drop": 0.5,
+    "top_sash_y_extra": 0.75,
+    "bottom_sash_y_extra": 0.375,
+    "bottom_meeting_rail_y_adjust": 0.6,
+    "muntin_light_overlap": 0.25,
+    "top_horizontal_muntin_light_adjust": 0.25,
+    "bottom_horizontal_muntin_light_adjust": 0.25,
+    "bottom_frame_lap_center_x": -7.0,
+    "top_frame_lap_center_x": 1.0,
+    "top_frame_lap_center_z_extra": 1.0
+  },
+  "colors": {
+    "sash": [0.95, 0.96, 0.94, 1.0],
+    "glass": [0.7, 0.9, 1.0, 0.35],
+    "fallback": [0.8, 0.7, 0.6, 1.0]
+  }
+}

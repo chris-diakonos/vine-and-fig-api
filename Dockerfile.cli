@@ -25,6 +25,7 @@ RUN python -m pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements-cli.txt
 
 COPY src /app/src
+COPY config /app/config
 
 ENTRYPOINT ["python", "-m", "app.cli"]
 CMD ["--help"]

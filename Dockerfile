@@ -45,6 +45,7 @@ WORKDIR /app
 
 # Copy application code
 COPY ./src /app/src
+COPY ./config /app/config
 #COPY .env.example /app/.env
 
 # Create temp directories for generated files
