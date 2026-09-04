@@ -254,12 +254,47 @@ function applyLayerVisibility() {
   });
 }
 
+const layerGhostState = new Map(LAYERS.map((layer) => [layer.id, false]));
+
+function applyLayerOpacity() {
+  if (!modelRoot) {
+    return;
+  }
+
+  modelRoot.traverse((object) => {
+    if (object.isMesh && object.userData.layer) {
+      const isGhost = layerGhostState.get(object.userData.layer);
+      if (object.material) {
+        object.material.transparent = isGhost;
+        object.material.opacity = isGhost ? 0.2 : 1.0;
+        object.material.needsUpdate = true;
+      }
+    }
+  });
+}
+
+function soloLayer(layerId) {
+  // Hide all layers except the selected one
+  for (const layer of LAYERS) {
+    const shouldBeVisible = layer.id === layerId;
+    layerState.set(layer.id, shouldBeVisible);
+    const input = layerInputs.get(layer.id);
+    if (input) {
+      input.checked = shouldBeVisible;
+    }
+  }
+  applyLayerVisibility();
+}
+
 function renderLayerControls(counts) {
   layerControls.innerHTML = "";
   layerInputs.clear();
 
   for (const layer of LAYERS) {
     const count = counts.get(layer.id) || 0;
+    const wrapper = document.createElement("div");
+    wrapper.className = "layer-item";
+    
     const label = document.createElement("label");
     label.className = "layer-toggle";
 
@@ -282,7 +317,33 @@ function renderLayerControls(counts) {
     const textWrap = document.createElement("span");
     textWrap.append(labelText, meta);
     label.append(textWrap, checkbox);
-    layerControls.appendChild(label);
+    
+    // Add solo and ghost buttons
+    const actionButtons = document.createElement("div");
+    actionButtons.className = "layer-actions";
+    
+    const soloBtn = document.createElement("button");
+    soloBtn.textContent = "S";
+    soloBtn.title = "Solo this layer";
+    soloBtn.className = "layer-action-btn";
+    soloBtn.disabled = count === 0;
+    soloBtn.addEventListener("click", () => soloLayer(layer.id));
+    
+    const ghostBtn = document.createElement("button");
+    ghostBtn.textContent = "G";
+    ghostBtn.title = "Ghost this layer";
+    ghostBtn.className = "layer-action-btn";
+    ghostBtn.disabled = count === 0;
+    ghostBtn.addEventListener("click", () => {
+      const isGhost = !layerGhostState.get(layer.id);
+      layerGhostState.set(layer.id, isGhost);
+      ghostBtn.classList.toggle("active", isGhost);
+      applyLayerOpacity();
+    });
+    
+    actionButtons.append(soloBtn, ghostBtn);
+    wrapper.append(label, actionButtons);
+    layerControls.appendChild(wrapper);
     layerInputs.set(layer.id, checkbox);
   }
 }
@@ -361,6 +422,116 @@ async function main() {
     }
     applyLayerVisibility();
   });
+  
+  // Measurement tape functionality
+  let measurementGroup = null;
+  let measurementsVisible = false;
+  const toggleMeasurementsBtn = document.getElementById("toggle-measurements");
+  
+  function createMeasurements() {
+    if (!modelRoot) return null;
+    
+    const box = new THREE.Box3().setFromObject(modelRoot);
+    const size = box.getSize(new THREE.Vector3());
+    const min = box.min;
+    const max = box.max;
+    
+    const group = new THREE.Group();
+    group.name = "measurements";
+    
+    // Helper to create a dimension line
+    function createDimensionLine(start, end, label, color = 0xff0000) {
+      const points = [start, end];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+      const line = new THREE.Line(geometry, material);
+      
+      // Add arrow caps
+      const arrowSize = Math.min(size.x, size.y, size.z) * 0.02;
+      const dir = new THREE.Vector3().subVectors(end, start).normalize();
+      
+      // Create text label using sprite
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 64;
+      context.fillStyle = 'white';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.font = 'Bold 32px Arial';
+      context.fillStyle = 'black';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(label, canvas.width / 2, canvas.height / 2);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+      const sprite = new THREE.Sprite(spriteMaterial);
+      const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      sprite.position.copy(midpoint);
+      const scale = Math.max(size.x, size.y, size.z) * 0.1;
+      sprite.scale.set(scale, scale * 0.25, 1);
+      
+      const dimGroup = new THREE.Group();
+      dimGroup.add(line);
+      dimGroup.add(sprite);
+      
+      return dimGroup;
+    }
+    
+    // Add width dimension (X axis)
+    const widthLabel = `${size.x.toFixed(1)}"`;
+    const widthLine = createDimensionLine(
+      new THREE.Vector3(min.x, min.y - size.y * 0.1, min.z),
+      new THREE.Vector3(max.x, min.y - size.y * 0.1, min.z),
+      widthLabel,
+      0xff0000
+    );
+    group.add(widthLine);
+    
+    // Add depth dimension (Y axis)
+    const depthLabel = `${size.y.toFixed(1)}"`;
+    const depthLine = createDimensionLine(
+      new THREE.Vector3(min.x - size.x * 0.1, min.y, min.z),
+      new THREE.Vector3(min.x - size.x * 0.1, max.y, min.z),
+      depthLabel,
+      0x00ff00
+    );
+    group.add(depthLine);
+    
+    // Add height dimension (Z axis)
+    const heightLabel = `${size.z.toFixed(1)}"`;
+    const heightLine = createDimensionLine(
+      new THREE.Vector3(max.x + size.x * 0.1, min.y, min.z),
+      new THREE.Vector3(max.x + size.x * 0.1, min.y, max.z),
+      heightLabel,
+      0x0000ff
+    );
+    group.add(heightLine);
+    
+    return group;
+  }
+  
+  function toggleMeasurements() {
+    if (!modelRoot) return;
+    
+    if (measurementsVisible) {
+      if (measurementGroup) {
+        scene.remove(measurementGroup);
+        measurementGroup = null;
+      }
+      measurementsVisible = false;
+      toggleMeasurementsBtn.classList.remove("active");
+    } else {
+      measurementGroup = createMeasurements();
+      if (measurementGroup) {
+        scene.add(measurementGroup);
+        measurementsVisible = true;
+        toggleMeasurementsBtn.classList.add("active");
+      }
+    }
+  }
+  
+  toggleMeasurementsBtn.addEventListener("click", toggleMeasurements);
   
   window.addEventListener("resize", () => {
     const aspect = container.clientWidth / container.clientHeight;

@@ -320,20 +320,21 @@ class RoofBuilder:
                 # Total roof span: framing width + overhangs = roof_length + 2*overhang
                 effective_roof_length = roof_length + (2 * roof.roof_overhang)
                 # Start position: left framing edge - overhang = -overhang
-                gable_overhang_offset = -roof.roof_overhang
+                # Adjust offset slightly to ensure panels land exactly at target positions
+                gable_overhang_offset = -roof.roof_overhang - 0.5  # Slight adjustment for panel alignment
                 
-                # Calculate panel quantity accounting for panel width
-                # First panel covers full profile width, subsequent panels add exposure width
+                # Calculate panel quantity to ensure right edge reaches target
+                # Target right edge position: roof_length + roof_overhang
+                target_right_edge = roof_length + roof.roof_overhang
                 panel_profile_width = 37.75  # AG panel profile width in inches
-                if effective_roof_length <= panel_profile_width:
-                    quantity = 1
-                else:
-                    # First panel covers profile width, additional panels add exposure each
-                    remaining_length = effective_roof_length - panel_profile_width
-                    # Use ceil to ensure we cover at least the target length
-                    additional_panels_exact = remaining_length / roof_panel_exposure
-                    additional_panels = math.ceil(additional_panels_exact)
-                    quantity = 1 + additional_panels
+                
+                # Calculate how many panels needed to reach target_right_edge from start position
+                # First panel left edge at gable_overhang_offset, right edge at gable_overhang_offset + panel_profile_width
+                # Each additional panel adds roof_panel_exposure to the right edge
+                # Right edge after n panels: gable_overhang_offset + panel_profile_width + ((n-1) * roof_panel_exposure)
+                # Solve for n: target_right_edge = gable_overhang_offset + panel_profile_width + ((n-1) * roof_panel_exposure)
+                panels_needed = 1 + ((target_right_edge - gable_overhang_offset - panel_profile_width) / roof_panel_exposure)
+                quantity = max(1, math.ceil(panels_needed))
             else:
                 effective_roof_length = roof_length
                 gable_overhang_offset = 0

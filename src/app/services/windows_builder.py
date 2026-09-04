@@ -240,6 +240,10 @@ class WindowsBuilder:
         """
         Create a window frame with bottom of opening at chair_rail_bottom_z.
         
+        APPROACH: Build the entire window (frame + sash) as a front-wall unit, 
+        then rotate the whole assembly 90° around Z for left/right walls.
+        This ensures proper alignment of all components.
+        
         Args:
             window: Window specification
             center_x: X coordinate of opening center
@@ -301,71 +305,48 @@ class WindowsBuilder:
         center_z = chair_rail_bottom_z + (pulley_stile_length / 2)
         
         # Create window frame assembly
+        # Build EVERYTHING in front-wall orientation first
         window_frame = cq.Assembly()
         
-        # For left/right walls, jambs span in Y direction with rail_length spacing
-        # For front/rear walls, jambs span in X direction with header_length spacing
-        if face in ["left", "right"]:
-            # Jambs positioned along Y axis, separated by rail_length
-            stile_pos_front = center_y - (rail_length / 2)
-            stile_pos_rear = center_y + (rail_length / 2) - frame_width
-            header_sill_const = center_x
-            # Header/sill should align with jambs, so use rail_length not header_length
-            header_sill_start = center_y - (rail_length / 2)
-            header_sill_length = rail_length
-        else:
-            # Jambs positioned along X axis, separated by header_length
-            stile_pos_left = center_x - (header_length / 2)
-            stile_pos_right = center_x + (header_length / 2) - frame_width
-            header_sill_const = center_y
-            header_sill_start = center_x - (header_length / 2)
-            header_sill_length = header_length
+        # ALWAYS build in front-wall orientation (X-axis horizontal, Y-axis depth)
+        # All frame parts will be centered around Y=0 with depth constrained to ~5"
+        # Jambs positioned along X axis, separated by header_length
+        stile_pos_left = -(header_length / 2)
+        stile_pos_right = (header_length / 2) - frame_width
+        header_sill_start = -(header_length / 2)
+        header_sill_length = header_length
         
-        # Frame center point for rotation
-        frame_center = (center_x, center_y, center_z)
+        # Frame center point for later rotation
+        frame_center = (0, 0, center_z)
         
-        # Left stile (vertical piece - front jamb for left/right walls)
+        # Left jamb (vertical piece)
+        # _beaded_board creates profile in XZ: X[0, width], Z[0, -depth]
+        # After extrude: X[0, width], Y[0, length], Z[0, -depth]
+        # After rotate 90° around X (Y→Z, Z→-Y): X[0, width], Y[-depth, 0], Z[0, length]
+        # So jamb extends Y[-4", 0"], translate by +2" to center around Y=0
         stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
         left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        if face in ["left", "right"]:
-            left_frame = left_frame.translate((header_sill_const, stile_pos_front, stile_z))
-        else:
-            left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
+        left_frame = left_frame.translate((stile_pos_left, frame_depth/2, stile_z))
         window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
-        # Right stile (vertical piece - rear jamb for left/right walls)
+        # Right jamb (vertical piece)
         right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        if face in ["left", "right"]:
-            right_frame = right_frame.translate((header_sill_const, stile_pos_rear, stile_z))
-        else:
-            right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
+        right_frame = right_frame.translate((stile_pos_right, frame_depth/2, stile_z))
         window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Top header (horizontal piece)
+        # After rotate 90° around Z (X→-Y, Y→X): X[0, length], Y[-depth, 0], Z[0, -width]
+        # So header extends Y[-4", 0"], translate by +2" to center around Y=0
         header_z = center_z + ((pulley_stile_length + frame_width) / 2)
-        if face in ["left", "right"]:
-            # For left/right walls, header extends in Y
-            # Create profile, extrude along Y, then rotate to align properly
-            # Use depth as width (X), width as height (Z) to get correct dimensions after rotation
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90).rotate((0, 0, 0), (1, 0, 0), -90)
-            top_frame = top_frame.translate((header_sill_const, header_sill_start, header_z))
-        else:
-            # For front/rear walls, header extends in X, rotate around Z
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
-            top_frame = top_frame.translate((header_sill_start, header_sill_const, header_z))
+        top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
+        top_frame = top_frame.translate((header_sill_start, frame_depth/2, header_z))
         window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bottom sill (horizontal piece)
+        # Similar to header, extends Y[-sill_width, 0], translate by +sill_width/2 to center
         sill_z = center_z - (pulley_stile_length / 2)
-        if face in ["left", "right"]:
-            # For left/right walls, sill extends in Y
-            # Use same rotation sequence as header to ensure consistent orientation
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90).rotate((0, 0, 0), (1, 0, 0), -90)
-            bottom_frame = bottom_frame.translate((header_sill_const, header_sill_start, sill_z))
-        else:
-            # For front/rear walls, sill extends in X, rotate around Z
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
-            bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
+        bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
+        bottom_frame = bottom_frame.translate((header_sill_start, sill_width/2, sill_z))
         window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         # Create top and bottom sash assemblies with muntins and glazing
@@ -397,67 +378,61 @@ class WindowsBuilder:
             sash_thickness=sash_thickness
         )
         
-        # Position sashes within the frame opening
-        # The sashes sit between the jambs, inside the opening
-        # Sash assembly is created with: width in X, height in Y, thickness in Z
-        # We need to rotate to get proper orientation with thickness perpendicular to wall
-        if face in ["left", "right"]:
-            # For left/right walls, sashes need to be in YZ plane with thickness in X
-            # Sash X position: centered in frame depth
-            sash_x = center_x - (sash_thickness / 2)
-            # Bottom sash Y position: aligned with front jamb + frame width
-            bottom_sash_y_start = center_y - (rail_length / 2) + frame_width
-            # Top sash Y position: above bottom sash (not meeting rail overlap)
-            top_sash_y_start = bottom_sash_y_start
-            # Z position: bottom sash at sill top, top sash above it
-            bottom_sash_z = sill_z + sill_inside_height
-            top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
-            
-            # Rotate and position bottom sash: first swap Y/Z (height vertical), then rotate to YZ plane
-            for name, obj_data in bottom_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    # First rotate -90° around X to make height vertical (Y→Z)
-                    # Then rotate 90° around Z to align width with Y axis (X→Y, thickness→X)
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.rotate((0, 0, 0), (0, 0, 1), 90)
-                    positioned_obj = positioned_obj.translate((sash_x, bottom_sash_y_start, bottom_sash_z))
-                    window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
-            
-            # Rotate and position top sash
-            for name, obj_data in top_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.rotate((0, 0, 0), (0, 0, 1), 90)
-                    positioned_obj = positioned_obj.translate((sash_x, top_sash_y_start, top_sash_z))
-                    window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
-        else:
-            # For front/rear walls, sashes need to be in XZ plane with thickness in Y
-            # Sash Y position: centered in frame depth
-            sash_y = center_y - (sash_thickness / 2)
-            # Bottom sash X position: aligned with left jamb + frame width
-            bottom_sash_x_start = center_x - (header_length / 2) + frame_width
-            # Top sash X position: same as bottom
-            top_sash_x_start = bottom_sash_x_start
-            # Z position: bottom sash at sill top, top sash above it
-            bottom_sash_z = sill_z + sill_inside_height
-            top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
-            
-            # Rotate and position bottom sash: rotate -90° around X to swap Y/Z (make height vertical)
-            for name, obj_data in bottom_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    # Rotate -90° around X axis: width stays in X, height moves to Z, thickness moves to Y
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.translate((bottom_sash_x_start, sash_y, bottom_sash_z))
-                    window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
-            
-            # Rotate and position top sash
-            for name, obj_data in top_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.translate((top_sash_x_start, sash_y, top_sash_z))
-                    window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+        # Position sashes within the frame opening (FRONT-WALL ORIENTATION)
+        # For front/rear walls, sashes need to be in XZ plane with thickness in Y
+        # Sash Y position: centered in frame depth
+        sash_y = -(sash_thickness / 2)
+        # Bottom sash X position: aligned with left jamb + frame width
+        bottom_sash_x_start = -(header_length / 2) + frame_width
+        # Top sash X position: same as bottom
+        top_sash_x_start = bottom_sash_x_start
+        # Z position: bottom sash at sill top, top sash above it
+        bottom_sash_z = sill_z + sill_inside_height
+        top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
         
-        return window_frame
+        # Rotate and position bottom sash: rotate -90° around X to swap Y/Z (make height vertical)
+        for name, obj_data in bottom_sash.traverse():
+            if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                # Rotate -90° around X axis: width stays in X, height moves to Z, thickness moves to Y
+                positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
+                positioned_obj = positioned_obj.translate((bottom_sash_x_start, sash_y, bottom_sash_z))
+                window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+        
+        # Rotate and position top sash
+        for name, obj_data in top_sash.traverse():
+            if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
+                positioned_obj = positioned_obj.translate((top_sash_x_start, sash_y, top_sash_z))
+                window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+        
+        # NOW: Rotate and translate all components based on face
+        # For left/right walls: rotate each part 90° around Z, then translate to final position
+        # For front/rear walls: just translate to final position
+        
+        # Collect all components with their transformations applied
+        transformed_parts = []
+        for name, obj_data in window_frame.traverse():
+            if hasattr(obj_data, 'obj') and obj_data.obj is not None and obj_data.obj:
+                transformed_parts.append((name, obj_data.obj, obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6)))
+        
+        # Now create final assembly with transformed parts
+        final_assembly = cq.Assembly()
+        
+        if face in ["left", "right"]:
+            # Rotate entire window assembly 90° around Z axis, then translate
+            for name, obj, color in transformed_parts:
+                # Rotate 90° around Z to orient for left/right wall
+                rotated_obj = obj.rotate((0, 0, center_z), (0, 0, 1), 90)
+                # Translate to final position on wall
+                positioned_obj = rotated_obj.translate((center_x, center_y, 0))
+                final_assembly.add(positioned_obj, name=name, color=color)
+        else:
+            # Front/rear walls: just translate to final position
+            for name, obj, color in transformed_parts:
+                positioned_obj = obj.translate((center_x, center_y, 0))
+                final_assembly.add(positioned_obj, name=name, color=color)
+        
+        return final_assembly
     
     @staticmethod
     def build(
