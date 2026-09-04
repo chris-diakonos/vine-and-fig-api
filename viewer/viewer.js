@@ -400,11 +400,14 @@ async function main() {
     }
 
     const hash = manifest.structure_hash || "unknown";
-    const commit = manifest.commit_sha || "unknown";
+    // Check both root level and metadata.run.commit_sha
+    const commit = manifest.commit_sha || 
+                   (manifest.metadata?.run?.commit_sha) || 
+                   "unknown";
     const meshHashValue = manifest.mesh_sha256 || "unknown";
     
     artifactLabel.textContent = `Artifact ${hash}`;
-    commitInfo.textContent = `Commit: ${commit.substring(0, 8)}`;
+    commitInfo.textContent = commit !== "unknown" ? `Commit: ${commit.substring(0, 8)}` : "";
     structureHash.textContent = `Structure hash: ${hash}`;
     meshHash.textContent = `Mesh hash: ${meshHashValue.substring(0, 16)}...`;
 

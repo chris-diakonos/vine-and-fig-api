@@ -488,11 +488,13 @@ class WindowsBuilder:
 
         top_z = center_z + ((pulley_stile_length + frame_width) / 2) + offsets["top_frame_z_lift"]
         top_x = center_x - (header_length / 2)
+        # Adjust Y position to align header with jambs (fix y_mis issue)
+        top_y = center_y - 4.0
         top_frame = (
             WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size)
             .extrude(header_length)
             .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
-            .translate((top_x, center_y, top_z))
+            .translate((top_x, top_y, top_z))
         )
         top_frame = (
             top_frame.faces("<Z").workplane()
@@ -515,11 +517,13 @@ class WindowsBuilder:
 
         bottom_x = center_x - (header_length / 2)
         bottom_z = center_z - ((pulley_stile_length + frame_width) / 2) - offsets["bottom_frame_z_drop"]
+        # Adjust Y position to align sill with jambs (fix y_mis issue)
+        bottom_y = center_y - 4.0
         bottom_frame = (
             WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size)
             .extrude(header_length)
             .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
-            .translate((bottom_x, center_y, bottom_z))
+            .translate((bottom_x, bottom_y, bottom_z))
         )
         bottom_frame = (
             bottom_frame.faces("<Z").workplane()
@@ -1032,12 +1036,45 @@ class WindowsBuilder:
                 )
         else:
             # Use automatic bay placement, but skip door openings
-            # Iterate through each story (skip attic/dormers for now)
+            # Iterate through regular stories first
             for story_idx, window in enumerate(windows):
                 if story_idx >= len(floor_heights):
                     break  # Skip if we don't have floor height for this story
                 if story_idx >= stories:
-                    break  # Skip attic/dormer windows (handle separately in future)
+                    # Handle attic windows separately (story_idx == stories)
+                    if story_idx == stories and floorplan and floorplan.bays:
+                        # Place attic windows on gable ends (left and right walls only)
+                        floor_height = floor_heights[story_idx]
+                        # Attic window height: halfway between floor and ridge
+                        attic_window_z = floor_height + 60.0  # Approximate height for attic windows
+                        
+                        for face in ["left", "right"]:
+                            bays = getattr(floorplan.bays, face, []) if floorplan.bays else []
+                            if not bays:
+                                continue
+                            
+                            # Place one window at each bay in the attic
+                            for bay_idx, bay_position in enumerate(bays):
+                                metrics = WindowsBuilder._window_metrics(window)
+                                wall_placement = window_placement_for_wall(
+                                    face,
+                                    bay_position,
+                                    attic_window_z,
+                                    metrics["opening_width"],
+                                    dimensions,
+                                )
+                                semantic_name = f"{face}_wall/attic/window_{bay_position:g}"
+                                component_prefix = f"window_{face}_attic_bay{bay_position}"
+                                windows_root.add_child(
+                                    WindowsBuilder._window_scene(
+                                        window,
+                                        semantic_name,
+                                        component_prefix,
+                                        wall_placement.legacy_transform,
+                                        wall_placement.as_dict(),
+                                    )
+                                )
+                    break  # Done with windows after attic
                 
                 # Get floor height and chair rail height for this story
                 floor_height = floor_heights[story_idx]
