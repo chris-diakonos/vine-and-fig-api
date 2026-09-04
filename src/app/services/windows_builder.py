@@ -11,6 +11,7 @@ from app.services.scene_graph import (
     SceneNode,
     Transform,
     aggregate_local_bounds,
+    bounds_for_workplane,
     collect_component_metadata,
     project_scene_to_assembly,
 )
@@ -137,6 +138,173 @@ class WindowsBuilder:
         profile = cq.Workplane("XZ").polyline(profile_points).close()
 
         return profile
+
+    @staticmethod
+    def _ogee_profile(
+        begin_x: float,
+        begin_y: float,
+        direction: int,
+        thickness: float,
+        glazing_rabbet: float,
+    ) -> List[tuple[float, float]]:
+        """Notebook-derived ogee profile points for sash members."""
+        profile_points: List[tuple[float, float]] = []
+        segments = 32
+        increment = 90 / segments
+        stem_width = 0.375
+        stem_height = 0.0625
+        stile_rabbet = 0.4375
+        ogee_diameter = thickness - (stem_width + stile_rabbet + stem_height)
+        ogee_radius = ogee_diameter / 2
+        vertical_radius = glazing_rabbet / 2
+
+        concave_center_x = -begin_x + stile_rabbet + stem_width + ogee_radius
+        concave_center_y = begin_y
+        for segment in range(1, segments):
+            angle_degrees = 360 - (segment * increment) if direction == -1 else 180 + (segment * increment)
+            angle_radians = math.radians(angle_degrees)
+            profile_points.append(
+                (
+                    concave_center_x + (ogee_radius * math.cos(angle_radians)),
+                    concave_center_y + (vertical_radius * math.sin(angle_radians)),
+                )
+            )
+
+        convex_center_x = concave_center_x
+        convex_center_y = concave_center_y - (2 * vertical_radius)
+        for segment in range(1, segments):
+            angle_degrees = 90 + (segment * increment) if direction == -1 else 90 - (segment * increment)
+            angle_radians = math.radians(angle_degrees)
+            profile_points.append(
+                (
+                    convex_center_x + (ogee_radius * math.cos(angle_radians)),
+                    convex_center_y + (vertical_radius * math.sin(angle_radians)),
+                )
+            )
+
+        return profile_points
+
+    @staticmethod
+    def _add_rail(
+        rail_width: float,
+        rail_length: float,
+        thickness: float,
+        glazing_rabbet: float,
+    ) -> cq.Workplane:
+        stem_width = 0.375
+        stem_height = 0.0625
+        stile_rabbet = 0.4375
+        vertical_radius = glazing_rabbet / 2
+
+        profile_points = [
+            (0, 0),
+            (-thickness, 0),
+            (-thickness, rail_width - glazing_rabbet),
+            (-thickness + stile_rabbet, rail_width - glazing_rabbet),
+            (-thickness + stile_rabbet, rail_width),
+            (-thickness + stile_rabbet + stem_width, rail_width),
+        ]
+        profile_points += WindowsBuilder._ogee_profile(thickness, rail_width, 1, thickness, glazing_rabbet)
+        profile_points.append((-stem_height, rail_width - (vertical_radius * 2)))
+        profile_points.append((0, rail_width - (vertical_radius * 2)))
+
+        return cq.Workplane("XZ").polyline(profile_points).close().extrude(rail_length)
+
+    @staticmethod
+    def _add_stile(
+        stile_length: float,
+        stile_width: float,
+        thickness: float,
+        glazing_rabbet: float,
+    ) -> cq.Workplane:
+        stem_width = 0.375
+        stem_height = 0.0625
+        stile_rabbet = 0.4375
+        vertical_radius = glazing_rabbet / 2
+
+        profile_points = [
+            (0, 0),
+            (-thickness, 0),
+            (-thickness, stile_width - glazing_rabbet),
+            (-thickness + stile_rabbet, stile_width - glazing_rabbet),
+            (-thickness + stile_rabbet, stile_width),
+            (-thickness + stile_rabbet + stem_width, stile_width),
+        ]
+        profile_points += WindowsBuilder._ogee_profile(thickness, stile_width, 1, thickness, glazing_rabbet)
+        profile_points.append((-stem_height, stile_width - (vertical_radius * 2)))
+        profile_points.append((0, stile_width - (vertical_radius * 2)))
+
+        return cq.Workplane("XZ").polyline(profile_points).close().extrude(stile_length)
+
+    @staticmethod
+    def _add_top_meeting_rail(
+        rail_length: float,
+        meeting_rail_width: float,
+        meeting_rail_thickness: float,
+    ) -> cq.Workplane:
+        stile_rabbet = 0.4375
+        stile_bevel = 0.625
+        bevel = 0.25
+        profile_points = [
+            (0, meeting_rail_width),
+            (0, bevel),
+            (stile_rabbet, bevel),
+            (stile_rabbet, 0),
+            (meeting_rail_thickness - bevel, 0),
+            (meeting_rail_thickness - bevel, meeting_rail_width - stile_bevel),
+            (meeting_rail_thickness, meeting_rail_width - stile_rabbet),
+            (meeting_rail_thickness, meeting_rail_width),
+        ]
+        return cq.Workplane("XZ").polyline(profile_points).close().extrude(rail_length)
+
+    @staticmethod
+    def _add_bottom_meeting_rail(
+        rail_length: float,
+        meeting_rail_width: float,
+        meeting_rail_thickness: float,
+        thickness: float,
+        glazing_rabbet: float,
+    ) -> cq.Workplane:
+        stem_width = 0.375
+        stile_rabbet = 0.4375
+        stile_bevel = 0.625
+        bevel = 0.25
+        ogee_radius = (thickness - (stem_width + stile_rabbet + 0.0625)) / 2
+
+        profile_points = [(0, meeting_rail_width)]
+        profile_points += WindowsBuilder._ogee_profile(0.8125, ogee_radius + 0.0625, 1, thickness, glazing_rabbet)
+        profile_points += [
+            (0.500, 0),
+            (0.500 + stem_width, 0),
+            (0.500 + stem_width, 0.25),
+            (0.500 + stem_width + 0.1875, 0.25),
+            (0.500 + stem_width + 0.1875, 0),
+            (meeting_rail_thickness - bevel, 0),
+            (meeting_rail_thickness - bevel, meeting_rail_width - stile_bevel),
+            (meeting_rail_thickness, meeting_rail_width - stile_rabbet),
+            (meeting_rail_thickness, meeting_rail_width),
+        ]
+        return cq.Workplane("XZ").polyline(profile_points).close().extrude(rail_length)
+
+    @staticmethod
+    def _ogee_muntin(length: float, thickness: float, glazing_rabbet: float) -> cq.Workplane:
+        profile_points = [(0.625, -0.25), (0.625, 0)]
+        profile_points += WindowsBuilder._ogee_profile(0, 0, 1, thickness, glazing_rabbet)
+        ogee_x, ogee_y = profile_points[-1]
+        profile_points += [
+            (ogee_x + 0.0625, ogee_y),
+            (ogee_x + 0.0625, ogee_y - 0.25),
+            (ogee_x, ogee_y - 0.25),
+        ]
+        profile_points += WindowsBuilder._ogee_profile(0, -0.500, -1, thickness, glazing_rabbet)
+        ogee_x, ogee_y = profile_points[-1]
+        profile_points += [
+            (ogee_x - 0.1875, ogee_y),
+            (ogee_x - 0.1875, ogee_y + 0.25),
+            (0, ogee_y + 0.25),
+            (0, ogee_y + 0.50),
+        ]
+        return cq.Workplane("XZ").polyline(profile_points).close().extrude(length)
     
     @staticmethod
     def _create_sash_assembly(
@@ -252,9 +420,10 @@ class WindowsBuilder:
         # Frame parameters - use values from Window model or defaults
         frame_depth = 4
         frame_width = 5
-        top_rail_width = window.rail_width
+        top_rail_width = 2.0
         bottom_rail_width = window.rail_width
         meeting_rail_width = window.meeting_rail_width
+        meeting_rail_thickness = 1.75
         muntin_width = window.muntin_width
         
         # Sill parameters (fixed values - could be made configurable)
@@ -265,7 +434,7 @@ class WindowsBuilder:
         # Joint parameters (fixed values - standard joinery)
         bead_size = 0.625
         tenon_size = 2.0
-        tenon_type = "blind"  # Could be made configurable
+        tenon_type = "through"  # Matches the handwritten Windows.ipynb construction.
         lap_thickness = 1.0
         lap_size = 3.0
         
@@ -280,9 +449,10 @@ class WindowsBuilder:
             tenon_length = frame_width + (tenon_adjustment / 2)
         else:
             tenon_adjustment = 0
-            tenon_length = frame_width
+            tenon_length = window.stile_width
         
-        rail_length = (light_width * 3) + (frame_width * 2) + (muntin_width * 2) - (glazing_rabbet * 6) + tenon_adjustment
+        rail_length = (light_width * 3) + (window.stile_width * 2) + (muntin_width * 2) - (glazing_rabbet * 6) + tenon_adjustment
+        net_rail_length = rail_length - (window.stile_width * 2)
         header_length = (frame_width * 2) + rail_length
 
         return {
@@ -295,6 +465,7 @@ class WindowsBuilder:
             "top_rail_width": top_rail_width,
             "bottom_rail_width": bottom_rail_width,
             "meeting_rail_width": meeting_rail_width,
+            "meeting_rail_thickness": meeting_rail_thickness,
             "muntin_width": muntin_width,
             "sill_inside_height": sill_inside_height,
             "sill_outside_height": sill_outside_height,
@@ -305,10 +476,335 @@ class WindowsBuilder:
             "bottom_stile_length": bottom_stile_length,
             "pulley_stile_length": pulley_stile_length,
             "rail_length": rail_length,
+            "net_rail_length": net_rail_length,
             "header_length": header_length,
             "opening_width": header_length,
             "opening_height": pulley_stile_length + frame_width,
         }
+
+    @staticmethod
+    def _notebook_frame(metrics: Dict[str, float]) -> cq.Assembly:
+        """Frame construction ported from docs/Windows.ipynb."""
+        center_x = 0.0
+        center_y = 0.0
+        center_z = 0.0
+        frame_depth = metrics["frame_depth"]
+        frame_width = metrics["frame_width"]
+        sill_inside_height = metrics["sill_inside_height"]
+        sill_outside_height = metrics["sill_outside_height"]
+        sill_width = metrics["sill_width"]
+        bead_size = metrics["bead_size"]
+        tenon_size = 2.0
+        header_length = metrics["header_length"]
+        pulley_stile_length = metrics["pulley_stile_length"]
+        lap_thickness = 1.0
+        lap_size = 3.0
+        sash_color = cq.Color(0.95, 0.96, 0.94, 1)
+
+        frame = cq.Assembly()
+
+        left_x = center_x - (header_length / 2)
+        left_z = center_z + (pulley_stile_length / 2) - (frame_width / 2) + 1.5
+        left_frame = (
+            WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size)
+            .extrude(pulley_stile_length + 5)
+            .rotate((center_x, center_y, center_z), (1, 0, 0), 90)
+            .translate((left_x, center_y, left_z))
+        )
+        left_frame = (
+            left_frame.faces(">Z").workplane()
+            .center(left_x + (frame_width / 2), center_y + tenon_size)
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().extrude(frame_width)
+            .faces("<Z").workplane()
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().extrude(frame_width - 2)
+        )
+        frame.add(left_frame, name="left_frame", color=sash_color)
+
+        right_x = center_x + (header_length / 2) - frame_width
+        right_z = center_z + (pulley_stile_length / 2) - (frame_width / 2) + 1.5
+        right_frame = (
+            WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size)
+            .extrude(pulley_stile_length + 5)
+            .rotate((center_x, center_y, center_z), (1, 0, 0), 90)
+            .translate((right_x, center_y, right_z))
+        )
+        right_frame = (
+            right_frame.faces(">Z").workplane()
+            .center(right_x + (frame_width / 2), center_y + tenon_size)
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().extrude(frame_width)
+            .faces("<Z").workplane()
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().extrude(frame_width - 2)
+        )
+        frame.add(right_frame, name="right_frame", color=sash_color)
+
+        top_z = center_z + ((pulley_stile_length + frame_width) / 2) + 1.5
+        top_x = center_x - (header_length / 2)
+        top_frame = (
+            WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size)
+            .extrude(header_length)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .translate((top_x, center_y, top_z))
+        )
+        top_frame = (
+            top_frame.faces("<Z").workplane()
+            .center(right_x + (frame_width / 2), center_y + tenon_size)
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().cutBlind(frame_width)
+            .faces("<Z").workplane()
+            .center(left_x + (frame_width / 2), center_y + tenon_size)
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().cutBlind(frame_width)
+            .faces("<X").workplane()
+            .center(1, center_z + lap_size / 2 + 1)
+            .rect(lap_thickness, frame_depth, forConstruction=True)
+            .wires().toPending().extrude(frame_depth)
+            .faces(">X").workplane()
+            .rect(lap_thickness, frame_depth, forConstruction=True)
+            .wires().toPending().extrude(frame_depth)
+        )
+        frame.add(top_frame, name="top_frame", color=sash_color)
+
+        bottom_x = center_x - (header_length / 2)
+        bottom_z = center_z - ((pulley_stile_length + frame_width) / 2) - 0.5
+        bottom_frame = (
+            WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size)
+            .extrude(header_length)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .translate((bottom_x, center_y, bottom_z))
+        )
+        bottom_frame = (
+            bottom_frame.faces("<Z").workplane()
+            .center(right_x + (frame_width / 2), center_y + tenon_size)
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().cutBlind(frame_width)
+            .faces("<Z").workplane()
+            .center(left_x + (frame_width / 2), center_y + tenon_size)
+            .rect(tenon_size, tenon_size, forConstruction=True)
+            .wires().toPending().cutBlind(frame_width)
+            .faces("<X").workplane()
+            .center(-7, center_z + lap_size / 2)
+            .rect(lap_thickness, lap_size, forConstruction=True)
+            .wires().toPending().extrude(frame_depth)
+            .faces(">X").workplane()
+            .rect(lap_thickness, lap_size, forConstruction=True)
+            .wires().toPending().extrude(frame_depth)
+        )
+        frame.add(bottom_frame, name="bottom_frame_sill", color=sash_color)
+        return frame
+
+    @staticmethod
+    def _notebook_top_sash(window: Window, metrics: Dict[str, float]) -> cq.Assembly:
+        center_x = 0.0
+        center_y = 0.0
+        center_z = 0.0
+        sash = cq.Assembly()
+        sash_color = cq.Color(0.95, 0.96, 0.94, 1)
+        thickness = window.thickness
+        rail_length = metrics["rail_length"]
+        top_stile_length = metrics["top_stile_length"]
+        top_rail_width = metrics["top_rail_width"]
+        meeting_rail_width = metrics["meeting_rail_width"]
+        meeting_rail_thickness = metrics["meeting_rail_thickness"]
+        muntin_width = metrics["muntin_width"]
+        light_width = metrics["light_width"]
+        light_height = metrics["light_height"]
+        glazing_rabbet = metrics["glazing_rabbet"]
+        stile_width = window.stile_width
+        top_sash_lights = int(metrics["top_sash_lights"])
+
+        stile_z = center_z + top_stile_length - thickness
+        stile_y = center_y + (thickness / 2) + thickness + 0.75
+        left_x = center_x - (rail_length / 2)
+        right_x = center_x + (rail_length / 2)
+
+        left_stile = (
+            WindowsBuilder._add_stile(top_stile_length, stile_width, thickness, glazing_rabbet)
+            .rotate((center_x, center_y, center_z), (1, 0, 0), 90)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .translate((left_x, stile_y, stile_z))
+        )
+        sash.add(left_stile, name="left_stile", color=sash_color)
+
+        right_stile = (
+            WindowsBuilder._add_stile(top_stile_length, stile_width, thickness, glazing_rabbet)
+            .rotate((center_x, center_y, center_z), (1, 0, 0), 270)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .translate((right_x, stile_y, stile_z - top_stile_length))
+        )
+        sash.add(right_stile, name="right_stile", color=sash_color)
+
+        top_rail_x = center_x + (rail_length / 2)
+        top_rail = (
+            WindowsBuilder._add_rail(top_rail_width, rail_length, thickness, glazing_rabbet)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .rotate((center_x, center_y, center_z), (0, 1, 0), 180)
+            .translate((top_rail_x, stile_y, stile_z))
+        )
+        sash.add(top_rail, name="top_rail", color=sash_color)
+
+        meeting_rail_x = center_x + (rail_length / 2)
+        meeting_rail = (
+            WindowsBuilder._add_top_meeting_rail(rail_length, meeting_rail_width, meeting_rail_thickness)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .rotate((center_x, center_y, center_z), (0, 1, 0), 180)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 180)
+            .translate((-meeting_rail_x, stile_y, -stile_z + top_stile_length - thickness))
+        )
+        sash.add(meeting_rail, name="meeting_rail", color=sash_color)
+
+        vertical_muntin_left_x = left_x + stile_width + light_width - 0.25 + (muntin_width / 2)
+        vertical_muntin_right_x = right_x - stile_width - light_width + 0.25
+        for muntin_name, muntin_x in [
+            ("left_vertical_muntin", vertical_muntin_left_x),
+            ("right_vertical_muntin", vertical_muntin_right_x),
+        ]:
+            muntin = (
+                WindowsBuilder._ogee_muntin(top_stile_length, thickness, glazing_rabbet)
+                .rotate((center_x, center_y, center_z), (1, 0, 0), 90)
+                .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+                .translate((muntin_x, stile_y - thickness, stile_z))
+            )
+            sash.add(muntin, name=muntin_name, color=sash_color)
+
+        muntins = 1 if top_sash_lights == 6 else 2 if top_sash_lights == 9 else 0
+        for muntin in range(1, muntins + 1):
+            horizontal_muntin_z = stile_z - stile_width - (muntin * (light_height + 0.25 - (muntin_width / 2)))
+            horizontal_muntin = (
+                WindowsBuilder._ogee_muntin(rail_length, thickness, glazing_rabbet)
+                .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+                .translate((top_rail_x - rail_length, stile_y - thickness, horizontal_muntin_z))
+            )
+            sash.add(horizontal_muntin, name=f"horizontal_muntin_{muntin}", color=sash_color)
+
+        return sash
+
+    @staticmethod
+    def _notebook_bottom_sash(window: Window, metrics: Dict[str, float]) -> cq.Assembly:
+        center_x = 0.0
+        center_y = 0.0
+        center_z = 0.0
+        sash = cq.Assembly()
+        sash_color = cq.Color(0.95, 0.96, 0.94, 1)
+        thickness = window.thickness
+        rail_length = metrics["rail_length"]
+        top_stile_length = metrics["top_stile_length"]
+        bottom_stile_length = metrics["bottom_stile_length"]
+        bottom_rail_width = metrics["bottom_rail_width"]
+        meeting_rail_width = metrics["meeting_rail_width"]
+        meeting_rail_thickness = metrics["meeting_rail_thickness"]
+        muntin_width = metrics["muntin_width"]
+        light_width = metrics["light_width"]
+        light_height = metrics["light_height"]
+        glazing_rabbet = metrics["glazing_rabbet"]
+        stile_width = window.stile_width
+        bottom_sash_lights = int(metrics["bottom_sash_lights"])
+
+        stile_z = center_z - bottom_stile_length + (thickness / 2) + top_stile_length - thickness
+        stile_y = center_y + (thickness / 2) + 0.375
+        left_x = center_x - (rail_length / 2) + stile_width
+        right_x = center_x + (rail_length / 2) - stile_width
+
+        left_stile = (
+            WindowsBuilder._add_stile(bottom_stile_length, stile_width, thickness, glazing_rabbet)
+            .rotate((center_x, center_y, center_z), (1, 0, 0), 90)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .rotate((0, 0, 0), (0, 1, 0), 180)
+            .translate((left_x, stile_y, stile_z - bottom_stile_length))
+        )
+        sash.add(left_stile, name="left_stile", color=sash_color)
+
+        right_stile = (
+            WindowsBuilder._add_stile(bottom_stile_length, stile_width, thickness, glazing_rabbet)
+            .rotate((center_x, center_y, center_z), (1, 0, 0), 270)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .rotate((0, 0, 0), (0, 1, 0), 180)
+            .translate((right_x, stile_y, stile_z))
+        )
+        sash.add(right_stile, name="right_stile", color=sash_color)
+
+        bottom_rail_x = center_x - (rail_length / 2)
+        bottom_rail = (
+            WindowsBuilder._add_rail(bottom_rail_width, rail_length, thickness, glazing_rabbet)
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .rotate((center_x, center_y, center_z), (0, 1, 0), 180)
+            .rotate((0, 0, 0), (0, 1, 0), 180)
+            .translate((bottom_rail_x, stile_y, stile_z - bottom_stile_length))
+        )
+        sash.add(bottom_rail, name="bottom_rail", color=sash_color)
+
+        meeting_rail_x = center_x + (rail_length / 2)
+        meeting_rail = (
+            WindowsBuilder._add_bottom_meeting_rail(
+                rail_length,
+                meeting_rail_width,
+                meeting_rail_thickness,
+                thickness,
+                glazing_rabbet,
+            )
+            .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+            .rotate((center_x, center_y, center_z), (1, 0, 0), 180)
+            .rotate((0, 0, 0), (0, 1, 0), 180)
+            .rotate((0, 0, 0), (0, 0, 1), 180)
+            .translate((-meeting_rail_x, -stile_y + 0.6, stile_z))
+        )
+        sash.add(meeting_rail, name="meeting_rail", color=sash_color)
+
+        vertical_muntin_left_x = left_x + light_width - 0.25 + (muntin_width / 2)
+        vertical_muntin_right_x = right_x - light_width + 0.25
+        for muntin_name, muntin_x in [
+            ("left_vertical_muntin", vertical_muntin_left_x),
+            ("right_vertical_muntin", vertical_muntin_right_x),
+        ]:
+            muntin = (
+                WindowsBuilder._ogee_muntin(bottom_stile_length, thickness, glazing_rabbet)
+                .rotate((center_x, center_y, center_z), (1, 0, 0), 90)
+                .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+                .translate((muntin_x, stile_y - thickness, stile_z))
+            )
+            sash.add(muntin, name=muntin_name, color=sash_color)
+
+        muntins = 1 if bottom_sash_lights == 6 else 2 if bottom_sash_lights == 9 else 0
+        for muntin in range(1, muntins + 1):
+            horizontal_muntin_z = stile_z - (muntin * (light_height - 0.25 + (muntin_width / 2)))
+            horizontal_muntin = (
+                WindowsBuilder._ogee_muntin(rail_length, thickness, glazing_rabbet)
+                .rotate((center_x, center_y, center_z), (0, 0, 1), 90)
+                .translate((bottom_rail_x, stile_y - thickness, horizontal_muntin_z))
+            )
+            sash.add(horizontal_muntin, name=f"horizontal_muntin_{muntin}", color=sash_color)
+
+        return sash
+
+    @staticmethod
+    def _normalize_local_window(window: cq.Assembly) -> cq.Assembly:
+        """Move notebook-centered geometry to the canonical local window origin."""
+        aggregate = None
+        for _, obj_data in window.traverse():
+            if not hasattr(obj_data, 'obj') or obj_data.obj is None:
+                continue
+            bounds = bounds_for_workplane(obj_data.obj)
+            if bounds is None:
+                continue
+            aggregate = bounds if aggregate is None else aggregate.union(bounds)
+
+        if aggregate is None:
+            return window
+
+        offset = (-aggregate.min[0], -aggregate.min[1], -aggregate.min[2])
+        normalized = cq.Assembly()
+        for name, obj_data in window.traverse():
+            if not hasattr(obj_data, 'obj') or obj_data.obj is None:
+                continue
+            normalized.add(
+                obj_data.obj.translate(offset),
+                name=name,
+                color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.95, 0.96, 0.94, 1),
+            )
+        return normalized
 
     @staticmethod
     def _window_frame(window: Window) -> cq.Assembly:
@@ -319,110 +815,21 @@ class WindowsBuilder:
         assembly contains no wall/building placement assumptions.
         """
         metrics = WindowsBuilder._window_metrics(window)
-        light_width = metrics["light_width"]
-        light_height = metrics["light_height"]
-        top_sash_lights = int(metrics["top_sash_lights"])
-        bottom_sash_lights = int(metrics["bottom_sash_lights"])
-        frame_depth = metrics["frame_depth"]
-        frame_width = metrics["frame_width"]
-        top_rail_width = metrics["top_rail_width"]
-        bottom_rail_width = metrics["bottom_rail_width"]
-        meeting_rail_width = metrics["meeting_rail_width"]
-        muntin_width = metrics["muntin_width"]
-        sill_inside_height = metrics["sill_inside_height"]
-        sill_width = metrics["sill_width"]
-        bead_size = metrics["bead_size"]
-        glazing_rabbet = metrics["glazing_rabbet"]
-        pulley_stile_length = metrics["pulley_stile_length"]
-        rail_length = metrics["rail_length"]
-        header_length = metrics["header_length"]
-        bottom_stile_length = metrics["bottom_stile_length"]
+        raw_window = cq.Assembly()
 
-        center_x = header_length / 2
-        center_y = frame_depth / 2
-        center_z = pulley_stile_length / 2
-
-        # Create window frame assembly
-        window_frame = cq.Assembly()
-
-        stile_pos_left = 0
-        stile_pos_right = header_length - frame_width
-        header_sill_const = center_y
-        header_sill_start = 0
-        header_sill_length = header_length
-        
-        # Left stile (vertical jamb)
-        stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-        left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
-        window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
-        
-        # Right stile (vertical jamb)
-        right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
-        window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
-        
-        # Top header (horizontal piece)
-        header_z = center_z + ((pulley_stile_length + frame_width) / 2)
-        top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
-        top_frame = top_frame.translate((header_sill_start, header_sill_const, header_z))
-        window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
-        
-        # Bottom sill (horizontal piece)
-        sill_z = center_z - (pulley_stile_length / 2)
-        bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, metrics["sill_outside_height"], bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
-        bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
-        window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
-        
-        # Create top and bottom sash assemblies with muntins and glazing
-        sash_thickness = window.thickness
-        
-        # Top sash
-        top_sash = WindowsBuilder._create_sash_assembly(
-            num_lights=top_sash_lights,
-            light_width=light_width,
-            light_height=light_height,
-            stile_width=window.stile_width,
-            top_rail_width=top_rail_width,
-            bottom_rail_width=meeting_rail_width,
-            muntin_width=muntin_width,
-            glazing_rabbet=glazing_rabbet,
-            sash_thickness=sash_thickness
-        )
-        
-        # Bottom sash
-        bottom_sash = WindowsBuilder._create_sash_assembly(
-            num_lights=bottom_sash_lights,
-            light_width=light_width,
-            light_height=light_height,
-            stile_width=window.stile_width,
-            top_rail_width=meeting_rail_width,
-            bottom_rail_width=bottom_rail_width,
-            muntin_width=muntin_width,
-            glazing_rabbet=glazing_rabbet,
-            sash_thickness=sash_thickness
-        )
-        
-        # Position sashes inside the local frame opening.
-        sash_y = center_y - (sash_thickness / 2)
-        bottom_sash_x_start = frame_width
-        top_sash_x_start = bottom_sash_x_start
-        bottom_sash_z = sill_z + sill_inside_height
-        top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
-
-        for name, obj_data in bottom_sash.traverse():
+        for name, obj_data in WindowsBuilder._notebook_frame(metrics).traverse():
             if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                positioned_obj = positioned_obj.translate((bottom_sash_x_start, sash_y, bottom_sash_z))
-                window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+                raw_window.add(obj_data.obj, name=name, color=obj_data.color)
 
-        for name, obj_data in top_sash.traverse():
+        for name, obj_data in WindowsBuilder._notebook_top_sash(window, metrics).traverse():
             if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                positioned_obj = positioned_obj.translate((top_sash_x_start, sash_y, top_sash_z))
-                window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
-        
-        return window_frame
+                raw_window.add(obj_data.obj, name=f"top_sash_{name}", color=obj_data.color)
+
+        for name, obj_data in WindowsBuilder._notebook_bottom_sash(window, metrics).traverse():
+            if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                raw_window.add(obj_data.obj, name=f"bottom_sash_{name}", color=obj_data.color)
+
+        return WindowsBuilder._normalize_local_window(raw_window)
 
     @staticmethod
     def _window_scene(
