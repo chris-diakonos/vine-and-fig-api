@@ -50,7 +50,8 @@ class RoofBuilder:
             panel_run = abs(front_eave_y - centerline_y)
             panel_cos = math.cos(roof_pitch_radians)
             panel_sin = math.sin(roof_pitch_radians)
-            panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
+            # Use exact panel length to avoid ridge gap from rounding
+            panel_length = (panel_run / panel_cos) if panel_cos != 0 else panel_run
             panel_y = ((panel_length/2) * panel_cos)
             panel_z = (panel_length/2) * panel_sin
             roof_length = front_dimension
@@ -314,16 +315,12 @@ class RoofBuilder:
             
             # For side-gable roofs, account for gable overhang on both ends
             if gable_direction == "side":
-                # Gable overhang should be exactly 12" past weatherboard outer face on both ends
-                # Weatherboard extends beyond framing by approximately 2.674" on each end
-                # (matching the front_weatherboard_y offset used in framing_builder.py)
-                weatherboard_extension = 2.674
-                # Total roof span: framing width + weatherboard extensions + overhangs
-                # = roof_length + 2*weatherboard_extension + 2*overhang
-                effective_roof_length = roof_length + (2 * weatherboard_extension) + (2 * roof.roof_overhang)
-                # Start position: left weatherboard face - overhang
-                # = -(weatherboard_extension + overhang)
-                gable_overhang_offset = -(weatherboard_extension + roof.roof_overhang)
+                # Gable overhang should be exactly 12" past framing outer face on both ends
+                # Note: Gable ends have no weatherboard extension in X direction (weatherboard only on front/rear)
+                # Total roof span: framing width + overhangs = roof_length + 2*overhang
+                effective_roof_length = roof_length + (2 * roof.roof_overhang)
+                # Start position: left framing edge - overhang = -overhang
+                gable_overhang_offset = -roof.roof_overhang
                 
                 # Calculate panel quantity accounting for panel width
                 # First panel covers full profile width, subsequent panels add exposure width
