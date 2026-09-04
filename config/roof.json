@@ -1,0 +1,8 @@
+{
+  "defaults": {
+    "front_weatherboard_outer_y": 2.674,
+    "rear_weatherboard_outer_y": -250.528,
+    "ag_panel_profile_width": 37.75,
+    "color": [0.3, 0.3, 0.3, 1.0]
+  }
+}

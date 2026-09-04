@@ -2,16 +2,27 @@
 Doors builder service using CadQuery.
 """
 import cadquery as cq
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from app.models.openings import Door
 from app.models.floorplan import Dimensions
+from app.services.config_loader import load_json_config
+from app.services.door_validation import validate_door_scene
+from app.services.scene_graph import SceneNode, Transform, aggregate_local_bounds, collect_component_metadata, project_scene_to_assembly
 
 
 class DoorsBuilder:
     """Builds door geometry using CadQuery."""
+
+    @staticmethod
+    def _config() -> Dict[str, Any]:
+        return load_json_config("doors", "DOORS_CONFIG_PATH")
+
+    @staticmethod
+    def _color() -> cq.Color:
+        return cq.Color(*DoorsBuilder._config()["defaults"]["color"])
     
     @staticmethod
-    def build(doors: List[Door], dimensions: Dimensions) -> Optional[cq.Assembly]:
+    def build(doors: List[Door], dimensions: Dimensions, floor_heights: Optional[List[float]] = None) -> Optional[cq.Assembly]:
         """
         Build door openings and frames.
         
@@ -24,48 +35,82 @@ class DoorsBuilder:
         """
         if not doors:
             return None
-        
+
+        scene_root = DoorsBuilder._door_scene(doors, dimensions, floor_heights or [])
         doors_assembly = cq.Assembly()
-        
-        for i, door in enumerate(doors):
-            # Parse door size
-            size_parts = door.size.split('x')
-            if len(size_parts) == 2:
-                width = float(size_parts[0])
-                height = float(size_parts[1])
-            else:
-                width, height = 36, 80  # Default size
-            
-            # Create door based on configuration
-            if door.configuration == "six-panel" and door.panel_type == "raised-panel":
-                door_obj = DoorsBuilder._build_six_panel_raised_door(
-                    door, width, height
-                )
-            else:
-                # Fallback to simple box
-                door_obj = (
-                    cq.Workplane("XY")
-                    .box(width, door.thickness, height)
-                )
-            
-            # Position door on appropriate wall
-            # Default floor to 1 (ground floor) if not specified
-            if door.wall and door.position is not None:
-                floor = door.floor if door.floor is not None else 1
-                positioned_door = DoorsBuilder._position_door(
-                    door_obj,
-                    door.wall,
-                    door.position,
-                    floor,
-                    dimensions,
-                    height
-                )
-                
-                # Add door to assembly with color
-                door_name = f"door_{i}"
-                doors_assembly.add(positioned_door, name=door_name, color=cq.Color(0.5, 0.3, 0.2))  # Brown
-        
+        project_scene_to_assembly(scene_root, doors_assembly)
+        doors_assembly.scene_root = scene_root
+        doors_assembly.scene_components = collect_component_metadata(scene_root)
+        doors_assembly.validation_results = validate_door_scene(scene_root)
         return doors_assembly if doors_assembly.children else None
+
+    @staticmethod
+    def _door_scene(doors: List[Door], dimensions: Dimensions, floor_heights: List[float]) -> SceneNode:
+        root = SceneNode("building", "building", "building")
+        doors_root = root.add_child(SceneNode("doors", "assembly", "doors"))
+
+        for i, door in enumerate(doors):
+            if not (door.wall and door.position is not None):
+                continue
+            width, height = DoorsBuilder._door_size(door)
+            door_obj = DoorsBuilder._door_geometry(door, width, height)
+            floor = door.floor if door.floor is not None else 1
+            transform = DoorsBuilder._door_transform(
+                door.wall,
+                door.position,
+                floor,
+                dimensions,
+                width,
+                door.thickness,
+                height,
+                floor_heights,
+            )
+            semantic_name = f"{door.wall}_wall/story_{floor}/door_{door.position:g}"
+            door_node = doors_root.add_child(
+                SceneNode(
+                    semantic_name,
+                    "door",
+                    "door",
+                    local_transform=transform,
+                    metadata={
+                        "metrics": {
+                            "width": width,
+                            "height": height,
+                            "thickness": door.thickness,
+                            "floor": floor,
+                        },
+                        "coordinate_system": "door-local",
+                    },
+                )
+            )
+            door_node.add_child(
+                SceneNode(
+                    "slab",
+                    "part",
+                    "door_slab",
+                    geometry=door_obj.translate((width / 2, door.thickness / 2, height / 2)),
+                    color=DoorsBuilder._color(),
+                    metadata={"component_name": f"door_{i}"},
+                )
+            )
+            local_bounds = aggregate_local_bounds(door_node)
+            if local_bounds is not None:
+                door_node.metadata["local_bounds_datum"] = local_bounds.as_dict()
+        return root
+
+    @staticmethod
+    def _door_size(door: Door) -> tuple[float, float]:
+        defaults = DoorsBuilder._config()["defaults"]
+        size_parts = door.size.split("x")
+        if len(size_parts) == 2:
+            return float(size_parts[0]), float(size_parts[1])
+        return defaults["width"], defaults["height"]
+
+    @staticmethod
+    def _door_geometry(door: Door, width: float, height: float) -> cq.Workplane:
+        if door.configuration == "six-panel" and door.panel_type == "raised-panel":
+            return DoorsBuilder._build_six_panel_raised_door(door, width, height)
+        return cq.Workplane("XY").box(width, door.thickness, height)
     
     @staticmethod
     def _build_six_panel_raised_door(
@@ -104,8 +149,9 @@ class DoorsBuilder:
         
         # Calculate panel positions and heights
         # Three rows of panels
-        panel_depth = 0.25  # Recess depth for panels
-        raised_height = 0.125  # Height of raised portion
+        defaults = DoorsBuilder._config()["defaults"]
+        panel_depth = defaults["panel_recess_depth"]
+        raised_height = defaults["raised_panel_height"]
         
         # Calculate vertical positions for three rows
         top_panel_start = height / 2 - top_rail
@@ -165,56 +211,54 @@ class DoorsBuilder:
         return door_slab
     
     @staticmethod
-    def _position_door(
-        door: cq.Workplane,
+    def _door_transform(
         wall: str,
         position: float,
         floor: int,
         dimensions: Dimensions,
-        door_height: float
-    ) -> cq.Workplane:
+        width: float,
+        thickness: float,
+        door_height: float,
+        floor_heights: List[float],
+    ) -> Transform:
         """
         Position a door on a specific wall.
         
         Args:
-            door: The door geometry
             wall: Wall identifier (front, rear, left, right)
             position: Position along wall from left
             floor: Floor number (1-indexed)
             dimensions: Building dimensions
+            width: Width of the door
+            thickness: Thickness of the door
             door_height: Height of the door
+            floor_heights: Shared floor datum elevations
             
         Returns:
-            Positioned door
+            Transform from door-local lower-left sill datum to legacy building space
         """
-        # Calculate vertical position
-        # Sill sits on finished floor at z=11 (joists 0-10, deck 10-11)
-        floor_height = 120  # Default story height
-        joist_and_deck_height = 11  # Height of floor structure
-        
-        # For floor 1, sill starts at z=11, so center is at z=11 + door_height/2
-        z_pos = (floor - 1) * floor_height + joist_and_deck_height + door_height / 2
-        
-        # Door depth for positioning
-        door_depth = 1.75  # Standard door thickness
-        
-        # Position based on wall (matching windows_builder coordinate system)
+        defaults = DoorsBuilder._config()["defaults"]
+        if floor_heights and 0 <= floor - 1 < len(floor_heights):
+            sill_z = floor_heights[floor - 1] + defaults["finished_floor_offset"]
+        else:
+            sill_z = (floor - 1) * defaults["story_height"] + 11.0
+        center_z = sill_z + door_height / 2
+
         if wall == "front":
             x_pos = position
-            y_pos = door_depth / 2
-            door = door.translate((x_pos, y_pos, z_pos))
+            y_pos = thickness / 2
         elif wall == "rear":
             x_pos = position
-            y_pos = -dimensions.right + door_depth / 2
-            door = door.translate((x_pos, y_pos, z_pos))
+            y_pos = -dimensions.right + thickness / 2
         elif wall == "left":
-            x_pos = door_depth / 2
+            x_pos = thickness / 2
             y_pos = -position
-            door = door.translate((x_pos, y_pos, z_pos))
         elif wall == "right":
-            x_pos = dimensions.front + door_depth / 2
+            x_pos = dimensions.front + thickness / 2
             y_pos = -position
-            door = door.translate((x_pos, y_pos, z_pos))
-        
-        return door
+        else:
+            x_pos = position
+            y_pos = thickness / 2
+
+        return Transform.translate(x_pos - width / 2, y_pos - thickness / 2, center_z - door_height / 2)
 

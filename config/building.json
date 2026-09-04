@@ -1,0 +1,12 @@
+{
+  "defaults": {
+    "sill_height": 10.0,
+    "chair_rail_height": 30.0,
+    "bay_height_above_chair_rail": 72.0,
+    "door_width": 36.0,
+    "door_height": 80.0,
+    "window_width": 24.0,
+    "window_height": 36.0,
+    "tolerance": 0.01
+  }
+}

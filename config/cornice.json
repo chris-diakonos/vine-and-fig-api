@@ -1,0 +1,20 @@
+{
+  "profile": {
+    "segments": 32,
+    "crown_width": 1.0,
+    "crown_height": 6.0,
+    "fascia_height": 0.75,
+    "modillion_spacing": 9.0,
+    "bed_molding_height": 5.5
+  },
+  "placement": {
+    "stud_depth": 6.0,
+    "front_rear_offset": 20.0,
+    "corona_z_drop": 2.0,
+    "fascia_z_drop": 8.0,
+    "modillion_z_drop": 12.0
+  },
+  "colors": {
+    "wood": [0.8, 0.7, 0.6, 1.0]
+  }
+}

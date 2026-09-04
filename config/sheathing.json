@@ -1,0 +1,15 @@
+{
+  "profile": {
+    "top_width": 0.375,
+    "bottom_width": 0.625,
+    "bead_segments": 32,
+    "bead_bevel_width_ratio": 0.9,
+    "bevel_angle_degrees": 4.0
+  },
+  "placement": {
+    "stud_depth": 6.0
+  },
+  "colors": {
+    "board": [0.9, 0.85, 0.75, 1.0]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "defaults": {
+    "width": 36.0,
+    "height": 80.0,
+    "story_height": 120.0,
+    "finished_floor_offset": 1.0,
+    "panel_recess_depth": 0.25,
+    "raised_panel_height": 0.125,
+    "color": [0.5, 0.3, 0.2, 1.0]
+  }
+}

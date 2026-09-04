@@ -14,6 +14,9 @@ from app.utils.materials_helper import (
     add_production_bom_quantities,
     add_sales_bom_quantities
 )
+from app.services.config_loader import load_json_config
+from app.services.framing_validation import validate_framing_scene
+from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 
 
 class FramingBuilder:
@@ -48,15 +51,17 @@ class FramingBuilder:
         self.centerlines = self._calculate_centerlines()
         
         # Configuration
-        self.bay_spacing = 37
-        self.lap = 8
-        self.chair_rail_height = 30
+        framing_defaults = load_json_config("framing", "FRAMING_CONFIG_PATH")["defaults"]
+        self.bay_spacing = framing_defaults["bay_spacing"]
+        self.lap = framing_defaults["lap"]
+        self.chair_rail_height = framing_defaults["chair_rail_height"]
+        self.max_member_length = framing_defaults["max_member_length"]
         self.joist_spacing = self.floorplan.spacing.joist_spacing
         self.stud_spacing = self.floorplan.spacing.stud_spacing
         self.rafter_spacing = self.floorplan.spacing.rafter_spacing
         self.ceiling_heights = self.floorplan.ceiling_heights or [120, 108]
         self.joist_heights = self.floorplan.joist_heights or [10, 9, 8]
-        self.roof_overhang = 12  # Default, could come from roof config
+        self.roof_overhang = self.roof.roof_overhang if self.roof else framing_defaults["roof_overhang"]
         self.roof_pitch_degrees = self.roof.roof_pitch if self.roof else 40
         
         # Calculated heights (set by build method)
@@ -181,7 +186,32 @@ class FramingBuilder:
             "bom_levels": self.bom_levels
         }
         
-        return assembly, bom_data
+        return self._with_scene(assembly), bom_data
+
+    def _with_scene(self, assembly: cq.Assembly) -> cq.Assembly:
+        scene_root = scene_from_assembly(
+            assembly,
+            subsystem_name="framing",
+            subsystem_type="framing",
+            subsystem_role="framing",
+            group_name_for_component=self._group_name_for_component,
+            role_for_component=lambda name: name.split("_")[0] if name else "framing_member",
+        )
+        projected = cq.Assembly()
+        project_scene_to_assembly(scene_root, projected)
+        projected.scene_root = scene_root
+        projected.scene_components = collect_component_metadata(scene_root)
+        projected.validation_results = validate_framing_scene(scene_root)
+        return projected
+
+    @staticmethod
+    def _group_name_for_component(component_name: str) -> str:
+        parts = component_name.split("_")
+        if not parts:
+            return "members"
+        if parts[0] == "cripple" and len(parts) > 1:
+            return "cripple_studs"
+        return f"{parts[0]}s"
     
     def _add_sills(self, assembly: cq.Assembly, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add sills to the assembly."""
@@ -199,15 +229,15 @@ class FramingBuilder:
         for face in self.faces:
             dimension = self.faces[face]
 
-            if dimension <= 240:
+            if dimension <= self.max_member_length:
                 quantity = 1
                 sill_length = dimension
-            elif dimension >= 240:
-                quantity = math.ceil(dimension / 240)
+            elif dimension >= self.max_member_length:
+                quantity = math.ceil(dimension / self.max_member_length)
                 sill_length = dimension / quantity
             else:
                 quantity = 1
-                sill_length = 240
+                sill_length = self.max_member_length
             
             for q in range(quantity):
                 sill_counter = q + 1
@@ -757,15 +787,15 @@ class FramingBuilder:
             right_dimension = self.faces["right"]
             front_dimension = self.faces["front"]
 
-            if dimension <= 240:
+            if dimension <= self.max_member_length:
                 quantity = 1
                 girt_length = dimension
-            elif dimension >= 240:
-                quantity = math.ceil(dimension / 240)
+            elif dimension >= self.max_member_length:
+                quantity = math.ceil(dimension / self.max_member_length)
                 girt_length = dimension / quantity
             else:
                 quantity = 1
-                girt_length = 240
+                girt_length = self.max_member_length
             
             total_quantity += quantity
             
@@ -832,15 +862,15 @@ class FramingBuilder:
             right_dimension = self.faces["right"]
             front_dimension = self.faces["front"]
 
-            if dimension <= 240:
+            if dimension <= self.max_member_length:
                 quantity = 1
                 plate_length = dimension
-            elif dimension >= 240:
-                quantity = math.ceil(dimension / 240)
+            elif dimension >= self.max_member_length:
+                quantity = math.ceil(dimension / self.max_member_length)
                 plate_length = dimension / quantity
             else:
                 quantity = 1
-                plate_length = 240
+                plate_length = self.max_member_length
 
             total_quantity += quantity
 
@@ -900,15 +930,15 @@ class FramingBuilder:
             right_dimension = self.faces["right"]
             roof_overhang = self.roof_overhang
             
-            if dimension <= 240:
+            if dimension <= self.max_member_length:
                 quantity = 1
                 false_plate_length = dimension
-            elif dimension >= 240:
-                quantity = math.ceil(dimension / 240)
+            elif dimension >= self.max_member_length:
+                quantity = math.ceil(dimension / self.max_member_length)
                 false_plate_length = dimension / quantity
             else:
                 quantity = 1
-                false_plate_length = 240
+                false_plate_length = self.max_member_length
 
             total_quantity += quantity
 

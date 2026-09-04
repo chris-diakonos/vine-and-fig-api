@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import cadquery as cq
 
@@ -165,6 +165,18 @@ class SceneNode:
             result = transform.apply_to_workplane(result)
         return result
 
+    def projected_geometry_to_ancestor(self, ancestor: "SceneNode") -> Optional[cq.Workplane]:
+        """Project this node's geometry into an ancestor's local coordinate space."""
+        if self.geometry is None:
+            return None
+
+        result = self.geometry
+        node: Optional[SceneNode] = self
+        while node is not None and node is not ancestor:
+            result = node.local_transform.apply_to_workplane(result)
+            node = node.parent
+        return result
+
 
 def project_scene_to_assembly(scene: SceneNode, assembly: Optional[cq.Assembly] = None) -> cq.Assembly:
     """Project geometry-bearing scene nodes into a flat CadQuery assembly."""
@@ -181,6 +193,81 @@ def project_scene_to_assembly(scene: SceneNode, assembly: Optional[cq.Assembly] 
             color=node.color if node.color is not None else cq.Color(0.8, 0.7, 0.6),
         )
     return target
+
+
+def scene_from_assembly(
+    assembly: cq.Assembly,
+    subsystem_name: str,
+    subsystem_type: str,
+    subsystem_role: str,
+    group_name_for_component: Optional[Callable[[str], str]] = None,
+    role_for_component: Optional[Callable[[str], str]] = None,
+) -> SceneNode:
+    """Create localized scene nodes from an existing flat CadQuery assembly."""
+
+    root = SceneNode("building", "building", "building")
+    subsystem = root.add_child(SceneNode(subsystem_name, subsystem_type, subsystem_role))
+    records: List[Dict[str, Any]] = []
+    group_bounds: Dict[str, Bounds] = {}
+
+    for name, obj_data in assembly.traverse():
+        if not hasattr(obj_data, "obj") or obj_data.obj is None:
+            continue
+        component_name = name if name else f"{subsystem_name}_{len(records)}"
+        bounds = bounds_for_workplane(obj_data.obj)
+        if bounds is None:
+            continue
+        group_name = group_name_for_component(component_name) if group_name_for_component else subsystem_name
+        group_bounds[group_name] = bounds if group_name not in group_bounds else group_bounds[group_name].union(bounds)
+        records.append(
+            {
+                "component_name": component_name,
+                "obj": obj_data.obj,
+                "color": obj_data.color if hasattr(obj_data, "color") else None,
+                "bounds": bounds,
+                "group_name": group_name,
+            }
+        )
+
+    groups: Dict[str, SceneNode] = {}
+    for group_name, bounds in group_bounds.items():
+        parent = subsystem
+        if group_name != subsystem_name:
+            parent = subsystem.add_child(
+                SceneNode(
+                    group_name,
+                    "assembly",
+                    group_name,
+                    local_transform=Transform.translate(*bounds.min),
+                    metadata={"local_bounds_datum": bounds.as_dict()},
+                )
+            )
+        groups[group_name] = parent
+
+    for record in records:
+        bounds = record["bounds"]
+        group_origin = group_bounds[record["group_name"]].min
+        part_origin = bounds.min
+        groups[record["group_name"]].add_child(
+            SceneNode(
+                record["component_name"],
+                "part",
+                role_for_component(record["component_name"]) if role_for_component else "part",
+                local_transform=Transform.translate(
+                    part_origin[0] - group_origin[0],
+                    part_origin[1] - group_origin[1],
+                    part_origin[2] - group_origin[2],
+                ),
+                geometry=record["obj"].translate((-part_origin[0], -part_origin[1], -part_origin[2])),
+                color=record["color"],
+                metadata={"component_name": record["component_name"]},
+            )
+        )
+
+    local_bounds = aggregate_local_bounds(subsystem)
+    if local_bounds is not None:
+        subsystem.metadata["local_bounds_datum"] = local_bounds.as_dict()
+    return root
 
 
 def collect_component_metadata(scene: SceneNode) -> List[Dict[str, Any]]:
@@ -216,7 +303,8 @@ def aggregate_local_bounds(node: SceneNode) -> Optional[Bounds]:
     for child in node.iter_nodes():
         if child.geometry is None:
             continue
-        bounds = bounds_for_workplane(child.geometry)
+        geometry = child.projected_geometry_to_ancestor(node)
+        bounds = bounds_for_workplane(geometry)
         if bounds is None:
             continue
         aggregate = bounds if aggregate is None else aggregate.union(bounds)

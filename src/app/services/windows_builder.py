@@ -864,18 +864,52 @@ class WindowsBuilder:
         }
 
         frame_assembly = WindowsBuilder._window_frame(window)
+        component_records = []
+        group_bounds: Dict[str, Any] = {}
+
         for name, obj_data in frame_assembly.traverse():
             if not hasattr(obj_data, 'obj') or obj_data.obj is None:
                 continue
+            bounds = bounds_for_workplane(obj_data.obj)
+            if bounds is None:
+                continue
             group_name = WindowsBuilder._scene_group_for_component(name)
+            group_bounds[group_name] = bounds if group_name not in group_bounds else group_bounds[group_name].union(bounds)
+            component_records.append(
+                {
+                    "name": name,
+                    "obj": obj_data.obj,
+                    "color": obj_data.color if hasattr(obj_data, 'color') else WindowsBuilder._color("fallback"),
+                    "bounds": bounds,
+                    "group_name": group_name,
+                }
+            )
+
+        for group_name, bounds in group_bounds.items():
+            groups[group_name].local_transform = Transform.translate(*bounds.min)
+            groups[group_name].metadata["local_bounds_datum"] = bounds.as_dict()
+
+        for record in component_records:
+            name = record["name"]
+            bounds = record["bounds"]
+            group_name = record["group_name"]
+            group_origin = group_bounds[group_name].min
+            part_origin = bounds.min
+            part_transform = Transform.translate(
+                part_origin[0] - group_origin[0],
+                part_origin[1] - group_origin[1],
+                part_origin[2] - group_origin[2],
+            )
+            local_geometry = record["obj"].translate((-part_origin[0], -part_origin[1], -part_origin[2]))
             part_name = WindowsBuilder._scene_part_name(name)
             groups[group_name].add_child(
                 SceneNode(
                     name=part_name,
                     node_type="part",
                     role=WindowsBuilder._scene_role_for_component(name),
-                    geometry=obj_data.obj,
-                    color=obj_data.color if hasattr(obj_data, 'color') else WindowsBuilder._color("fallback"),
+                    local_transform=part_transform,
+                    geometry=local_geometry,
+                    color=record["color"],
                     metadata={"component_name": f"{component_prefix}_{name}"},
                 )
             )

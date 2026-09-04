@@ -49,6 +49,15 @@ class WindowSceneGraphTest(unittest.TestCase):
         self.assertIn("building/windows/front_wall/story_1/window_120/lower_sash/glass_0_0", paths)
         self.assertIn("building/windows/front_wall/story_1/window_120/upper_sash/glass_0_0", paths)
 
+        components = {component["semantic_path"]: component for component in model.scene_components}
+        lower_sash = components["building/windows/front_wall/story_1/window_120/lower_sash"]
+        lower_glass = components["building/windows/front_wall/story_1/window_120/lower_sash/glass_0_0"]
+        self.assertNotEqual(lower_sash["local_transform"]["translation"], [0.0, 0.0, 0.0])
+        self.assertNotEqual(lower_glass["local_transform"]["translation"], [0.0, 0.0, 0.0])
+        self.assertAlmostEqual(lower_glass["local_bounds"]["min"][0], 0.0)
+        self.assertAlmostEqual(lower_glass["local_bounds"]["min"][1], 0.0)
+        self.assertAlmostEqual(lower_glass["local_bounds"]["min"][2], 0.0)
+
         window_results = model.validation_results["results"]
         self.assertTrue(all(not result["warnings"] for result in window_results))
 

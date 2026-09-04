@@ -4,12 +4,23 @@ Creates exterior cornice molding at the top of the building.
 """
 import math
 import cadquery as cq
-from typing import Optional
+from typing import Any, Dict, Optional
 from app.models.floorplan import Dimensions
+from app.services.config_loader import load_json_config
+from app.services.cornice_validation import validate_cornice_scene
+from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 
 
 class CorniceBuilder:
     """Builds exterior cornice geometry using CadQuery."""
+
+    @staticmethod
+    def _config() -> Dict[str, Any]:
+        return load_json_config("cornice", "CORNICE_CONFIG_PATH")
+
+    @staticmethod
+    def _color() -> cq.Color:
+        return cq.Color(*CorniceBuilder._config()["colors"]["wood"])
     
     @staticmethod
     def _crown_molding(width: float, height: float) -> cq.Workplane:
@@ -23,7 +34,7 @@ class CorniceBuilder:
         Returns:
             2D CadQuery Workplane profile
         """
-        segments = 32
+        segments = CorniceBuilder._config()["profile"]["segments"]
         increment = 90 / segments
         board_height = height / math.sqrt(2)
         fillet_height = (1 / 9) * board_height
@@ -135,7 +146,7 @@ class CorniceBuilder:
         Returns:
             2D CadQuery Workplane profile
         """
-        segments = 32
+        segments = CorniceBuilder._config()["profile"]["segments"]
         increment = 90 / segments
         radius = (top_width - bottom_width)
         profile_points = []
@@ -179,7 +190,7 @@ class CorniceBuilder:
         Returns:
             2D CadQuery Workplane profile
         """
-        segments = 32
+        segments = CorniceBuilder._config()["profile"]["segments"]
         increment = 90 / segments
         board_height = height / math.sqrt(2)
         fillet_height = (1 / 9) * board_height
@@ -269,7 +280,7 @@ class CorniceBuilder:
         Returns:
             2D CadQuery Workplane profile
         """
-        segments = 32
+        segments = CorniceBuilder._config()["profile"]["segments"]
         increment = 90 / segments
         profile_points = []
         fillet_height = (1 / 3) * height
@@ -361,27 +372,29 @@ class CorniceBuilder:
             faces_to_build = ["front", "rear", "left", "right"]
         
         # Stud depth (standard)
-        stud_depth = 6
+        placement_config = CorniceBuilder._config()["placement"]
+        profile_config = CorniceBuilder._config()["profile"]
+        stud_depth = placement_config["stud_depth"]
         
         # Crown molding parameters
-        crown_width = 1.0
-        crown_height = 6.0
+        crown_width = profile_config["crown_width"]
+        crown_height = profile_config["crown_height"]
         
         
         # Corona (cavetto + fascia) parameter
-        fascia_height = 0.75
+        fascia_height = profile_config["fascia_height"]
         
         # Modillion spacing
-        modillion_spacing = 9.0
+        modillion_spacing = profile_config["modillion_spacing"]
         
         # Bed molding parameters
-        bed_molding_height = 5.5
+        bed_molding_height = profile_config["bed_molding_height"]
 
         # Z positions
         crown_z_position = building_height # Position at top of building
-        corona_z_position = building_height - 2.0
-        fascia_z_position = building_height - 8.0
-        modillion_z_position = building_height - 12.0
+        corona_z_position = building_height - placement_config["corona_z_drop"]
+        fascia_z_position = building_height - placement_config["fascia_z_drop"]
+        modillion_z_position = building_height - placement_config["modillion_z_drop"]
         
         # Build cornice for each face
         # Cornice is extruded along Y by default (from XZ plane profile)
@@ -389,8 +402,8 @@ class CorniceBuilder:
         # Left/right faces need it along Y (no rotation needed)
         # Added 10 inches to the front and rear faces to account for the stud depth
         face_map = {
-            "front": (dimensions.front, 90, dimensions.front / 2, 20, 0),
-            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - 20, 0),
+            "front": (dimensions.front, 90, dimensions.front / 2, placement_config["front_rear_offset"], 0),
+            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - placement_config["front_rear_offset"], 0),
             "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0),
             "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0)
         }
@@ -416,7 +429,7 @@ class CorniceBuilder:
                     trans_y
                 )
         
-        return cornice
+        return CorniceBuilder._with_scene(cornice)
 
     @staticmethod
     def _build_face_cornice(
@@ -491,22 +504,22 @@ class CorniceBuilder:
         # Crown - built along Y axis (extrusion), then transformed
         crown = CorniceBuilder._crown_molding(crown_width, crown_height).extrude(length).translate((4.25, 0, 0))
         crown = transform_component(crown, crown_z_position)
-        assembly.add(crown, name=f"{face}_crown", color=cq.Color(0.8, 0.7, 0.6))
+        assembly.add(crown, name=f"{face}_crown", color=CorniceBuilder._color())
         
         # Corona - Cavetto (note: original code had rotateAboutCenter(180) which is part of the cavetto positioning)
         cavetto = CorniceBuilder._cavetto_board().extrude(length).translate((8, 0, 0)).rotateAboutCenter((0, 0, 1), 180)
         cavetto = transform_component(cavetto, corona_z_position)
-        assembly.add(cavetto, name=f"{face}_cavetto", color=cq.Color(0.8, 0.7, 0.6))
+        assembly.add(cavetto, name=f"{face}_cavetto", color=CorniceBuilder._color())
         
         # Corona - Fascia
         fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, -0.8))
         fascia = transform_component(fascia, fascia_z_position)
-        assembly.add(fascia, name=f"{face}_fascia", color=cq.Color(0.8, 0.7, 0.6))
+        assembly.add(fascia, name=f"{face}_fascia", color=CorniceBuilder._color())
         
         # Modillion backing
         modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((22, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
         modillion_backing = transform_component(modillion_backing, modillion_z_position)
-        assembly.add(modillion_backing, name=f"{face}_modillion_backing", color=cq.Color(0.8, 0.7, 0.6))
+        assembly.add(modillion_backing, name=f"{face}_modillion_backing", color=CorniceBuilder._color())
         
         # Modillions
         modillion_count = math.floor(length / modillion_spacing)
@@ -514,13 +527,34 @@ class CorniceBuilder:
             modillion_x = length - (modillion_idx * modillion_spacing)
             modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((22, -modillion_x + modillion_spacing, -4))
             modillion = transform_component(modillion, modillion_z_position)
-            assembly.add(modillion, name=f"{face}_modillion_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
+            assembly.add(modillion, name=f"{face}_modillion_{modillion_idx}", color=CorniceBuilder._color())
             
             modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((22, -modillion_x + modillion_spacing, -1.5))
             modillion_band = transform_component(modillion_band, modillion_z_position)
-            assembly.add(modillion_band, name=f"{face}_modillion_band_{modillion_idx}", color=cq.Color(0.8, 0.7, 0.6))
+            assembly.add(modillion_band, name=f"{face}_modillion_band_{modillion_idx}", color=CorniceBuilder._color())
         
         # Bedmold
         bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18, 0, -bed_molding_height))
         bed = transform_component(bed, crown_z_position)
-        assembly.add(bed, name=f"{face}_bed_molding", color=cq.Color(0.8, 0.7, 0.6))
+        assembly.add(bed, name=f"{face}_bed_molding", color=CorniceBuilder._color())
+
+    @staticmethod
+    def _with_scene(assembly: cq.Assembly) -> cq.Assembly:
+        scene_root = scene_from_assembly(
+            assembly,
+            subsystem_name="cornice",
+            subsystem_type="cornice",
+            subsystem_role="cornice",
+            group_name_for_component=CorniceBuilder._group_name_for_component,
+            role_for_component=lambda name: name.split("_", 1)[1] if "_" in name else "cornice_part",
+        )
+        projected = cq.Assembly()
+        project_scene_to_assembly(scene_root, projected)
+        projected.scene_root = scene_root
+        projected.scene_components = collect_component_metadata(scene_root)
+        projected.validation_results = validate_cornice_scene(scene_root)
+        return projected
+
+    @staticmethod
+    def _group_name_for_component(component_name: str) -> str:
+        return f"{component_name.split('_', 1)[0]}_cornice"

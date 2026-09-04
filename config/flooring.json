@@ -1,0 +1,13 @@
+{
+  "defaults": {
+    "flooring_type": "tongue-and-groove",
+    "flooring_species": "pine",
+    "flooring_thickness": 1.0,
+    "flooring_width": 10.0,
+    "flooring_exposure": 9.25,
+    "plank_gap": 0.0625,
+    "groove_depth_ratio": 0.6,
+    "groove_vertical_offset_ratio": 0.2,
+    "color": [0.8, 0.7, 0.6, 1.0]
+  }
+}

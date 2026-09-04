@@ -2,13 +2,35 @@
 Floor builder service using CadQuery.
 """
 import cadquery as cq
-from typing import List
+from typing import Any, Dict, List
 from app.models.building import Flooring
 from app.models.floorplan import Dimensions
+from app.services.config_loader import load_json_config
+from app.services.floor_validation import validate_floor_scene
+from app.services.scene_graph import SceneNode, Transform, collect_component_metadata, project_scene_to_assembly
 
 
 class FloorBuilder:
     """Builds floor geometry using CadQuery."""
+
+    @staticmethod
+    def _config() -> Dict[str, Any]:
+        return load_json_config("flooring", "FLOORING_CONFIG_PATH")
+
+    @staticmethod
+    def _color() -> cq.Color:
+        return cq.Color(*FloorBuilder._config()["defaults"]["color"])
+
+    @staticmethod
+    def _default_flooring() -> Flooring:
+        defaults = FloorBuilder._config()["defaults"]
+        return Flooring(
+            flooring_type=defaults["flooring_type"],
+            flooring_species=defaults["flooring_species"],
+            flooring_thickness=defaults["flooring_thickness"],
+            flooring_width=defaults["flooring_width"],
+            flooring_exposure=defaults["flooring_exposure"],
+        )
     
     @staticmethod
     def build(
@@ -30,102 +52,90 @@ class FloorBuilder:
             CadQuery Assembly with individual planks as separate components
         """
         
-        # Create assembly to hold individual planks
+        scene_root = FloorBuilder._floor_scene(flooring, dimensions, stories, floor_heights)
         floor_assembly = cq.Assembly()
-        
-        # If flooring array is empty or insufficient, create default config
-        from app.models.building import Flooring as FlooringModel
-        default_flooring = FlooringModel(
-            flooring_type="tongue-and-groove",
-            flooring_species="pine",
-            flooring_thickness=1.0,
-            flooring_width=10.0,
-            flooring_exposure=9.25
-        )
-        
-        # Build floors for each story
-        for i in range(stories + 1):  # +1 for foundation floor (first floor)
-            # Get flooring config for this floor
-            if len(flooring) > 0:
-                flooring_config = flooring[i] if i < len(flooring) else flooring[0]
-            else:
-                flooring_config = default_flooring
-            
-            # Get floor height from calculated heights
-            floor_height = floor_heights[i]
-            floor_thickness = flooring_config.flooring_thickness
-            floor_center_z = floor_height + (floor_thickness / 2)
-            
-            # Build individual planks for this floor and add to assembly
-            FloorBuilder._build_floor_planks(
-                floor_assembly,
-                flooring_config,
-                dimensions,
-                floor_center_z,
-                i  # floor index for naming
-            )
-        
+        project_scene_to_assembly(scene_root, floor_assembly)
+        floor_assembly.scene_root = scene_root
+        floor_assembly.scene_components = collect_component_metadata(scene_root)
+        floor_assembly.validation_results = validate_floor_scene(scene_root)
         return floor_assembly
     
     @staticmethod
-    def _build_floor_planks(
-        assembly: cq.Assembly,
+    def _floor_scene(
+        flooring: List[Flooring],
+        dimensions: Dimensions,
+        stories: int,
+        floor_heights: List[float],
+    ) -> SceneNode:
+        root = SceneNode("building", "building", "building")
+        floors_node = root.add_child(SceneNode("floors", "assembly", "floors"))
+        default_flooring = FloorBuilder._default_flooring()
+
+        for floor_index in range(stories + 1):
+            flooring_config = flooring[floor_index] if floor_index < len(flooring) else default_flooring
+            floor_height = floor_heights[floor_index]
+            floor_thickness = flooring_config.flooring_thickness
+            floor_node = floors_node.add_child(
+                SceneNode(
+                    f"floor_{floor_index}",
+                    "floor",
+                    "floor",
+                    local_transform=Transform.translate(0.0, 0.0, floor_height + floor_thickness / 2),
+                    metadata={
+                        "metrics": {
+                            "floor_length": dimensions.front,
+                            "plank_length": dimensions.left,
+                            "floor_thickness": floor_thickness,
+                        },
+                        "coordinate_system": "cornerstone",
+                    },
+                )
+            )
+            FloorBuilder._add_floor_planks(floor_node, flooring_config, dimensions, floor_index)
+        return root
+
+    @staticmethod
+    def _add_floor_planks(
+        floor_node: SceneNode,
         flooring_config: Flooring,
         dimensions: Dimensions,
-        floor_center_z: float,
-        floor_index: int
+        floor_index: int,
     ) -> None:
-        """
-        Build individual tongue-and-groove planks for a floor and add to assembly.
-        
-        Args:
-            assembly: Assembly to add planks to
-            flooring_config: Flooring configuration
-            dimensions: Building dimensions
-            floor_center_z: Z position of floor center
-            floor_index: Index of the floor (for naming)
-        """
         flooring_width = flooring_config.flooring_width
         flooring_exposure = flooring_config.flooring_exposure
         floor_thickness = flooring_config.flooring_thickness
         plank_length = dimensions.left
-        
-        # Small visual gap between planks (in inches) for visual distinction
-        plank_gap = 0.0625  # 0.0625 inches = ~1.59mm - small but visible
-        
-        # Calculate tongue dimensions
-        # Tongue is 1/2 of the difference between width and exposure
+        defaults = FloorBuilder._config()["defaults"]
+        plank_gap = defaults["plank_gap"]
         overlap = flooring_width - flooring_exposure
         tongue_width = overlap / 2
         groove_width = overlap / 2
-        
-        # Calculate number of planks needed
-        # Planks are spaced by exposure + gap, starting from one edge
+
         floor_length = dimensions.front
         spacing = flooring_exposure + plank_gap
-        num_planks = int(floor_length / spacing) + 2  # Add extra to ensure coverage
-        
+        num_planks = int(floor_length / spacing) + 2
+
         for i in range(num_planks):
-            # Calculate plank position (center of plank)
-            # First plank starts at flooring_width/2 (left edge at 0)
-            # Subsequent planks are spaced by exposure + gap
             plank_x = (flooring_width / 2) + (i * spacing)
-            
-            # Create plank with tongue-and-groove
             plank = FloorBuilder._create_tongue_groove_plank(
                 flooring_width,
-                plank_length,  # Plank runs along left dimension (Y axis)
+                plank_length,
                 floor_thickness,
                 tongue_width,
                 groove_width
             )
-            
-            # Position plank
-            plank = plank.translate((plank_x, -plank_length/2, floor_center_z))
-            
-            # Add plank to assembly as individual component with color
             plank_name = f"floor_plank_floor{floor_index}_plank{i}"
-            assembly.add(plank, name=plank_name, color=cq.Color(0.8, 0.7, 0.6))  # Light wood
+            floor_node.add_child(
+                SceneNode(
+                    f"plank_{i}",
+                    "part",
+                    "floor_plank",
+                    local_transform=Transform.translate(plank_x, -plank_length / 2, 0.0),
+                    geometry=plank,
+                    color=FloorBuilder._color(),
+                    metadata={"component_name": plank_name},
+                )
+            )
     
     @staticmethod
     def _create_tongue_groove_plank(
@@ -152,33 +162,22 @@ class FloorBuilder:
         Returns:
             CadQuery Workplane with the plank geometry
         """
-        # Main plank body is the exposed width
-        # Tongue extends beyond on one side, groove recesses on the other
-        main_width = width - tongue_width - groove_width  # This equals flooring_exposure
-        
-        # Create main body (the visible/exposed part)
+        main_width = width - tongue_width - groove_width
+        defaults = FloorBuilder._config()["defaults"]
+
         main_body = (
             cq.Workplane("XY")
             .box(main_width, length, thickness)
         )
-        
-        # Add tongue on one side (positive X direction)
-        # Tongue extends outward from the main body
         tongue = (
             cq.Workplane("XY")
             .box(tongue_width, length, thickness)
             .translate((main_width / 2 + tongue_width / 2, 0, 0))
         )
-        
-        # Create groove by cutting a recess into the main body
-        # Groove is on the negative X side (opposite from tongue)
         groove_cutout = (
             cq.Workplane("XY")
-            .box(groove_width, length, thickness * 0.6)  # Groove depth (60% of thickness)
-            .translate((-(main_width / 2 + groove_width / 2), 0, -thickness * 0.2))
+            .box(groove_width, length, thickness * defaults["groove_depth_ratio"])
+            .translate((-(main_width / 2 + groove_width / 2), 0, -thickness * defaults["groove_vertical_offset_ratio"]))
         )
-        
-        # Combine main body and tongue, then cut groove
         plank = main_body.union(tongue).cut(groove_cutout)
-        
         return plank

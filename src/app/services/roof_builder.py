@@ -3,13 +3,24 @@ Roof builder service using CadQuery.
 """
 import cadquery as cq
 import math
-from typing import List
+from typing import Any, Dict, List
 from app.models.building import Roof
 from app.models.floorplan import Dimensions
+from app.services.config_loader import load_json_config
+from app.services.roof_validation import validate_roof_scene
+from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 
 
 class RoofBuilder:
     """Builds roof geometry using CadQuery."""
+
+    @staticmethod
+    def _config() -> Dict[str, Any]:
+        return load_json_config("roof", "ROOF_CONFIG_PATH")
+
+    @staticmethod
+    def _color() -> cq.Color:
+        return cq.Color(*RoofBuilder._config()["defaults"]["color"])
     
     @staticmethod
     def build(
@@ -42,8 +53,9 @@ class RoofBuilder:
         if roof.roof_type == "side-gable":
             # Pitch applies to the depth dimension
             # Account for asymmetric weatherboard extensions to avoid ridge gap
-            front_weatherboard_y = 2.674
-            rear_weatherboard_y = -250.528
+            defaults = RoofBuilder._config()["defaults"]
+            front_weatherboard_y = defaults["front_weatherboard_outer_y"]
+            rear_weatherboard_y = defaults["rear_weatherboard_outer_y"]
             centerline_y = (front_weatherboard_y + rear_weatherboard_y) / 2
             # Panel must span from eave (12" past weatherboard) to ridge
             front_eave_y = front_weatherboard_y + roof_overhang
@@ -84,7 +96,7 @@ class RoofBuilder:
             front_dimension
         )
         
-        return roof_assembly
+        return RoofBuilder._with_scene(roof_assembly)
 
     
     @staticmethod
@@ -324,7 +336,7 @@ class RoofBuilder:
                 
                 # Calculate panel quantity accounting for panel width
                 # First panel covers full profile width, subsequent panels add exposure width
-                panel_profile_width = 37.75  # AG panel profile width in inches
+                panel_profile_width = RoofBuilder._config()["defaults"]["ag_panel_profile_width"]
                 if effective_roof_length <= panel_profile_width:
                     quantity = 1
                 else:
@@ -348,14 +360,14 @@ class RoofBuilder:
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = 180 - roof_pitch_degrees
                     # Target eave position: 12" past actual weatherboard outer face at y=2.674
-                    actual_weatherboard_outer_y = 2.674
+                    actual_weatherboard_outer_y = RoofBuilder._config()["defaults"]["front_weatherboard_outer_y"]
                     target_eave_y = actual_weatherboard_outer_y + roof.roof_overhang
                 elif face == "rear":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
                     panel_z = base_elevation + panel_z_offset
                     roof_pitch = roof_pitch_degrees
                     # Target eave position: 12" past actual weatherboard outer face at y=-250.528
-                    actual_weatherboard_outer_y = -250.528
+                    actual_weatherboard_outer_y = RoofBuilder._config()["defaults"]["rear_weatherboard_outer_y"]
                     target_eave_y = actual_weatherboard_outer_y - roof.roof_overhang
                 elif face == "left":
                     panel_x = (roof.roof_panel_exposure * (panel_counter - 1)) + gable_overhang_offset
@@ -405,6 +417,30 @@ class RoofBuilder:
                 # Translate to final position
                 panel = panel.translate((panel_x, y_offset, panel_z))
                 
-                assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}", color=cq.Color(0.3, 0.3, 0.3))  # Dark roof
+                assembly.add(panel, name=f"roof_panel_{panel_counter}_{face}", color=RoofBuilder._color())  # Dark roof
 
         return assembly
+
+    @staticmethod
+    def _with_scene(assembly: cq.Assembly) -> cq.Assembly:
+        scene_root = scene_from_assembly(
+            assembly,
+            subsystem_name="roof",
+            subsystem_type="roof",
+            subsystem_role="roof",
+            group_name_for_component=RoofBuilder._group_name_for_component,
+            role_for_component=lambda _name: "roof_panel",
+        )
+        projected = cq.Assembly()
+        project_scene_to_assembly(scene_root, projected)
+        projected.scene_root = scene_root
+        projected.scene_components = collect_component_metadata(scene_root)
+        projected.validation_results = validate_roof_scene(scene_root)
+        return projected
+
+    @staticmethod
+    def _group_name_for_component(component_name: str) -> str:
+        parts = component_name.split("_")
+        if len(parts) >= 4:
+            return f"{parts[3]}_roof_plane"
+        return "roof_panels"

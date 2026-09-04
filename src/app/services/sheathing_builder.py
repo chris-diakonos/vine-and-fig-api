@@ -7,10 +7,21 @@ import math
 from typing import Dict, Any, List, Optional
 from app.models.building import Sheathing
 from app.models.floorplan import Dimensions, Floorplan
+from app.services.config_loader import load_json_config
+from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
+from app.services.sheathing_validation import validate_sheathing_scene
 
 
 class SheathingBuilder:
     """Builds exterior sheathing boards using CadQuery."""
+
+    @staticmethod
+    def _config() -> Dict[str, Any]:
+        return load_json_config("sheathing", "SHEATHING_CONFIG_PATH")
+
+    @staticmethod
+    def _color() -> cq.Color:
+        return cq.Color(*SheathingBuilder._config()["colors"]["board"])
     
     @staticmethod
     def _bevel_weatherboard(top_width: float, bottom_width: float, height: float, length: float) -> cq.Workplane:
@@ -52,7 +63,8 @@ class SheathingBuilder:
             2D CadQuery Workplane profile
         """
         profile_points = []
-        segments = 32
+        profile_config = SheathingBuilder._config()["profile"]
+        segments = profile_config["bead_segments"]
         increment = 180 / segments
         
         # Add initial points
@@ -63,7 +75,7 @@ class SheathingBuilder:
         bead_diameter = bottom_width
         bead_radius = bead_diameter / 2
         bevel_height = height - bead_diameter
-        bevel_width = bottom_width * 0.90
+        bevel_width = bottom_width * profile_config["bead_bevel_width_ratio"]
         center_x = bead_radius
         center_y = -height + bead_radius
         
@@ -132,25 +144,23 @@ class SheathingBuilder:
         # Determine the range: from lowest floor height to highest floor height
         lowest_floor_height = min(floor_heights)
         highest_floor_height = max(floor_heights)
-        print(f"Lowest floor height: {lowest_floor_height}")
-        print(f"Highest floor height: {highest_floor_height}")
-        print(f"Floor heights: {floor_heights}")
 
         # Sheathing board specifications
         board_exposure = sheathing.sheathing_exposure  # Visible exposure in inches
         board_height = sheathing.sheathing_height  # Board height in inches
         
         # Profile dimensions (same for beveled and beaded weatherboard)
-        top_width = 0.375  # Top width in inches
-        bottom_width = 0.625  # Bottom width in inches
+        profile_config = SheathingBuilder._config()["profile"]
+        top_width = profile_config["top_width"]
+        bottom_width = profile_config["bottom_width"]
         
         # Calculate bevel angle for lapped siding
         # The bevel is the angle created by the difference between top and bottom width
         # bevel_angle = arctan((bottom_width - top_width) / board_height)
-        bevel_angle_degrees = 4
+        bevel_angle_degrees = profile_config["bevel_angle_degrees"]
         
         # Stud dimensions (from framing)
-        stud_depth = 6
+        stud_depth = SheathingBuilder._config()["placement"]["stud_depth"]
         
         # Create assembly to hold individual boards
         sheathing_assembly = cq.Assembly()
@@ -167,8 +177,6 @@ class SheathingBuilder:
             bays = getattr(floorplan.bays, face, [])
             wall_length = getattr(dimensions, face)
             bay_count = len(bays)
-            print(f"Bay count: {bay_count}")
-            print(f"Bays: {bays}")
             board_lengths = []
             board_x_positions = []
             face_quantity = 0
@@ -203,44 +211,34 @@ class SheathingBuilder:
                 bay_width = calculated_bay_widths[story_idx] if story_idx < len(calculated_bay_widths) else calculated_bay_widths[-1]
                 
                 horizontal_quantity = (bay_count + 1)
-                print(f"Horizontal quantity: {horizontal_quantity}")
 
                 for bay in range(1, horizontal_quantity + 1):
-                    print(f"Bay: {bay}")
                     if bay == 1:
                         board_length = bays[0] - (bay_width / 2)
-                        print(f"Board length: {board_length}")
                         board_x_position = 0 + (board_length / 2)
-                        print(f"Board x position: {board_x_position}")
                         board_x_positions.append(board_x_position)
                         board_lengths.append(board_length)
                     elif bay == horizontal_quantity:
                         previous_bay = bays[bay - 2] + (bay_width / 2)
                         current_bay = wall_length
                         board_length = current_bay - previous_bay
-                        print(f"Board length: {board_length}")
                         board_lengths.append(board_length)
                         board_x_position = previous_bay + (board_length / 2)
-                        print(f"Board x position: {board_x_position}")
                         board_x_positions.append(board_x_position)
                     elif bay > 1 and bay < horizontal_quantity:
                         previous_bay = bays[bay - 2] + (bay_width / 2)
                         current_bay = bays[bay - 1] - (bay_width / 2)
                         board_length = current_bay - previous_bay
-                        print(f"Board length: {board_length}")
                         board_lengths.append(board_length)
                         board_x_position = previous_bay + (board_length / 2)
-                        print(f"Board x position: {board_x_position}")
                         board_x_positions.append(board_x_position)
 
             # Create individual sheathing boards lapping continuously from bottom to top
             for row in range(1, vertical_quantity + 1):
 
-                print(f"Row: {row}")
                 
                 # Calculate the vertical position of the board
                 current_board_height += board_exposure
-                print(f"Current board height: {current_board_height}")
                 
                 # Determine which story we're in and get story-specific values
                 story_idx = get_story_index(current_board_height)
@@ -248,7 +246,6 @@ class SheathingBuilder:
                 bay_height = calculated_bay_heights[story_idx] if story_idx < len(calculated_bay_heights) else calculated_bay_heights[-1]
                 bay_width = calculated_bay_widths[story_idx] if story_idx < len(calculated_bay_widths) else calculated_bay_widths[-1]
                 
-                print(f"Story index: {story_idx}, Chair rail: {chair_rail_height}, Bay height: {bay_height}, Bay width: {bay_width}")
                 
                 # Calculate bottom edge Z position (top is at current_board_height)
                 bottom_edge_z = current_board_height - board_height
@@ -278,30 +275,22 @@ class SheathingBuilder:
                 # Determine if the board is a single board or multiple boards
                 if len(board_lengths) == 1:
                     horizontal_quantity = 1
-                    print("No windows in this row")
                 elif not board_intersects_opening:
                     # No openings in this row, use single board
                     horizontal_quantity = 1
-                    print("Single board - no opening intersection")
                 elif board_intersects_door:
                     # Door opening - always use multiple boards to cut around it
                     horizontal_quantity = len(board_lengths)
-                    print("Multiple boards in this row (door opening)")
                 elif current_board_height < chair_rail_height:
                     horizontal_quantity = 1
-                    print("Single board below window")
                 elif current_board_height > bay_height:
                     horizontal_quantity = 1
-                    print("Single board above window")
                 else:
-                    print("Multiple boards in this row")
                     horizontal_quantity = len(board_lengths)
 
-                print(f"Horizontal quantity: {horizontal_quantity}")
 
                 for col in range(1, horizontal_quantity + 1):
 
-                    print(f"Col: {col}")
                     if horizontal_quantity == 1:
                         board_length = wall_length
                         board_x_position = wall_length / 2
@@ -309,12 +298,9 @@ class SheathingBuilder:
                         board_length = board_lengths[col - 1]
                         board_x_position = board_x_positions[col - 1]
 
-                    print(f"Board length: {board_length}")
-                    print(f"Board x position: {board_x_position}")
                     face_quantity += 1
                     total_quantity += 1
 
-                    print(f"Face quantity: {face_quantity}")
 
                     if face == "front":
                         board_x = board_x_position
@@ -368,9 +354,9 @@ class SheathingBuilder:
                     
                     # Add board to assembly as individual component with color
                     board_name = f"sheathing_{face}_board{face_quantity}"
-                    sheathing_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))  # Light sheathing
+                    sheathing_assembly.add(board, name=board_name, color=SheathingBuilder._color())  # Light sheathing
         
-        return sheathing_assembly
+        return SheathingBuilder._with_scene(sheathing_assembly, "sheathing")
     
     @staticmethod
     def build_gable_sheathing(
@@ -403,12 +389,13 @@ class SheathingBuilder:
         # Sheathing board specifications
         board_exposure = sheathing.sheathing_exposure
         board_height = sheathing.sheathing_height
-        top_width = 0.375
-        bottom_width = 0.625
-        bevel_angle_degrees = 4
+        profile_config = SheathingBuilder._config()["profile"]
+        top_width = profile_config["top_width"]
+        bottom_width = profile_config["bottom_width"]
+        bevel_angle_degrees = profile_config["bevel_angle_degrees"]
         
         # Stud dimensions
-        stud_depth = 6
+        stud_depth = SheathingBuilder._config()["placement"]["stud_depth"]
         
         # Calculate wall top and ridge height
         wall_top = floor_heights[stories]
@@ -493,7 +480,33 @@ class SheathingBuilder:
                 
                 # Add to assembly
                 board_name = f"gable_sheathing_{face}_board{face_quantity}"
-                gable_assembly.add(board, name=board_name, color=cq.Color(0.9, 0.85, 0.75))
+                gable_assembly.add(board, name=board_name, color=SheathingBuilder._color())
         
-        return gable_assembly
+        return SheathingBuilder._with_scene(gable_assembly, "gable_sheathing")
+
+    @staticmethod
+    def _with_scene(assembly: cq.Assembly, subsystem_name: str) -> cq.Assembly:
+        scene_root = scene_from_assembly(
+            assembly,
+            subsystem_name=subsystem_name,
+            subsystem_type="sheathing",
+            subsystem_role=subsystem_name,
+            group_name_for_component=SheathingBuilder._group_name_for_component,
+            role_for_component=lambda _name: "sheathing_board",
+        )
+        projected = cq.Assembly()
+        project_scene_to_assembly(scene_root, projected)
+        projected.scene_root = scene_root
+        projected.scene_components = collect_component_metadata(scene_root)
+        projected.validation_results = validate_sheathing_scene(scene_root)
+        return projected
+
+    @staticmethod
+    def _group_name_for_component(component_name: str) -> str:
+        parts = component_name.split("_")
+        if component_name.startswith("gable_sheathing_") and len(parts) >= 3:
+            return f"{parts[2]}_gable"
+        if component_name.startswith("sheathing_") and len(parts) >= 2:
+            return f"{parts[1]}_wall"
+        return "sheathing"
 

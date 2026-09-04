@@ -3,37 +3,10 @@ Deterministic validation for the window scene-graph slice.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from app.services.scene_graph import Bounds, SceneNode, aggregate_local_bounds, bounds_for_workplane
-
-
-DEFAULT_TOLERANCE_INCHES = 0.01
-
-
-@dataclass
-class ValidationResult:
-    """Machine-readable geometric validation result."""
-
-    code: str
-    severity: str
-    target: str
-    message: str
-    expected: Optional[Dict[str, Any]] = None
-    measured: Optional[Dict[str, Any]] = None
-    tolerance: float = DEFAULT_TOLERANCE_INCHES
-
-    def as_dict(self) -> Dict[str, Any]:
-        return {
-            "code": self.code,
-            "severity": self.severity,
-            "target": self.target,
-            "message": self.message,
-            "expected": self.expected,
-            "measured": self.measured,
-            "tolerance": self.tolerance,
-        }
+from app.services.validation import DEFAULT_TOLERANCE_INCHES, ValidationResult, validation_summary
 
 
 def validate_window_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANCE_INCHES) -> Dict[str, Any]:
@@ -45,15 +18,7 @@ def validate_window_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANCE
             continue
         results.extend(_validate_window_node(node, tolerance))
 
-    errors = [result.as_dict() for result in results if result.severity == "error"]
-    warnings = [result.as_dict() for result in results if result.severity == "warning"]
-    return {
-        "status": "passed" if not errors else "failed",
-        "tolerance": tolerance,
-        "errors": errors,
-        "warnings": warnings,
-        "results": [result.as_dict() for result in results],
-    }
+    return validation_summary(results, tolerance)
 
 
 def _validate_window_node(window_node: SceneNode, tolerance: float) -> List[ValidationResult]:
