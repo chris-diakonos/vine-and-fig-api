@@ -74,13 +74,21 @@ def window_placement_for_wall(
             translation=(position + half_width, -dimensions.right, sill_z),
         )
     elif wall == "left":
+        # Left wall at X=0, window faces +X (into building)
+        # Window origin (lower-left exterior) should be at wall exterior face
         cornerstone_origin = CornerstonePoint(0.0, position - half_width, sill_z)
+        # Rotate -90° so window +Y (exterior-interior) points +X (into building)
+        # Y translation positions window along wall; no depth offset needed as origin is at exterior
         legacy_transform = Transform.rotate_z(
             -90.0,
             translation=(0.0, -position + half_width, sill_z),
         )
     elif wall == "right":
+        # Right wall at X=front, window faces -X (into building)
+        # Window origin should be at wall exterior face
         cornerstone_origin = CornerstonePoint(dimensions.front, position + half_width, sill_z)
+        # Rotate +90° so window +Y (exterior-interior) points -X (into building)
+        # Y translation positions window along wall; no depth offset needed as origin is at exterior
         legacy_transform = Transform.rotate_z(
             90.0,
             translation=(dimensions.front, -position - half_width, sill_z),
