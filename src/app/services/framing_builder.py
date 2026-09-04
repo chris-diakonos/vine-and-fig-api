@@ -1017,18 +1017,22 @@ class FramingBuilder:
             
             if face == "front":
                 # Front rafter: ridge to front eave (12" past front weatherboard)
-                rafter_run = front_rafter_run
+                # Target eave should match AG panel eave position
+                target_eave_y = front_weatherboard_y + roof_overhang
+                rafter_run = target_eave_y - centerline_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
-                # Position rafter centered at midpoint of its run, accounting for pitch
-                new_x = +(right_dimension/2) + (rafter_length/2 * rafter_cos) + x_offset
+                # Initial positioning (will be adjusted after calculating tip position)
+                new_x = +(right_dimension/2) + x_offset
                 roof_pitch = roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
             elif face == "rear":
                 # Rear rafter: ridge to rear eave (12" past rear weatherboard)
-                rafter_run = rear_rafter_run
+                # Target eave should match AG panel eave position
+                target_eave_y = rear_weatherboard_y - roof_overhang
+                rafter_run = centerline_y - target_eave_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
-                # Position rafter centered at midpoint of its run, accounting for pitch
-                new_x = +(right_dimension/2) - (rafter_length/2 * rafter_cos) + x_offset
+                # Initial positioning (will be adjusted after calculating tip position)
+                new_x = +(right_dimension/2) + x_offset
                 roof_pitch = 180 - roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
 
@@ -1041,8 +1045,24 @@ class FramingBuilder:
                 else:
                     new_y = (rafter_spacing * (rafter_counter - 1)) + y_offset
 
-
-                rafter = cq.Workplane('XY').box(rafter_length, rafter_width, rafter_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0),roof_pitch).rotate((0,0,1),(0,0,0),90)
+                # Create rafter with initial positioning, then adjust to seat tip at eave
+                # Rafter transformations: translate, pitch about Y, rotate 90° about Z
+                # After these transforms, we need the eave tip at target_eave_y
+                rafter_temp = cq.Workplane('XY').box(rafter_length, rafter_width, rafter_depth).translate((new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0), roof_pitch).rotate((0,0,1),(0,0,0),90)
+                bbox_temp = rafter_temp.val().BoundingBox()
+                
+                # Find current eave tip position after transformations
+                if face == "front":
+                    current_eave_y = bbox_temp.ymax  # Front rafter tip at max Y
+                elif face == "rear":
+                    current_eave_y = bbox_temp.ymin  # Rear rafter tip at min Y
+                
+                # Calculate adjustment needed to position tip at target
+                x_adjustment = target_eave_y - current_eave_y
+                adjusted_new_x = new_x + x_adjustment
+                
+                # Create final rafter with adjusted position
+                rafter = cq.Workplane('XY').box(rafter_length, rafter_width, rafter_depth).translate((adjusted_new_x, new_y, new_z)).rotateAboutCenter((0, 1, 0),roof_pitch).rotate((0,0,1),(0,0,0),90)
                 assembly.add(rafter, name=f"{member_type}_{face}_{rafter_counter}", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
         
         # Add BOM tracking

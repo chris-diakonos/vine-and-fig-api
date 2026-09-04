@@ -287,6 +287,44 @@ function renderLayerControls(counts) {
   }
 }
 
+function renderValidationResults(validation) {
+  if (!validation || !validation.results || validation.results.length === 0) {
+    return;
+  }
+  
+  validationContent.innerHTML = "";
+  let hasErrors = false;
+  
+  for (const result of validation.results) {
+    const item = document.createElement("div");
+    item.className = `validation-item ${result.severity || "warning"}`;
+    
+    const code = document.createElement("div");
+    code.className = "validation-code";
+    code.textContent = result.code || "UNKNOWN";
+    
+    const message = document.createElement("div");
+    message.className = "validation-message";
+    message.textContent = result.message || "Validation issue";
+    
+    const target = document.createElement("div");
+    target.className = "validation-target";
+    target.textContent = result.target || "";
+    
+    item.append(code, message, target);
+    validationContent.appendChild(item);
+    
+    if (result.severity === "error") {
+      hasErrors = true;
+    }
+  }
+  
+  // Only show panel if there are validation issues
+  if (validation.results.length > 0) {
+    validationPanel.hidden = false;
+  }
+}
+
 async function loadManifest() {
   const response = await fetch("./manifest.json", { cache: "no-store" });
   if (!response.ok) {
@@ -314,6 +352,13 @@ async function main() {
   const viewLeftBtn = document.getElementById("view-left");
   const viewRightBtn = document.getElementById("view-right");
   const fitVisibleBtn = document.getElementById("fit-visible");
+  const validationPanel = document.getElementById("validation-panel");
+  const validationContent = document.getElementById("validation-content");
+  const validationCloseBtn = document.getElementById("validation-close");
+  
+  validationCloseBtn.addEventListener("click", () => {
+    validationPanel.hidden = true;
+  });
   
   viewPerspectiveBtn.addEventListener("click", () => {
     camera = perspectiveCamera;
@@ -433,6 +478,12 @@ async function main() {
     scene.add(modelRoot);
     renderLayerControls(counts);
     fitCameraToObject(camera, controls, modelRoot);
+    
+    // Render validation results if present
+    if (manifest.validation) {
+      renderValidationResults(manifest.validation);
+    }
+    
     statusMessage.hidden = true;
   } catch (error) {
     showError(error.message || "Could not load GLB");
