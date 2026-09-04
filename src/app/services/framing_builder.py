@@ -980,7 +980,9 @@ class FramingBuilder:
                 target_eave_y = front_weatherboard_y + roof_overhang
                 rafter_run = target_eave_y - centerline_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
-                new_x = +(right_dimension/2) + (rafter_length/2 * rafter_cos) + x_offset
+                # After rotation by 90° around Z, new_x becomes the Y position
+                # Rafter center should be at midpoint between ridge (centerline_y) and eave (target_eave_y)
+                new_x = (centerline_y + target_eave_y) / 2 + x_offset
                 roof_pitch = roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
             elif face == "rear":
@@ -988,7 +990,9 @@ class FramingBuilder:
                 target_eave_y = rear_weatherboard_y - roof_overhang
                 rafter_run = centerline_y - target_eave_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
-                new_x = +(right_dimension/2) - (rafter_length/2 * rafter_cos) + x_offset
+                # After rotation by 90° around Z, new_x becomes the Y position
+                # Rafter center should be at midpoint between ridge (centerline_y) and eave (target_eave_y)
+                new_x = (centerline_y + target_eave_y) / 2 + x_offset
                 roof_pitch = 180 - roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
 
