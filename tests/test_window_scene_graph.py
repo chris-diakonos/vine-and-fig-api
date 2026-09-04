@@ -46,6 +46,11 @@ class WindowSceneGraphTest(unittest.TestCase):
         paths = {component["semantic_path"] for component in model.scene_components}
         self.assertIn("building/windows/front_wall/story_1/window_120/lower_sash/left_stile", paths)
         self.assertIn("building/windows/front_wall/story_1/window_120/upper_sash/right_stile", paths)
+        self.assertIn("building/windows/front_wall/story_1/window_120/lower_sash/glass_0_0", paths)
+        self.assertIn("building/windows/front_wall/story_1/window_120/upper_sash/glass_0_0", paths)
+
+        window_results = model.validation_results["results"]
+        self.assertTrue(all(not result["warnings"] for result in window_results))
 
     def test_example_request_window_validation_passes(self):
         request = self._load_request(ROOT / "example_request.json")
@@ -97,6 +102,7 @@ class WindowSceneGraphTest(unittest.TestCase):
             with open(artifacts["validation_path"], "r", encoding="utf-8") as handle:
                 validation = json.load(handle)
             self.assertEqual(validation["status"], "passed")
+        self.assertTrue(all(not result["warnings"] for result in validation["results"]))
 
 
 if __name__ == "__main__":

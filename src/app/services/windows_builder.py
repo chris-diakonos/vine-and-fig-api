@@ -462,6 +462,7 @@ class WindowsBuilder:
             "bottom_sash_lights": bottom_sash_lights,
             "frame_depth": frame_depth,
             "frame_width": frame_width,
+            "stile_width": window.stile_width,
             "top_rail_width": top_rail_width,
             "bottom_rail_width": bottom_rail_width,
             "meeting_rail_width": meeting_rail_width,
@@ -597,6 +598,42 @@ class WindowsBuilder:
         return frame
 
     @staticmethod
+    def _add_glass_panes(
+        sash: cq.Assembly,
+        rows: int,
+        metrics: Dict[str, float],
+        z_start: float,
+        y_center: float,
+    ) -> None:
+        """Add simple glass panes in sash-local coordinates."""
+        cols = 3
+        light_width = metrics["light_width"]
+        light_height = metrics["light_height"]
+        stile_width = metrics["stile_width"]
+        rail_length = metrics["rail_length"]
+        muntin_width = metrics["muntin_width"]
+        glazing_rabbet = metrics["glazing_rabbet"]
+        glass_thickness = 0.125
+        glass_color = cq.Color(0.7, 0.9, 1.0, 0.35)
+
+        pane_width = light_width - (2 * glazing_rabbet)
+        pane_height = light_height - (2 * glazing_rabbet)
+        x_start = -(rail_length / 2) + stile_width + glazing_rabbet
+        x_pitch = light_width + muntin_width - (2 * glazing_rabbet)
+        z_pitch = light_height + muntin_width - (2 * glazing_rabbet)
+
+        for row in range(rows):
+            for col in range(cols):
+                x_center = x_start + (col * x_pitch) + (pane_width / 2)
+                z_center = z_start + (row * z_pitch) + (pane_height / 2)
+                pane = (
+                    cq.Workplane("XY")
+                    .box(pane_width, glass_thickness, pane_height)
+                    .translate((x_center, y_center, z_center))
+                )
+                sash.add(pane, name=f"glass_{row}_{col}", color=glass_color)
+
+    @staticmethod
     def _notebook_top_sash(window: Window, metrics: Dict[str, float]) -> cq.Assembly:
         center_x = 0.0
         center_y = 0.0
@@ -679,6 +716,14 @@ class WindowsBuilder:
                 .translate((top_rail_x - rail_length, stile_y - thickness, horizontal_muntin_z))
             )
             sash.add(horizontal_muntin, name=f"horizontal_muntin_{muntin}", color=sash_color)
+
+        WindowsBuilder._add_glass_panes(
+            sash,
+            rows=top_sash_lights // 3,
+            metrics=metrics,
+            z_start=glazing_rabbet,
+            y_center=stile_y - (thickness / 2),
+        )
 
         return sash
 
@@ -776,6 +821,15 @@ class WindowsBuilder:
                 .translate((bottom_rail_x, stile_y - thickness, horizontal_muntin_z))
             )
             sash.add(horizontal_muntin, name=f"horizontal_muntin_{muntin}", color=sash_color)
+
+        bottom_glass_start = stile_z - bottom_stile_length + bottom_rail_width + glazing_rabbet
+        WindowsBuilder._add_glass_panes(
+            sash,
+            rows=bottom_sash_lights // 3,
+            metrics=metrics,
+            z_start=bottom_glass_start,
+            y_center=stile_y - (thickness / 2),
+        )
 
         return sash
 

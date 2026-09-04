@@ -175,8 +175,18 @@ def _validate_named_group_containment(
 
 
 def _validate_glazing_plane(window_node: SceneNode, tolerance: float) -> List[ValidationResult]:
+    results: List[ValidationResult] = []
+    for group_name in ["upper_sash", "lower_sash"]:
+        group = next((child for child in window_node.children if child.name == group_name), None)
+        if group is None:
+            continue
+        results.extend(_validate_group_glazing_plane(group, tolerance))
+    return results
+
+
+def _validate_group_glazing_plane(sash_node: SceneNode, tolerance: float) -> List[ValidationResult]:
     glass_bounds = []
-    for node in window_node.iter_nodes():
+    for node in sash_node.iter_nodes():
         if "glass" not in node.role or node.geometry is None:
             continue
         bounds = bounds_for_workplane(node.geometry)
@@ -187,9 +197,9 @@ def _validate_glazing_plane(window_node: SceneNode, tolerance: float) -> List[Va
         return [
             ValidationResult(
                 code="WINDOW_GLAZING_MISSING",
-                severity="warning",
-                target=window_node.semantic_path,
-                message="Window has no glass panes to validate.",
+                severity="error",
+                target=sash_node.semantic_path,
+                message="Sash has no glass panes to validate.",
                 tolerance=tolerance,
             )
         ]
@@ -204,9 +214,9 @@ def _validate_glazing_plane(window_node: SceneNode, tolerance: float) -> List[Va
     return [
         ValidationResult(
             code="WINDOW_GLAZING_PLANE_MISMATCH",
-            severity="warning",
-            target=window_node.semantic_path,
-            message="Glass panes are not aligned to a common local glazing plane.",
+            severity="error",
+            target=sash_node.semantic_path,
+            message="Glass panes are not aligned to a common sash-local glazing plane.",
             expected={"axis": axis, "average": average},
             measured={"max_delta": max_delta},
             tolerance=tolerance,
