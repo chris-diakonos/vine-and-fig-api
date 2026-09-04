@@ -326,11 +326,7 @@ class WindowsBuilder:
         
         # Left stile (vertical piece - front jamb for left/right walls)
         stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
-        if face in ["left", "right"]:
-            # For left/right walls, jamb needs frame_width in Y direction to match header/sill span
-            left_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        else:
-            left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
+        left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
         if face in ["left", "right"]:
             left_frame = left_frame.translate((header_sill_const, stile_pos_front, stile_z))
         else:
@@ -338,11 +334,7 @@ class WindowsBuilder:
         window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Right stile (vertical piece - rear jamb for left/right walls)
-        if face in ["left", "right"]:
-            # For left/right walls, jamb needs frame_width in Y direction to match header/sill span
-            right_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        else:
-            right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
+        right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
         if face in ["left", "right"]:
             right_frame = right_frame.translate((header_sill_const, stile_pos_rear, stile_z))
         else:

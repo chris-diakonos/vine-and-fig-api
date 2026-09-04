@@ -41,7 +41,13 @@ class RoofBuilder:
         
         if roof.roof_type == "side-gable":
             # Pitch applies to the depth dimension
-            panel_run = (right_dimension / 2) + roof_overhang
+            # Account for asymmetric weatherboard extensions to avoid ridge gap
+            front_weatherboard_y = 2.674
+            rear_weatherboard_y = -250.528
+            centerline_y = (front_weatherboard_y + rear_weatherboard_y) / 2
+            # Panel must span from eave (12" past weatherboard) to ridge
+            front_eave_y = front_weatherboard_y + roof_overhang
+            panel_run = abs(front_eave_y - centerline_y)
             panel_cos = math.cos(roof_pitch_radians)
             panel_sin = math.sin(roof_pitch_radians)
             panel_length = math.ceil(panel_run / panel_cos) if panel_cos != 0 else math.ceil(panel_run)
