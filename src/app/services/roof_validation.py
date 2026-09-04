@@ -36,4 +36,39 @@ def validate_roof_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANCE_I
                         tolerance=tolerance,
                     )
                 )
+            else:
+                # Validate gable overhang extent for side-gable roofs
+                # For a 480" wide building, roof should extend roughly from x=-12 to x=492
+                if bounds:
+                    roof_x_min = bounds.min[0]
+                    roof_x_max = bounds.max[0]
+                    expected_x_min = -12.0
+                    expected_x_max = 492.0
+                    overhang_tolerance = 2.0  # Allow 2" tolerance for gable overhang
+                    
+                    if roof_x_min > expected_x_min + overhang_tolerance:
+                        results.append(
+                            ValidationResult(
+                                code="GABLE_OVERHANG_LEFT_SHORT",
+                                severity="warning",
+                                target=node.semantic_path,
+                                message=f"Left gable overhang insufficient: roof starts at x={roof_x_min:.2f}",
+                                expected={"x_min": expected_x_min},
+                                measured={"x_min": roof_x_min},
+                                tolerance=overhang_tolerance,
+                            )
+                        )
+                    
+                    if roof_x_max < expected_x_max - overhang_tolerance:
+                        results.append(
+                            ValidationResult(
+                                code="GABLE_OVERHANG_RIGHT_SHORT",
+                                severity="warning",
+                                target=node.semantic_path,
+                                message=f"Right gable overhang insufficient: roof ends at x={roof_x_max:.2f}",
+                                expected={"x_max": expected_x_max},
+                                measured={"x_max": roof_x_max},
+                                tolerance=overhang_tolerance,
+                            )
+                        )
     return validation_summary(results, tolerance)

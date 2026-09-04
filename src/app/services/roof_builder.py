@@ -331,17 +331,21 @@ class RoofBuilder:
                 # Note: Gable ends have no weatherboard extension in X direction (weatherboard only on front/rear)
                 # Total roof span: framing width + overhangs = roof_length + 2*overhang
                 effective_roof_length = roof_length + (2 * roof.roof_overhang)
-                # Start position: left framing edge - overhang = -overhang
-                gable_overhang_offset = -roof.roof_overhang
+                # Start position: left framing edge - overhang - safety margin
+                # Add extra margin to account for panel profile geometry and ensure full coverage
+                safety_margin = 4.0
+                gable_overhang_offset = -roof.roof_overhang - safety_margin
                 
                 # Calculate panel quantity accounting for panel width
                 # First panel covers full profile width, subsequent panels add exposure width
+                # Add safety margin to both ends to ensure coverage
                 panel_profile_width = RoofBuilder._config()["defaults"]["ag_panel_profile_width"]
-                if effective_roof_length <= panel_profile_width:
+                target_length = effective_roof_length + (2 * safety_margin)
+                if target_length <= panel_profile_width:
                     quantity = 1
                 else:
                     # First panel covers profile width, additional panels add exposure each
-                    remaining_length = effective_roof_length - panel_profile_width
+                    remaining_length = target_length - panel_profile_width
                     # Use ceil to ensure we cover at least the target length
                     additional_panels_exact = remaining_length / roof_panel_exposure
                     additional_panels = math.ceil(additional_panels_exact)
