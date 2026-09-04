@@ -309,11 +309,15 @@ class RoofBuilder:
             # For side-gable roofs, account for gable overhang on both ends
             if gable_direction == "side":
                 # Gable overhang should be exactly 12" past weatherboard outer face on both ends
-                # The weatherboard faces are at x=0 (left) and x=roof_length (right) after weatherboard extension
-                # We need roof to span: weatherboard_left - 12" to weatherboard_right + 12"
-                # So total roof length = roof_length + 24"
-                effective_roof_length = roof_length + (2 * roof.roof_overhang)
-                gable_overhang_offset = -roof.roof_overhang
+                # Weatherboard extends beyond framing by approximately 2.674" on each end
+                # (matching the front_weatherboard_y offset used in framing_builder.py)
+                weatherboard_extension = 2.674
+                # Total roof span: framing width + weatherboard extensions + overhangs
+                # = roof_length + 2*weatherboard_extension + 2*overhang
+                effective_roof_length = roof_length + (2 * weatherboard_extension) + (2 * roof.roof_overhang)
+                # Start position: left weatherboard face - overhang
+                # = -(weatherboard_extension + overhang)
+                gable_overhang_offset = -(weatherboard_extension + roof.roof_overhang)
                 
                 # Calculate panel quantity accounting for panel width
                 # First panel covers full profile width, subsequent panels add exposure width
