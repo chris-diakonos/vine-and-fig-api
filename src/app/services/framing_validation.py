@@ -37,14 +37,15 @@ def validate_framing_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANC
                     )
                 )
         
-        # Validate rafter eave overhang
+        # Validate rafter eave overhang (should match AG panel eave positions)
         if node.role == "rafter" and "front" in node.name:
             bounds = aggregate_local_bounds(node)
             if bounds:
-                # Front rafters should extend to approximately y=14.674 (2.674 + 12)
+                # Front rafters should extend to same eave as AG panels: weatherboard + 12"
+                # weatherboard outer Y = 2.674, so eave at 2.674 + 12 = 14.674
                 expected_front_eave_y = 14.674
                 measured_y_max = bounds.max[1]
-                eave_tolerance = 2.0
+                eave_tolerance = 1.0  # Tighter tolerance for eave alignment
                 
                 if abs(measured_y_max - expected_front_eave_y) > eave_tolerance:
                     results.append(
@@ -52,7 +53,7 @@ def validate_framing_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANC
                             code="RAFTER_FRONT_EAVE_MISMATCH",
                             severity="warning",
                             target=node.semantic_path,
-                            message=f"Front rafter eave position: y={measured_y_max:.2f}, expected ~{expected_front_eave_y:.2f}",
+                            message=f"Front rafter eave at y={measured_y_max:.2f}, expected {expected_front_eave_y:.2f} (12\" past WB at y=2.674)",
                             expected={"eave_y": expected_front_eave_y},
                             measured={"eave_y": measured_y_max},
                             tolerance=eave_tolerance,
@@ -62,10 +63,11 @@ def validate_framing_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANC
         if node.role == "rafter" and "rear" in node.name:
             bounds = aggregate_local_bounds(node)
             if bounds:
-                # Rear rafters should extend to approximately y=-262.528 (-250.528 - 12)
+                # Rear rafters should extend to same eave as AG panels: weatherboard - 12"
+                # weatherboard outer Y = -250.528, so eave at -250.528 - 12 = -262.528
                 expected_rear_eave_y = -262.528
                 measured_y_min = bounds.min[1]
-                eave_tolerance = 2.0
+                eave_tolerance = 1.0  # Tighter tolerance for eave alignment
                 
                 if abs(measured_y_min - expected_rear_eave_y) > eave_tolerance:
                     results.append(
@@ -73,7 +75,7 @@ def validate_framing_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANC
                             code="RAFTER_REAR_EAVE_MISMATCH",
                             severity="warning",
                             target=node.semantic_path,
-                            message=f"Rear rafter eave position: y={measured_y_min:.2f}, expected ~{expected_rear_eave_y:.2f}",
+                            message=f"Rear rafter eave at y={measured_y_min:.2f}, expected {expected_rear_eave_y:.2f} (12\" past WB at y=-250.528)",
                             expected={"eave_y": expected_rear_eave_y},
                             measured={"eave_y": measured_y_min},
                             tolerance=eave_tolerance,

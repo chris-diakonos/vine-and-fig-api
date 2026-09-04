@@ -327,11 +327,13 @@ class RoofBuilder:
             
             # For side-gable roofs, account for gable overhang on both ends
             if gable_direction == "side":
-                # Gable overhang should be exactly 12" past framing outer face on both ends
-                # Target span: from x=-12 to x=roof_length+12 (e.g., -12 to 492 for 480" building)
-                # This gives both ends exactly 12" past the framing edges at x=0 and x=roof_length
-                left_target_x = -roof.roof_overhang
-                right_target_x = roof_length + roof.roof_overhang
+                # Gable overhang should be exactly 12" past corner post outer faces
+                # Corner posts are 6" wide centered at x=0 and x=roof_length
+                # Post outer faces are at x=-3 and x=roof_length+3
+                # Target: 12" past post faces = x=-15 to x=roof_length+15
+                post_half_width = 3.0
+                left_target_x = -post_half_width - roof.roof_overhang
+                right_target_x = roof_length + post_half_width + roof.roof_overhang
                 target_span = right_target_x - left_target_x
                 
                 # Calculate panel quantity accounting for panel width
