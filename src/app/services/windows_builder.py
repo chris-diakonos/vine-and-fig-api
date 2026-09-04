@@ -6,6 +6,15 @@ import math
 from typing import Dict, Any, List, Optional
 from app.models.openings import Window
 from app.models.floorplan import Dimensions, Floorplan
+from app.services.coordinate_system import window_placement_for_wall
+from app.services.scene_graph import (
+    SceneNode,
+    Transform,
+    aggregate_local_bounds,
+    collect_component_metadata,
+    project_scene_to_assembly,
+)
+from app.services.window_validation import validate_window_scene
 
 
 class WindowsBuilder:
@@ -230,35 +239,16 @@ class WindowsBuilder:
         return sash_assembly
     
     @staticmethod
-    def _window_frame(
-        window: Window,
-        center_x: float,
-        center_y: float,
-        chair_rail_bottom_z: float,
-        face: str
-    ) -> cq.Assembly:
-        """
-        Create a window frame with bottom of opening at chair_rail_bottom_z.
-        
-        Args:
-            window: Window specification
-            center_x: X coordinate of opening center
-            center_y: Y coordinate of opening center
-            chair_rail_bottom_z: Z coordinate of bottom of opening (chair rail height)
-            face: Wall face ("front", "rear", "left", "right") - determines rotation
-            
-        Returns:
-            CadQuery Assembly with window frame components
-        """
+    def _window_metrics(window: Window) -> Dict[str, float]:
         # Parse window size and configuration
         size_parts = window.size.split('x')
         light_width = float(size_parts[0])
         light_height = float(size_parts[1])
-        
+
         configuration_parts = window.configuration.split("/")
         top_sash_lights = int(configuration_parts[0])
         bottom_sash_lights = int(configuration_parts[1])
-        
+
         # Frame parameters - use values from Window model or defaults
         frame_depth = 4
         frame_width = 5
@@ -294,78 +284,94 @@ class WindowsBuilder:
         
         rail_length = (light_width * 3) + (frame_width * 2) + (muntin_width * 2) - (glazing_rabbet * 6) + tenon_adjustment
         header_length = (frame_width * 2) + rail_length
-        
-        # Calculate the center Z position based on the actual opening height
-        # The bottom of the opening (where sill sits) should be at chair_rail_bottom_z
-        # So the center is at: bottom + (opening_height / 2)
-        center_z = chair_rail_bottom_z + (pulley_stile_length / 2)
-        
+
+        return {
+            "light_width": light_width,
+            "light_height": light_height,
+            "top_sash_lights": top_sash_lights,
+            "bottom_sash_lights": bottom_sash_lights,
+            "frame_depth": frame_depth,
+            "frame_width": frame_width,
+            "top_rail_width": top_rail_width,
+            "bottom_rail_width": bottom_rail_width,
+            "meeting_rail_width": meeting_rail_width,
+            "muntin_width": muntin_width,
+            "sill_inside_height": sill_inside_height,
+            "sill_outside_height": sill_outside_height,
+            "sill_width": sill_width,
+            "bead_size": bead_size,
+            "glazing_rabbet": glazing_rabbet,
+            "top_stile_length": top_stile_length,
+            "bottom_stile_length": bottom_stile_length,
+            "pulley_stile_length": pulley_stile_length,
+            "rail_length": rail_length,
+            "header_length": header_length,
+            "opening_width": header_length,
+            "opening_height": pulley_stile_length + frame_width,
+        }
+
+    @staticmethod
+    def _window_frame(window: Window) -> cq.Assembly:
+        """
+        Create a complete window in canonical local coordinates.
+
+        Origin is the lower-left exterior corner of the opening. The returned
+        assembly contains no wall/building placement assumptions.
+        """
+        metrics = WindowsBuilder._window_metrics(window)
+        light_width = metrics["light_width"]
+        light_height = metrics["light_height"]
+        top_sash_lights = int(metrics["top_sash_lights"])
+        bottom_sash_lights = int(metrics["bottom_sash_lights"])
+        frame_depth = metrics["frame_depth"]
+        frame_width = metrics["frame_width"]
+        top_rail_width = metrics["top_rail_width"]
+        bottom_rail_width = metrics["bottom_rail_width"]
+        meeting_rail_width = metrics["meeting_rail_width"]
+        muntin_width = metrics["muntin_width"]
+        sill_inside_height = metrics["sill_inside_height"]
+        sill_width = metrics["sill_width"]
+        bead_size = metrics["bead_size"]
+        glazing_rabbet = metrics["glazing_rabbet"]
+        pulley_stile_length = metrics["pulley_stile_length"]
+        rail_length = metrics["rail_length"]
+        header_length = metrics["header_length"]
+        bottom_stile_length = metrics["bottom_stile_length"]
+
+        center_x = header_length / 2
+        center_y = frame_depth / 2
+        center_z = pulley_stile_length / 2
+
         # Create window frame assembly
         window_frame = cq.Assembly()
+
+        stile_pos_left = 0
+        stile_pos_right = header_length - frame_width
+        header_sill_const = center_y
+        header_sill_start = 0
+        header_sill_length = header_length
         
-        # For left/right walls, jambs span in Y direction with rail_length spacing
-        # For front/rear walls, jambs span in X direction with header_length spacing
-        if face in ["left", "right"]:
-            # Jambs positioned along Y axis, separated by rail_length
-            stile_pos_front = center_y - (rail_length / 2)
-            stile_pos_rear = center_y + (rail_length / 2) - frame_width
-            header_sill_const = center_x
-            # Header/sill should align with jambs, so use rail_length not header_length
-            header_sill_start = center_y - (rail_length / 2)
-            header_sill_length = rail_length
-        else:
-            # Jambs positioned along X axis, separated by header_length
-            stile_pos_left = center_x - (header_length / 2)
-            stile_pos_right = center_x + (header_length / 2) - frame_width
-            header_sill_const = center_y
-            header_sill_start = center_x - (header_length / 2)
-            header_sill_length = header_length
-        
-        # Frame center point for rotation
-        frame_center = (center_x, center_y, center_z)
-        
-        # Left stile (vertical piece - front jamb for left/right walls)
+        # Left stile (vertical jamb)
         stile_z = center_z + (pulley_stile_length / 2) - (frame_width / 2)
         left_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        if face in ["left", "right"]:
-            left_frame = left_frame.translate((header_sill_const, stile_pos_front, stile_z))
-        else:
-            left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
+        left_frame = left_frame.translate((stile_pos_left, header_sill_const, stile_z))
         window_frame.add(left_frame, name="left_frame", color=cq.Color(0.8, 0.7, 0.6))
         
-        # Right stile (vertical piece - rear jamb for left/right walls)
+        # Right stile (vertical jamb)
         right_frame = WindowsBuilder._beaded_board(frame_width, frame_depth, bead_size).extrude(pulley_stile_length + 2).rotate((0, 0, 0), (1, 0, 0), 90)
-        if face in ["left", "right"]:
-            right_frame = right_frame.translate((header_sill_const, stile_pos_rear, stile_z))
-        else:
-            right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
+        right_frame = right_frame.translate((stile_pos_right, header_sill_const, stile_z))
         window_frame.add(right_frame, name="right_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Top header (horizontal piece)
         header_z = center_z + ((pulley_stile_length + frame_width) / 2)
-        if face in ["left", "right"]:
-            # For left/right walls, header extends in Y
-            # Create profile, extrude along Y, then rotate to align properly
-            # Use depth as width (X), width as height (Z) to get correct dimensions after rotation
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90).rotate((0, 0, 0), (1, 0, 0), -90)
-            top_frame = top_frame.translate((header_sill_const, header_sill_start, header_z))
-        else:
-            # For front/rear walls, header extends in X, rotate around Z
-            top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
-            top_frame = top_frame.translate((header_sill_start, header_sill_const, header_z))
+        top_frame = WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
+        top_frame = top_frame.translate((header_sill_start, header_sill_const, header_z))
         window_frame.add(top_frame, name="top_frame", color=cq.Color(0.8, 0.7, 0.6))
         
         # Bottom sill (horizontal piece)
         sill_z = center_z - (pulley_stile_length / 2)
-        if face in ["left", "right"]:
-            # For left/right walls, sill extends in Y
-            # Use same rotation sequence as header to ensure consistent orientation
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90).rotate((0, 0, 0), (1, 0, 0), -90)
-            bottom_frame = bottom_frame.translate((header_sill_const, header_sill_start, sill_z))
-        else:
-            # For front/rear walls, sill extends in X, rotate around Z
-            bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
-            bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
+        bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, metrics["sill_outside_height"], bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
+        bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
         window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
         
         # Create top and bottom sash assemblies with muntins and glazing
@@ -397,67 +403,109 @@ class WindowsBuilder:
             sash_thickness=sash_thickness
         )
         
-        # Position sashes within the frame opening
-        # The sashes sit between the jambs, inside the opening
-        # Sash assembly is created with: width in X, height in Y, thickness in Z
-        # We need to rotate to get proper orientation with thickness perpendicular to wall
-        if face in ["left", "right"]:
-            # For left/right walls, sashes need to be in YZ plane with thickness in X
-            # Sash X position: centered in frame depth
-            sash_x = center_x - (sash_thickness / 2)
-            # Bottom sash Y position: aligned with front jamb + frame width
-            bottom_sash_y_start = center_y - (rail_length / 2) + frame_width
-            # Top sash Y position: above bottom sash (not meeting rail overlap)
-            top_sash_y_start = bottom_sash_y_start
-            # Z position: bottom sash at sill top, top sash above it
-            bottom_sash_z = sill_z + sill_inside_height
-            top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
-            
-            # Rotate and position bottom sash: first swap Y/Z (height vertical), then rotate to YZ plane
-            for name, obj_data in bottom_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    # First rotate -90° around X to make height vertical (Y→Z)
-                    # Then rotate 90° around Z to align width with Y axis (X→Y, thickness→X)
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.rotate((0, 0, 0), (0, 0, 1), 90)
-                    positioned_obj = positioned_obj.translate((sash_x, bottom_sash_y_start, bottom_sash_z))
-                    window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
-            
-            # Rotate and position top sash
-            for name, obj_data in top_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.rotate((0, 0, 0), (0, 0, 1), 90)
-                    positioned_obj = positioned_obj.translate((sash_x, top_sash_y_start, top_sash_z))
-                    window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
-        else:
-            # For front/rear walls, sashes need to be in XZ plane with thickness in Y
-            # Sash Y position: centered in frame depth
-            sash_y = center_y - (sash_thickness / 2)
-            # Bottom sash X position: aligned with left jamb + frame width
-            bottom_sash_x_start = center_x - (header_length / 2) + frame_width
-            # Top sash X position: same as bottom
-            top_sash_x_start = bottom_sash_x_start
-            # Z position: bottom sash at sill top, top sash above it
-            bottom_sash_z = sill_z + sill_inside_height
-            top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
-            
-            # Rotate and position bottom sash: rotate -90° around X to swap Y/Z (make height vertical)
-            for name, obj_data in bottom_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    # Rotate -90° around X axis: width stays in X, height moves to Z, thickness moves to Y
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.translate((bottom_sash_x_start, sash_y, bottom_sash_z))
-                    window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
-            
-            # Rotate and position top sash
-            for name, obj_data in top_sash.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
-                    positioned_obj = positioned_obj.translate((top_sash_x_start, sash_y, top_sash_z))
-                    window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+        # Position sashes inside the local frame opening.
+        sash_y = center_y - (sash_thickness / 2)
+        bottom_sash_x_start = frame_width
+        top_sash_x_start = bottom_sash_x_start
+        bottom_sash_z = sill_z + sill_inside_height
+        top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
+
+        for name, obj_data in bottom_sash.traverse():
+            if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
+                positioned_obj = positioned_obj.translate((bottom_sash_x_start, sash_y, bottom_sash_z))
+                window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+
+        for name, obj_data in top_sash.traverse():
+            if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                positioned_obj = obj_data.obj.rotate((0, 0, 0), (1, 0, 0), -90)
+                positioned_obj = positioned_obj.translate((top_sash_x_start, sash_y, top_sash_z))
+                window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
+
+    @staticmethod
+    def _window_scene(
+        window: Window,
+        semantic_name: str,
+        component_prefix: str,
+        placement: Transform,
+        placement_metadata: Dict[str, Any],
+    ) -> SceneNode:
+        """Create a semantic window scene node from local window geometry."""
+        metrics = WindowsBuilder._window_metrics(window)
+        window_node = SceneNode(
+            name=semantic_name,
+            node_type="window",
+            role="window",
+            local_transform=placement,
+            metadata={
+                "metrics": metrics,
+                "placement": placement_metadata,
+                "coordinate_system": "window-local",
+            },
+        )
+
+        groups = {
+            "frame": window_node.add_child(SceneNode("frame", "assembly", "frame")),
+            "upper_sash": window_node.add_child(SceneNode("upper_sash", "assembly", "upper_sash")),
+            "lower_sash": window_node.add_child(SceneNode("lower_sash", "assembly", "lower_sash")),
+        }
+
+        frame_assembly = WindowsBuilder._window_frame(window)
+        for name, obj_data in frame_assembly.traverse():
+            if not hasattr(obj_data, 'obj') or obj_data.obj is None:
+                continue
+            group_name = WindowsBuilder._scene_group_for_component(name)
+            part_name = WindowsBuilder._scene_part_name(name)
+            groups[group_name].add_child(
+                SceneNode(
+                    name=part_name,
+                    node_type="part",
+                    role=WindowsBuilder._scene_role_for_component(name),
+                    geometry=obj_data.obj,
+                    color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6),
+                    metadata={"component_name": f"{component_prefix}_{name}"},
+                )
+            )
+
+        local_bounds = aggregate_local_bounds(window_node)
+        if local_bounds is not None:
+            metrics["opening_width"] = local_bounds.size[0]
+            metrics["opening_height"] = local_bounds.size[2]
+            window_node.metadata["local_bounds_datum"] = local_bounds.as_dict()
+
+        return window_node
+
+    @staticmethod
+    def _scene_group_for_component(name: str) -> str:
+        if name.startswith("top_sash_"):
+            return "upper_sash"
+        if name.startswith("bottom_sash_"):
+            return "lower_sash"
+        return "frame"
+
+    @staticmethod
+    def _scene_part_name(name: str) -> str:
+        if name.startswith("top_sash_"):
+            return name.replace("top_sash_", "", 1)
+        if name.startswith("bottom_sash_"):
+            return name.replace("bottom_sash_", "", 1)
+        return name
+
+    @staticmethod
+    def _scene_role_for_component(name: str) -> str:
+        if "glass" in name:
+            return "glass"
+        if "muntin" in name:
+            return "muntin"
+        if "rail" in name:
+            return "rail"
+        if "stile" in name or "frame" in name:
+            return "stile"
+        if "sill" in name:
+            return "sill"
+        return "part"
     
     @staticmethod
     def build(
@@ -488,6 +536,8 @@ class WindowsBuilder:
             return None
         
         windows_assembly = cq.Assembly()
+        scene_root = SceneNode("building", "building", "building")
+        windows_root = scene_root.add_child(SceneNode("windows", "assembly", "windows"))
         
         # Build set of door locations for quick lookup (wall, position, floor)
         door_locations = set()
@@ -513,43 +563,28 @@ class WindowsBuilder:
                 floor_height = floor_heights[story_idx]
                 chair_rail_height_z = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else floor_height + 30.0
                 
-                # Frame depth
-                frame_depth = 4
-                
-                # Calculate window center coordinates based on face
-                if window.wall == "front":
-                    window_center_x = window.position
-                    window_center_y = frame_depth / 2
-                elif window.wall == "rear":
-                    window_center_x = window.position
-                    window_center_y = -dimensions.right + frame_depth / 2
-                elif window.wall == "left":
-                    window_center_x = frame_depth / 2
-                    window_center_y = -window.position
-                elif window.wall == "right":
-                    window_center_x = dimensions.front + frame_depth / 2
-                    window_center_y = -window.position
-                else:
+                if window.wall not in ["front", "rear", "left", "right"]:
                     continue
-                
-                # Create window frame
-                frame_assembly = WindowsBuilder._window_frame(
-                    window,
-                    window_center_x,
-                    window_center_y,
+
+                metrics = WindowsBuilder._window_metrics(window)
+                wall_placement = window_placement_for_wall(
+                    window.wall,
+                    window.position,
                     chair_rail_height_z,
-                    window.wall
+                    metrics["opening_width"],
+                    dimensions,
                 )
-                
-                # Add all frame components to the windows assembly
-                for name, obj_data in frame_assembly.traverse():
-                    if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                        component_name = f"window_{window.wall}_story{story_idx}_pos{window.position}_{name}"
-                        windows_assembly.add(
-                            obj_data.obj,
-                            name=component_name,
-                            color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6)
-                        )
+                semantic_name = f"{window.wall}_wall/story_{window.floor}/window_{window.position:g}"
+                component_prefix = f"window_{window.wall}_story{story_idx}_pos{window.position}"
+                windows_root.add_child(
+                    WindowsBuilder._window_scene(
+                        window,
+                        semantic_name,
+                        component_prefix,
+                        wall_placement.legacy_transform,
+                        wall_placement.as_dict(),
+                    )
+                )
         else:
             # Use automatic bay placement, but skip door openings
             # Iterate through each story (skip attic/dormers for now)
@@ -562,9 +597,6 @@ class WindowsBuilder:
                 # Get floor height and chair rail height for this story
                 floor_height = floor_heights[story_idx]
                 chair_rail_height_z = calculated_chair_rail_heights[story_idx] if story_idx < len(calculated_chair_rail_heights) else floor_height + 30.0
-                
-                # Frame depth
-                frame_depth = 4
                 
                 # Get bays for each face
                 for face in ["front", "rear", "left", "right"]:
@@ -580,39 +612,32 @@ class WindowsBuilder:
                         if (face, bay_position, floor_number) in door_locations:
                             continue  # Skip this bay - it has a door
                         
-                        # Calculate window center coordinates based on face
-                        if face == "front":
-                            window_center_x = bay_position
-                            window_center_y = frame_depth / 2
-                        elif face == "rear":
-                            window_center_x = bay_position
-                            window_center_y = -dimensions.right + frame_depth / 2
-                        elif face == "left":
-                            window_center_x = frame_depth / 2
-                            window_center_y = -bay_position
-                        elif face == "right":
-                            window_center_x = dimensions.front + frame_depth / 2
-                            window_center_y = -bay_position
-                        else:
-                            continue
-                        
-                        # Create window frame
-                        frame_assembly = WindowsBuilder._window_frame(
-                            window,
-                            window_center_x,
-                            window_center_y,
+                        metrics = WindowsBuilder._window_metrics(window)
+                        wall_placement = window_placement_for_wall(
+                            face,
+                            bay_position,
                             chair_rail_height_z,
-                            face
+                            metrics["opening_width"],
+                            dimensions,
                         )
-                        
-                        # Add all frame components to the windows assembly
-                        for name, obj_data in frame_assembly.traverse():
-                            if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                                component_name = f"window_{face}_story{story_idx}_bay{bay_position}_{name}"
-                                windows_assembly.add(
-                                    obj_data.obj,
-                                    name=component_name,
-                                    color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6)
-                                )
-        
+                        semantic_name = f"{face}_wall/story_{floor_number}/window_{bay_position:g}"
+                        component_prefix = f"window_{face}_story{story_idx}_bay{bay_position}"
+                        windows_root.add_child(
+                            WindowsBuilder._window_scene(
+                                window,
+                                semantic_name,
+                                component_prefix,
+                                wall_placement.legacy_transform,
+                                wall_placement.as_dict(),
+                            )
+                        )
+
+        if not windows_root.children:
+            return None
+
+        project_scene_to_assembly(scene_root, windows_assembly)
+        windows_assembly.scene_root = scene_root
+        windows_assembly.scene_components = collect_component_metadata(scene_root)
+        windows_assembly.validation_results = validate_window_scene(scene_root)
+
         return windows_assembly if windows_assembly.children else None

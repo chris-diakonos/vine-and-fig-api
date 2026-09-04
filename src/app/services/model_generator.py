@@ -63,11 +63,25 @@ class ModelGenerator:
         with open(bom_path, "w", encoding="utf-8") as handle:
             json.dump(serialized_bom, handle, indent=2, ensure_ascii=False)
 
+        components_path = output_dir / "components.json"
+        components_data = getattr(building_model, "scene_components", [])
+        with open(components_path, "w", encoding="utf-8") as handle:
+            json.dump({"components": components_data}, handle, indent=2, ensure_ascii=False)
+
+        validation_path = output_dir / "validation.json"
+        validation_data = getattr(building_model, "validation_results", {"status": "passed", "results": []})
+        with open(validation_path, "w", encoding="utf-8") as handle:
+            json.dump(validation_data, handle, indent=2, ensure_ascii=False)
+
         return {
             "structure_hash": structure_hash,
             "glb_path": glb_path,
             "bom_path": bom_path,
+            "components_path": components_path,
+            "validation_path": validation_path,
             "bom_data": serialized_bom,
+            "components_data": components_data,
+            "validation_data": validation_data,
         }
     
     @staticmethod

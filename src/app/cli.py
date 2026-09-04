@@ -86,6 +86,8 @@ def generate_command(args: argparse.Namespace) -> int:
     )
     glb_path = artifacts["glb_path"]
     bom_path = artifacts["bom_path"]
+    components_path = artifacts["components_path"]
+    validation_path = artifacts["validation_path"]
 
     storage = S3Storage(
         bucket_name=args.bucket,
@@ -101,6 +103,8 @@ def generate_command(args: argparse.Namespace) -> int:
     manifest_key = storage.object_key(f"{artifact_root}/manifest.json")
     glb_url = storage.upload_file(glb_path, f"{artifact_root}/model.glb", "model/gltf-binary")
     bom_url = storage.upload_file(bom_path, f"{artifact_root}/bom.json", "application/json")
+    components_url = storage.upload_file(components_path, f"{artifact_root}/components.json", "application/json")
+    validation_url = storage.upload_file(validation_path, f"{artifact_root}/validation.json", "application/json")
     
     # Parse metadata first so we can fall back to it for commit_sha
     try:
@@ -140,6 +144,14 @@ def generate_command(args: argparse.Namespace) -> int:
             "bom": {
                 "local_path": str(bom_path),
                 "url": bom_url,
+            },
+            "components": {
+                "local_path": str(components_path),
+                "url": components_url,
+            },
+            "validation": {
+                "local_path": str(validation_path),
+                "url": validation_url,
             },
             "manifest": {
                 "local_path": str(manifest_path),

@@ -135,7 +135,11 @@ class BuildingBuilder:
         for idx, floor_height in enumerate(calculated_floor_heights):
             chair_rail_height = 30
             bay_height = chair_rail_height + 72
-            bay_width = structure.windows[idx].bay_width
+            if structure.windows:
+                window_idx = min(idx, len(structure.windows) - 1)
+                bay_width = structure.windows[window_idx].bay_width
+            else:
+                bay_width = 0
             calculated_chair_rail_heights.append(floor_height + chair_rail_height)
             calculated_bay_heights.append(floor_height + bay_height)
             calculated_bay_widths.append(bay_width)
@@ -213,6 +217,8 @@ class BuildingBuilder:
 
         # Create main building assembly
         building_assembly = cq.Assembly()
+        scene_components: List[Dict[str, Any]] = []
+        validation_results: List[Dict[str, Any]] = []
         
         # Build foundation first
         # Foundation top is at z=0, foundation extends downward
@@ -353,6 +359,10 @@ class BuildingBuilder:
                 door_openings=door_openings
             )
             if windows_assembly is not None:
+                if hasattr(windows_assembly, "scene_components"):
+                    scene_components.extend(windows_assembly.scene_components)
+                if hasattr(windows_assembly, "validation_results"):
+                    validation_results.append(windows_assembly.validation_results)
                 # Add all windows to the main assembly (colors are already set in windows_builder)
                 for name, obj_data in windows_assembly.traverse():
                     if hasattr(obj_data, 'obj') and obj_data.obj is not None:
@@ -378,4 +388,10 @@ class BuildingBuilder:
                     component_name = name if name else f"cornice_{len(building_assembly.children)}"
                     building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
         
+        building_assembly.scene_components = scene_components
+        building_assembly.validation_results = {
+            "status": "failed" if any(result.get("status") == "failed" for result in validation_results) else "passed",
+            "results": validation_results,
+        }
+
         return building_assembly, bom_data

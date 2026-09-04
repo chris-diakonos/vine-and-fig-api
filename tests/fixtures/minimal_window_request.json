@@ -1,0 +1,92 @@
+{
+  "customer": {
+    "customer_name": "Window Fixture",
+    "customer_email": "fixture@example.com"
+  },
+  "structure": {
+    "floorplan": {
+      "floorplan_type": "center-hall",
+      "depth": "single-pile",
+      "stories": 1,
+      "hall_offset": 0.0,
+      "hall_width": 72.0,
+      "ceiling_heights": [96.0],
+      "joist_heights": [10.0, 8.0],
+      "dimensions": {
+        "front": 240.0,
+        "rear": 240.0,
+        "left": 240.0,
+        "right": 240.0,
+        "building_height": 120.0
+      },
+      "spacing": {
+        "stud_spacing": 21.0,
+        "joist_spacing": 21.0,
+        "rafter_spacing": 21.0,
+        "pile_width": 240.0
+      },
+      "bays": {
+        "front": [120.0],
+        "rear": [],
+        "left": [],
+        "right": []
+      }
+    },
+    "foundation": {
+      "foundation_type": "limestone-block",
+      "foundation_block_size": [40.0, 14.0, 14.0],
+      "foundation_courses": 2,
+      "foundation_block_joint": 0.375
+    },
+    "roof": {
+      "roof_pitch": 37.0,
+      "roof_type": "side-gable",
+      "roof_panel_type": "ag-panel",
+      "roof_panel_color": "charcoal-gray",
+      "roof_panel_exposure": 12,
+      "roof_overhang": 12.0
+    },
+    "sheathing": {
+      "sheathing_species": "cypress",
+      "sheathing_exposure": 6,
+      "sheathing_height": 7.25,
+      "sheathing_type": "beveled-weatherboard"
+    },
+    "flooring": [
+      {
+        "flooring_type": "tongue-and-groove",
+        "flooring_species": "pine",
+        "flooring_thickness": 1.0,
+        "flooring_width": 10.0,
+        "flooring_exposure": 9.25
+      },
+      {
+        "flooring_type": "tongue-and-groove",
+        "flooring_species": "pine",
+        "flooring_thickness": 1.0,
+        "flooring_width": 10.0,
+        "flooring_exposure": 9.25
+      }
+    ],
+    "windows": [
+      {
+        "configuration": "6/6",
+        "operation": "single-hung",
+        "window_species": "pine",
+        "size": "10x12",
+        "profile": "ovolo",
+        "thickness": 1.375,
+        "stile_width": 2.0,
+        "rail_width": 3.0,
+        "muntin_width": 1.0,
+        "meeting_rail_width": 1.0,
+        "bay_width": 37.25,
+        "wall": "front",
+        "position": 120.0,
+        "floor": 1
+      }
+    ],
+    "doors": []
+  },
+  "view_mode": "3d"
+}
