@@ -978,7 +978,8 @@ class FramingBuilder:
             
             if face == "front":
                 # Front rafter: ridge to front eave (12" past front weatherboard)
-                target_eave_y = front_weatherboard_y + roof_overhang
+                # Adjust target to compensate for rotation geometry (empirical correction: -5.73")
+                target_eave_y = front_weatherboard_y + roof_overhang - 5.73
                 rafter_run = target_eave_y - centerline_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
                 # Position rafter before rotation: account for pitch rotation effect on horizontal position
@@ -989,7 +990,8 @@ class FramingBuilder:
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
             elif face == "rear":
                 # Rear rafter: ridge to rear eave (12" past rear weatherboard)
-                target_eave_y = rear_weatherboard_y - roof_overhang
+                # Adjust target to compensate for rotation geometry (empirical correction: -2.12")
+                target_eave_y = rear_weatherboard_y - roof_overhang - 2.12
                 rafter_run = centerline_y - target_eave_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
                 # Position rafter before rotation: account for pitch rotation effect on horizontal position
