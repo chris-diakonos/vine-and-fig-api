@@ -38,13 +38,15 @@ def validate_roof_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANCE_I
                 )
             else:
                 # Validate gable overhang extent for side-gable roofs
-                # For a 480" wide building, roof should extend roughly from x=-12 to x=492
+                # Corner posts are 6" wide centered at x=0 and x=480
+                # Post outer faces at x=-3 and x=483
+                # Roof should extend 12" past post faces: x=-15 to x=495
                 if bounds:
                     roof_x_min = bounds.min[0]
                     roof_x_max = bounds.max[0]
-                    expected_x_min = -12.0
-                    expected_x_max = 492.0
-                    overhang_tolerance = 2.0  # Allow 2" tolerance for gable overhang
+                    expected_x_min = -15.0  # 12" past left post outer face at x=-3
+                    expected_x_max = 495.0  # 12" past right post outer face at x=483
+                    overhang_tolerance = 2.0  # Allow 2" tolerance for discrete panel constraints
                     
                     if roof_x_min > expected_x_min + overhang_tolerance:
                         results.append(
@@ -52,7 +54,7 @@ def validate_roof_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANCE_I
                                 code="GABLE_OVERHANG_LEFT_SHORT",
                                 severity="warning",
                                 target=node.semantic_path,
-                                message=f"Left gable overhang insufficient: roof starts at x={roof_x_min:.2f}",
+                                message=f"Left gable overhang short: roof at x={roof_x_min:.2f}, expected ~{expected_x_min:.2f} (12\" past post face at x=-3)",
                                 expected={"x_min": expected_x_min},
                                 measured={"x_min": roof_x_min},
                                 tolerance=overhang_tolerance,
@@ -65,7 +67,7 @@ def validate_roof_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANCE_I
                                 code="GABLE_OVERHANG_RIGHT_SHORT",
                                 severity="warning",
                                 target=node.semantic_path,
-                                message=f"Right gable overhang insufficient: roof ends at x={roof_x_max:.2f}",
+                                message=f"Right gable overhang short: roof at x={roof_x_max:.2f}, expected ~{expected_x_max:.2f} (12\" past post face at x=483)",
                                 expected={"x_max": expected_x_max},
                                 measured={"x_max": roof_x_max},
                                 tolerance=overhang_tolerance,

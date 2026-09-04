@@ -488,8 +488,7 @@ class WindowsBuilder:
 
         top_z = center_z + ((pulley_stile_length + frame_width) / 2) + offsets["top_frame_z_lift"]
         top_x = center_x - (header_length / 2)
-        # Adjust Y position to align header with jambs (fix y_mis issue)
-        top_y = center_y - 4.0
+        top_y = center_y
         top_frame = (
             WindowsBuilder._beaded_board(frame_depth, frame_width, bead_size)
             .extrude(header_length)
@@ -517,8 +516,7 @@ class WindowsBuilder:
 
         bottom_x = center_x - (header_length / 2)
         bottom_z = center_z - ((pulley_stile_length + frame_width) / 2) - offsets["bottom_frame_z_drop"]
-        # Adjust Y position to align sill with jambs (fix y_mis issue)
-        bottom_y = center_y - 4.0
+        bottom_y = center_y
         bottom_frame = (
             WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size)
             .extrude(header_length)
