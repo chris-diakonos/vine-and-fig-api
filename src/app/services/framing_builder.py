@@ -968,7 +968,8 @@ class FramingBuilder:
             # Match the eave positions used in roof_builder.py
             front_weatherboard_y = 2.674
             rear_weatherboard_y = -250.528
-            centerline_y = -right_dimension / 2  # Building centerline (ridge)
+            # Ridge should be at midpoint between weatherboard outer faces to avoid gap
+            centerline_y = (front_weatherboard_y + rear_weatherboard_y) / 2
             
             # Calculate rafter run for this specific face to match eaves exactly
             roof_pitch_radians = roof_pitch_degrees * (math.pi / 180)
@@ -980,9 +981,10 @@ class FramingBuilder:
                 target_eave_y = front_weatherboard_y + roof_overhang
                 rafter_run = target_eave_y - centerline_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
-                # After rotation by 90° around Z, new_x becomes the Y position
-                # Rafter center should be at midpoint between ridge (centerline_y) and eave (target_eave_y)
-                new_x = (centerline_y + target_eave_y) / 2 + x_offset
+                # Position rafter before rotation: account for pitch rotation effect on horizontal position
+                # The rafter is created along X, then pitched, then rotated 90° around Z
+                # We need to position it so that after these rotations, it spans from ridge to eave
+                new_x = +(right_dimension/2) + (rafter_length/2 * rafter_cos) + x_offset
                 roof_pitch = roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
             elif face == "rear":
@@ -990,9 +992,10 @@ class FramingBuilder:
                 target_eave_y = rear_weatherboard_y - roof_overhang
                 rafter_run = centerline_y - target_eave_y
                 rafter_length = rafter_run / rafter_cos if rafter_cos > 0 else rafter_run
-                # After rotation by 90° around Z, new_x becomes the Y position
-                # Rafter center should be at midpoint between ridge (centerline_y) and eave (target_eave_y)
-                new_x = (centerline_y + target_eave_y) / 2 + x_offset
+                # Position rafter before rotation: account for pitch rotation effect on horizontal position
+                # The rafter is created along X, then pitched, then rotated 90° around Z
+                # We need to position it so that after these rotations, it spans from ridge to eave
+                new_x = +(right_dimension/2) - (rafter_length/2 * rafter_cos) + x_offset
                 roof_pitch = 180 - roof_pitch_degrees
                 new_z = floor_height + (rafter_length/2 * rafter_sin) - rafter_depth
 
