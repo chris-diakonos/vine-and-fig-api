@@ -345,14 +345,12 @@ class RoofBuilder:
                 else:
                     # First panel covers profile width, additional panels add exposure each
                     remaining_length = target_span - panel_profile_width
-                    # Calculate exact panels needed and adjust placement to hit right edge exactly
+                    # Calculate exact panels needed
                     additional_panels_exact = remaining_length / roof_panel_exposure
                     quantity = 1 + math.ceil(additional_panels_exact)
-                    # Adjust starting offset so last panel ends at right_target_x
-                    # Total coverage: panel_profile_width + (quantity-1)*roof_panel_exposure
-                    actual_coverage = panel_profile_width + ((quantity - 1) * roof_panel_exposure)
-                    # Start offset to center coverage on target span
-                    gable_overhang_offset = left_target_x + (target_span - actual_coverage) / 2
+                    # Start exactly at left_target_x to ensure exact 12" overhang on left
+                    # The right edge will naturally land close to right_target_x due to panel sizing
+                    gable_overhang_offset = left_target_x
             else:
                 effective_roof_length = roof_length
                 gable_overhang_offset = 0
