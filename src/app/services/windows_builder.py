@@ -130,6 +130,106 @@ class WindowsBuilder:
         return profile
     
     @staticmethod
+    def _create_sash_assembly(
+        num_lights: int,
+        light_width: float,
+        light_height: float,
+        stile_width: float,
+        top_rail_width: float,
+        bottom_rail_width: float,
+        muntin_width: float,
+        glazing_rabbet: float,
+        sash_thickness: float = 1.375
+    ) -> cq.Assembly:
+        """
+        Create a complete sash assembly with stiles, rails, muntins, and glazing.
+        
+        Args:
+            num_lights: Total number of lights (e.g., 9 for 3x3, 6 for 2x3)
+            light_width: Width of each light in inches
+            light_height: Height of each light in inches
+            stile_width: Width of sash stiles
+            top_rail_width: Width of top rail
+            bottom_rail_width: Width of bottom rail
+            muntin_width: Width of muntins
+            glazing_rabbet: Rabbet depth for glazing
+            sash_thickness: Thickness of sash components
+            
+        Returns:
+            CadQuery Assembly with sash, muntins, and glazing
+        """
+        sash_assembly = cq.Assembly()
+        
+        # Determine grid dimensions (num_lights = rows * cols, always 3 cols)
+        cols = 3
+        rows = num_lights // cols
+        
+        # Calculate sash dimensions
+        # Sash width = 3 lights + 2 vertical muntins + 2 stiles
+        sash_width = (cols * light_width) + ((cols - 1) * muntin_width) + (2 * stile_width) - (glazing_rabbet * 2 * cols)
+        # Sash height = rows of lights + (rows-1) horizontal muntins + top and bottom rails
+        sash_height = (rows * light_height) + ((rows - 1) * muntin_width) + top_rail_width + bottom_rail_width - (glazing_rabbet * 2 * rows)
+        
+        # Create stiles (left and right vertical pieces)
+        stile_profile = cq.Workplane("XZ").rect(stile_width, sash_thickness).extrude(sash_height)
+        
+        # Left stile
+        left_stile = stile_profile.translate((0, 0, 0))
+        sash_assembly.add(left_stile, name="left_stile", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Right stile
+        right_stile = stile_profile.translate((sash_width - stile_width, 0, 0))
+        sash_assembly.add(right_stile, name="right_stile", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Create rails (top and bottom horizontal pieces)
+        # Top rail
+        top_rail = cq.Workplane("XZ").rect(sash_width, sash_thickness).extrude(top_rail_width)
+        top_rail = top_rail.translate((0, 0, sash_height - top_rail_width))
+        sash_assembly.add(top_rail, name="top_rail", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Bottom rail
+        bottom_rail = cq.Workplane("XZ").rect(sash_width, sash_thickness).extrude(bottom_rail_width)
+        bottom_rail = bottom_rail.translate((0, 0, 0))
+        sash_assembly.add(bottom_rail, name="bottom_rail", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Create vertical muntins (between columns)
+        muntin_profile_v = cq.Workplane("XZ").rect(muntin_width, sash_thickness).extrude(
+            sash_height - top_rail_width - bottom_rail_width
+        )
+        for col in range(1, cols):
+            muntin_x = stile_width + (col * light_width) + ((col - 1) * muntin_width) - (glazing_rabbet * 2 * col) + (muntin_width * (col - 1))
+            muntin_v = muntin_profile_v.translate((muntin_x, 0, bottom_rail_width))
+            sash_assembly.add(muntin_v, name=f"muntin_v_{col}", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Create horizontal muntins (between rows)
+        muntin_profile_h = cq.Workplane("XZ").rect(
+            sash_width - (2 * stile_width), sash_thickness
+        ).extrude(muntin_width)
+        for row in range(1, rows):
+            muntin_z = bottom_rail_width + (row * light_height) + ((row - 1) * muntin_width) - (glazing_rabbet * 2 * row) + (muntin_width * (row - 1))
+            muntin_h = muntin_profile_h.translate((stile_width, 0, muntin_z))
+            sash_assembly.add(muntin_h, name=f"muntin_h_{row}", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Create glazing (glass panes)
+        glass_thickness = 0.125
+        # Each light is positioned within its grid cell
+        for row in range(rows):
+            for col in range(cols):
+                # Calculate position for this light
+                glass_x = stile_width + (col * (light_width + muntin_width)) - (glazing_rabbet * 2 * col) + (muntin_width * col) + glazing_rabbet
+                glass_z = bottom_rail_width + (row * (light_height + muntin_width)) - (glazing_rabbet * 2 * row) + (muntin_width * row) + glazing_rabbet
+                glass_width = light_width - (2 * glazing_rabbet)
+                glass_height = light_height - (2 * glazing_rabbet)
+                
+                # Create glass pane (slightly recessed into the sash)
+                glass_y = -sash_thickness / 2 + glass_thickness / 2
+                glass_pane = cq.Workplane("XZ").rect(glass_width, glass_thickness).extrude(glass_height)
+                glass_pane = glass_pane.translate((glass_x, glass_y, glass_z))
+                sash_assembly.add(glass_pane, name=f"glass_{row}_{col}", color=cq.Color(0.7, 0.9, 1.0, 0.3))
+        
+        return sash_assembly
+    
+    @staticmethod
     def _window_frame(
         window: Window,
         center_x: float,
@@ -266,6 +366,88 @@ class WindowsBuilder:
             bottom_frame = WindowsBuilder._beaded_sill(sill_width, sill_inside_height, sill_outside_height, bead_size).extrude(header_sill_length).rotate((0, 0, 0), (0, 0, 1), 90)
             bottom_frame = bottom_frame.translate((header_sill_start, header_sill_const, sill_z))
         window_frame.add(bottom_frame, name="bottom_frame_sill", color=cq.Color(0.8, 0.7, 0.6))
+        
+        # Create top and bottom sash assemblies with muntins and glazing
+        sash_thickness = window.thickness
+        
+        # Top sash
+        top_sash = WindowsBuilder._create_sash_assembly(
+            num_lights=top_sash_lights,
+            light_width=light_width,
+            light_height=light_height,
+            stile_width=window.stile_width,
+            top_rail_width=top_rail_width,
+            bottom_rail_width=meeting_rail_width,
+            muntin_width=muntin_width,
+            glazing_rabbet=glazing_rabbet,
+            sash_thickness=sash_thickness
+        )
+        
+        # Bottom sash
+        bottom_sash = WindowsBuilder._create_sash_assembly(
+            num_lights=bottom_sash_lights,
+            light_width=light_width,
+            light_height=light_height,
+            stile_width=window.stile_width,
+            top_rail_width=meeting_rail_width,
+            bottom_rail_width=bottom_rail_width,
+            muntin_width=muntin_width,
+            glazing_rabbet=glazing_rabbet,
+            sash_thickness=sash_thickness
+        )
+        
+        # Position sashes within the frame opening
+        # The sashes sit between the jambs, inside the opening
+        if face in ["left", "right"]:
+            # For left/right walls, sashes are in the YZ plane
+            # Sash X position: centered in frame depth
+            sash_x = center_x - (sash_thickness / 2)
+            # Bottom sash Y position: aligned with front jamb + frame width
+            bottom_sash_y_start = center_y - (rail_length / 2) + frame_width
+            # Top sash Y position: above bottom sash
+            top_sash_y_start = bottom_sash_y_start + bottom_stile_length - meeting_rail_width
+            # Z position: bottom sash at sill top, top sash above it
+            bottom_sash_z = sill_z + sill_inside_height
+            top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
+            
+            # Rotate and position bottom sash
+            for name, obj_data in bottom_sash.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (0, 1, 0), -90)
+                    positioned_obj = positioned_obj.translate((sash_x, bottom_sash_y_start, bottom_sash_z))
+                    window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+            
+            # Rotate and position top sash
+            for name, obj_data in top_sash.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (0, 1, 0), -90)
+                    positioned_obj = positioned_obj.translate((sash_x, top_sash_y_start, top_sash_z))
+                    window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+        else:
+            # For front/rear walls, sashes are in the XZ plane
+            # Sash Y position: centered in frame depth
+            sash_y = center_y - (sash_thickness / 2)
+            # Bottom sash X position: aligned with left jamb + frame width
+            bottom_sash_x_start = center_x - (header_length / 2) + frame_width
+            # Top sash X position: same as bottom
+            top_sash_x_start = bottom_sash_x_start
+            # Z position: bottom sash at sill top, top sash above it
+            bottom_sash_z = sill_z + sill_inside_height
+            top_sash_z = bottom_sash_z + bottom_stile_length - meeting_rail_width
+            
+            # Rotate and position bottom sash
+            for name, obj_data in bottom_sash.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (0, 0, 1), 90)
+                    positioned_obj = positioned_obj.translate((bottom_sash_x_start, sash_y, bottom_sash_z))
+                    window_frame.add(positioned_obj, name=f"bottom_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+            
+            # Rotate and position top sash
+            for name, obj_data in top_sash.traverse():
+                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                    positioned_obj = obj_data.obj.rotate((0, 0, 0), (0, 0, 1), 90)
+                    positioned_obj = positioned_obj.translate((top_sash_x_start, sash_y, top_sash_z))
+                    window_frame.add(positioned_obj, name=f"top_sash_{name}", color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
         
         return window_frame
     

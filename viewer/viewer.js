@@ -92,13 +92,127 @@ function fitCameraToObject(camera, controls, object) {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z);
-  const distance = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
-
-  camera.position.set(center.x + distance, center.y + distance * 0.72, center.z + distance);
-  camera.near = Math.max(distance / 100, 0.01);
-  camera.far = distance * 100;
+  
+  if (camera.isPerspectiveCamera) {
+    const distance = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
+    camera.position.set(center.x + distance, center.y + distance * 0.72, center.z + distance);
+    camera.near = Math.max(distance / 100, 0.01);
+    camera.far = distance * 100;
+  } else {
+    // Orthographic camera
+    const aspect = camera.right / camera.top;
+    const frustumSize = maxDim * 1.2;
+    camera.left = -frustumSize * aspect / 2;
+    camera.right = frustumSize * aspect / 2;
+    camera.top = frustumSize / 2;
+    camera.bottom = -frustumSize / 2;
+    camera.near = -maxDim * 10;
+    camera.far = maxDim * 10;
+  }
+  
   camera.updateProjectionMatrix();
+  controls.target.copy(center);
+  controls.update();
+}
 
+function fitCameraToVisible(camera, controls, scene) {
+  const box = new THREE.Box3();
+  let hasVisibleObjects = false;
+  
+  scene.traverse((object) => {
+    if (object.isMesh && object.visible) {
+      box.expandByObject(object);
+      hasVisibleObjects = true;
+    }
+  });
+  
+  if (!hasVisibleObjects) {
+    return;
+  }
+  
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  
+  if (camera.isPerspectiveCamera) {
+    const distance = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
+    const dir = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
+    camera.position.copy(center).add(dir.multiplyScalar(distance * 1.5));
+    camera.near = Math.max(distance / 100, 0.01);
+    camera.far = distance * 100;
+  } else {
+    // Orthographic camera
+    const aspect = camera.right / camera.top;
+    const frustumSize = maxDim * 1.2;
+    camera.left = -frustumSize * aspect / 2;
+    camera.right = frustumSize * aspect / 2;
+    camera.top = frustumSize / 2;
+    camera.bottom = -frustumSize / 2;
+    camera.near = -maxDim * 10;
+    camera.far = maxDim * 10;
+  }
+  
+  camera.updateProjectionMatrix();
+  controls.target.copy(center);
+  controls.update();
+}
+
+function setOrthographicView(camera, controls, scene, viewType) {
+  // Calculate bounding box of visible objects
+  const box = new THREE.Box3();
+  let hasVisibleObjects = false;
+  
+  scene.traverse((object) => {
+    if (object.isMesh && object.visible) {
+      box.expandByObject(object);
+      hasVisibleObjects = true;
+    }
+  });
+  
+  if (!hasVisibleObjects) {
+    return;
+  }
+  
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  
+  // Set up orthographic projection
+  const aspect = container.clientWidth / container.clientHeight;
+  const frustumSize = maxDim * 1.2;
+  camera.left = -frustumSize * aspect / 2;
+  camera.right = frustumSize * aspect / 2;
+  camera.top = frustumSize / 2;
+  camera.bottom = -frustumSize / 2;
+  camera.near = -maxDim * 10;
+  camera.far = maxDim * 10;
+  
+  // Set camera position based on view type
+  const distance = maxDim * 2;
+  switch (viewType) {
+    case 'front':
+      // Front elevation: looking along +Y axis
+      camera.position.set(center.x, center.y + distance, center.z);
+      camera.up.set(0, 0, 1);
+      break;
+    case 'rear':
+      // Rear elevation: looking along -Y axis
+      camera.position.set(center.x, center.y - distance, center.z);
+      camera.up.set(0, 0, 1);
+      break;
+    case 'left':
+      // Left elevation: looking along +X axis
+      camera.position.set(center.x + distance, center.y, center.z);
+      camera.up.set(0, 0, 1);
+      break;
+    case 'right':
+      // Right elevation: looking along -X axis
+      camera.position.set(center.x - distance, center.y, center.z);
+      camera.up.set(0, 0, 1);
+      break;
+  }
+  
+  camera.updateProjectionMatrix();
   controls.target.copy(center);
   controls.update();
 }
@@ -184,9 +298,58 @@ async function loadManifest() {
 async function main() {
   const renderer = createRenderer();
   const scene = createScene();
-  const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1000);
+  
+  // Create both perspective and orthographic cameras
+  let camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1000);
+  const perspectiveCamera = camera;
+  const orthographicCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+  
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+  
+  // Camera view buttons
+  const viewPerspectiveBtn = document.getElementById("view-perspective");
+  const viewFrontBtn = document.getElementById("view-front");
+  const viewRearBtn = document.getElementById("view-rear");
+  const viewLeftBtn = document.getElementById("view-left");
+  const viewRightBtn = document.getElementById("view-right");
+  const fitVisibleBtn = document.getElementById("fit-visible");
+  
+  viewPerspectiveBtn.addEventListener("click", () => {
+    camera = perspectiveCamera;
+    controls.object = camera;
+    if (modelRoot) {
+      fitCameraToObject(camera, controls, modelRoot);
+    }
+  });
+  
+  viewFrontBtn.addEventListener("click", () => {
+    camera = orthographicCamera;
+    controls.object = camera;
+    setOrthographicView(camera, controls, scene, 'front');
+  });
+  
+  viewRearBtn.addEventListener("click", () => {
+    camera = orthographicCamera;
+    controls.object = camera;
+    setOrthographicView(camera, controls, scene, 'rear');
+  });
+  
+  viewLeftBtn.addEventListener("click", () => {
+    camera = orthographicCamera;
+    controls.object = camera;
+    setOrthographicView(camera, controls, scene, 'left');
+  });
+  
+  viewRightBtn.addEventListener("click", () => {
+    camera = orthographicCamera;
+    controls.object = camera;
+    setOrthographicView(camera, controls, scene, 'right');
+  });
+  
+  fitVisibleBtn.addEventListener("click", () => {
+    fitCameraToVisible(camera, controls, scene);
+  });
 
   showAllButton.addEventListener("click", () => {
     for (const layer of LAYERS) {
@@ -198,10 +361,22 @@ async function main() {
     }
     applyLayerVisibility();
   });
-
+  
   window.addEventListener("resize", () => {
-    camera.aspect = container.clientWidth / container.clientHeight;
-    camera.updateProjectionMatrix();
+    const aspect = container.clientWidth / container.clientHeight;
+    
+    // Update perspective camera
+    perspectiveCamera.aspect = aspect;
+    perspectiveCamera.updateProjectionMatrix();
+    
+    // Update orthographic camera
+    if (orthographicCamera.top > 0) {
+      const frustumHeight = orthographicCamera.top * 2;
+      orthographicCamera.left = -frustumHeight * aspect / 2;
+      orthographicCamera.right = frustumHeight * aspect / 2;
+      orthographicCamera.updateProjectionMatrix();
+    }
+    
     renderer.setSize(container.clientWidth, container.clientHeight);
   });
 
