@@ -149,23 +149,27 @@ class FramingPlacementDatums:
         run_length = run_max - run_min
         if face == "front":
             size = (run_length, girt_width, girt_depth)
-            min_corner = (run_min, self.sill_width / 2.0, floor_height - joist_height - girt_depth)
+            min_corner = (
+                run_min,
+                self.sill_width / 2.0 - girt_width,
+                floor_height - joist_height - girt_depth,
+            )
             axis: AxisName = "x"
         elif face == "rear":
             size = (run_length, girt_width, girt_depth)
             min_corner = (
                 run_min,
-                -self.depth - self.sill_width / 2.0 - girt_width,
+                -self.depth - self.sill_width / 2.0,
                 floor_height - joist_height - girt_depth,
             )
             axis = "x"
         elif face == "left":
             size = (girt_width, run_length, girt_depth)
-            min_corner = (-self.sill_width / 2.0 - girt_width, -run_max, floor_height - girt_depth)
+            min_corner = (-self.sill_width / 2.0, -run_max, floor_height - girt_depth)
             axis = "y"
         else:
             size = (girt_width, run_length, girt_depth)
-            min_corner = (self.width + self.sill_width / 2.0, -run_max, floor_height - girt_depth)
+            min_corner = (self.width + self.sill_width / 2.0 - girt_width, -run_max, floor_height - girt_depth)
             axis = "y"
 
         return FramingMemberDatum(
