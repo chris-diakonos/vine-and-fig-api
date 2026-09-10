@@ -113,11 +113,17 @@ class FramingPlacementDatums:
         return self.width if face in ("front", "rear") else self.depth
 
     def post(self, corner: CornerName, floor_height: float, post_height: float) -> FramingMemberDatum:
-        x = self.width if corner.endswith("right") else 0.0
-        y = -self.depth if corner.startswith("rear") else 0.0
+        if corner.endswith("right"):
+            x = self.width + self.sill_width / 2.0 - self.post_width
+        else:
+            x = -self.sill_width / 2.0
+        if corner.startswith("rear"):
+            y = -self.depth - self.sill_width / 2.0
+        else:
+            y = self.sill_width / 2.0 - self.post_depth
         min_corner = (
-            x - self.post_width / 2.0,
-            y - self.post_depth / 2.0,
+            x,
+            y,
             floor_height - self.post_tenon_depth,
         )
         return FramingMemberDatum(

@@ -76,8 +76,8 @@ class FramingSceneGraphTest(unittest.TestCase):
             self.assertIn("joint_datums", spec.params)
             self.assertEqual(spec.params["joint_datums"]["tenon_height"], 2.0)
             if spec.id == "post_sill_corner_front_left":
-                self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_x"], 4.0)
-                self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_y"], 244.0)
+                self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_x"], 3.0)
+                self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_y"], 246.0)
 
         unjoined_builder = FramingBuilder(request.structure, request.structure_hash or "joinery-flag-test")
         unjoined_model, _ = unjoined_builder.build(ceiling_heights, floor_heights, compile_joinery=False)
@@ -130,10 +130,6 @@ class FramingSceneGraphTest(unittest.TestCase):
             legacy_node = self._scene_node(legacy_model.scene_root, name)
             self.assertIn("framing_datums", cornerstone_node.metadata)
             if name.startswith("post_"):
-                self._assert_bounds_almost_equal(
-                    cornerstone_components[name]["world_bounds"],
-                    legacy_components[name]["world_bounds"],
-                )
                 self.assertAlmostEqual(
                     workplane_volume(cornerstone_node.geometry),
                     workplane_volume(legacy_node.geometry),
@@ -172,6 +168,44 @@ class FramingSceneGraphTest(unittest.TestCase):
             {"min": [236.0, -244.0, 0.0], "max": [244.0, 4.0, 10.0], "size": [8.0, 248.0, 10.0]},
         )
 
+    def test_corner_posts_are_flush_to_outer_sill_corners(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "corner-post-flush-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+
+        components = {component["component_name"]: component for component in model.scene_components}
+        self._assert_bounds_almost_equal(
+            components["post_front_left"]["world_bounds"],
+            {"min": [-4.0, 0.0, 8.0], "max": [2.0, 4.0, 104.0], "size": [6.0, 4.0, 96.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["post_front_right"]["world_bounds"],
+            {"min": [238.0, 0.0, 8.0], "max": [244.0, 4.0, 104.0], "size": [6.0, 4.0, 96.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["post_rear_left"]["world_bounds"],
+            {"min": [-4.0, -244.0, 8.0], "max": [2.0, -240.0, 104.0], "size": [6.0, 4.0, 96.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["post_rear_right"]["world_bounds"],
+            {"min": [238.0, -244.0, 8.0], "max": [244.0, -240.0, 104.0], "size": [6.0, 4.0, 96.0]},
+        )
+
     def test_corner_sills_overlap_by_full_sill_width(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
         floorplan = request.structure.floorplan
@@ -193,13 +227,18 @@ class FramingSceneGraphTest(unittest.TestCase):
         )
 
         components = {component["component_name"]: component for component in model.scene_components}
-        front = components["sill_front_1"]["world_bounds"]
-        left = components["sill_left_1"]["world_bounds"]
-
-        overlap_x = min(front["max"][0], left["max"][0]) - max(front["min"][0], left["min"][0])
-        overlap_y = min(front["max"][1], left["max"][1]) - max(front["min"][1], left["min"][1])
-        self.assertAlmostEqual(overlap_x, 8.0)
-        self.assertAlmostEqual(overlap_y, 8.0)
+        for cross_sill, side_sill in (
+            ("sill_front_1", "sill_left_1"),
+            ("sill_front_1", "sill_right_1"),
+            ("sill_rear_1", "sill_left_1"),
+            ("sill_rear_1", "sill_right_1"),
+        ):
+            cross_bounds = components[cross_sill]["world_bounds"]
+            side_bounds = components[side_sill]["world_bounds"]
+            overlap_x = min(cross_bounds["max"][0], side_bounds["max"][0]) - max(cross_bounds["min"][0], side_bounds["min"][0])
+            overlap_y = min(cross_bounds["max"][1], side_bounds["max"][1]) - max(cross_bounds["min"][1], side_bounds["min"][1])
+            self.assertAlmostEqual(overlap_x, 8.0)
+            self.assertAlmostEqual(overlap_y, 8.0)
 
     def _scene_node(self, scene_root, component_name):
         for node in scene_root.iter_nodes():
