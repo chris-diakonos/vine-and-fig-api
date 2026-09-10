@@ -1,5 +1,7 @@
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from app.models.structure import BuildingRequest, ComponentVisibility  # noqa: E402
 from app.services.joinery.base import workplane_volume  # noqa: E402
 from app.services.building_builder import BuildingBuilder  # noqa: E402
+from app.services.config_loader import load_json_config  # noqa: E402
 from app.services.framing_builder import FramingBuilder  # noqa: E402
 
 
@@ -85,9 +88,14 @@ class FramingSceneGraphTest(unittest.TestCase):
                 self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_y"], 246.0)
         front_joist_spec = next(spec for spec in joist_sill_specs if spec.id == "joist_sill_story1_1_front")
         self.assertEqual(front_joist_spec.params["joint_datums"]["direction"], 1)
-        self.assertEqual(front_joist_spec.params["joint_datums"]["joist_end_y"], 240.0)
+        self.assertEqual(front_joist_spec.params["joint_datums"]["joist_end_y"], 232.0)
         self.assertEqual(front_joist_spec.params["joint_datums"]["sill_socket_center_x"], 25.0)
-        self.assertEqual(front_joist_spec.params["joint_datums"]["sill_socket_center_y"], 4.0)
+        self.assertEqual(front_joist_spec.params["joint_datums"]["sill_socket_center_y"], 0.0)
+        rear_joist_spec = next(spec for spec in joist_sill_specs if spec.id == "joist_sill_story1_1_rear")
+        self.assertEqual(rear_joist_spec.params["joint_datums"]["direction"], -1)
+        self.assertEqual(rear_joist_spec.params["joint_datums"]["joist_end_y"], 0.0)
+        self.assertEqual(rear_joist_spec.params["joint_datums"]["sill_socket_center_x"], 25.0)
+        self.assertEqual(rear_joist_spec.params["joint_datums"]["sill_socket_center_y"], 8.0)
 
         unjoined_builder = FramingBuilder(request.structure, request.structure_hash or "joinery-flag-test")
         unjoined_model, _ = unjoined_builder.build(ceiling_heights, floor_heights, compile_joinery=False)
@@ -216,17 +224,64 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertEqual(len(joist_names), 22)
         self._assert_bounds_almost_equal(
             components["joist_story1_1"]["world_bounds"],
-            {"min": [19.5, -240.0, 0.0], "max": [22.5, 0.0, 10.0], "size": [3.0, 240.0, 10.0]},
+            {"min": [19.5, -236.0, 0.0], "max": [22.5, -4.0, 10.0], "size": [3.0, 232.0, 10.0]},
         )
         self._assert_bounds_almost_equal(
             components["joist_story1_11"]["world_bounds"],
-            {"min": [229.5, -240.0, 0.0], "max": [232.5, 0.0, 10.0], "size": [3.0, 240.0, 10.0]},
+            {"min": [229.5, -236.0, 0.0], "max": [232.5, -4.0, 10.0], "size": [3.0, 232.0, 10.0]},
         )
         self._assert_bounds_almost_equal(
             components["joist_story2_1"]["world_bounds"],
             {"min": [19.5, -252.0, 106.0], "max": [22.5, 12.0, 114.0], "size": [3.0, 264.0, 8.0]},
         )
         self.assertEqual(components["joist_story1_1"]["metadata"]["framing_datums"]["story"], 1)
+
+    def test_cornerstone_joist_span_uses_configured_sill_width(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        with open(ROOT / "config" / "framing.json", "r", encoding="utf-8") as handle:
+            framing_config = json.load(handle)
+        framing_config["defaults"]["sill_width"] = 12.0
+        previous_path = os.environ.get("FRAMING_CONFIG_PATH")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "framing.json"
+            with open(config_path, "w", encoding="utf-8") as handle:
+                json.dump(framing_config, handle)
+
+            os.environ["FRAMING_CONFIG_PATH"] = str(config_path)
+            load_json_config.cache_clear()
+            try:
+                floorplan = request.structure.floorplan
+                ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+                    floorplan.stories,
+                    floorplan.joist_heights or [10, 9, 8],
+                    floorplan.ceiling_heights or [120, 108],
+                )
+                floor_heights = BuildingBuilder.calculate_floor_heights(
+                    floorplan.stories,
+                    floorplan.joist_heights or [10, 9, 8],
+                    floorplan.ceiling_heights or [120, 108],
+                )
+                model, _ = FramingBuilder(request.structure, "configured-sill-width-test").build(
+                    ceiling_heights,
+                    floor_heights,
+                    compile_joinery=False,
+                )
+                components = {component["component_name"]: component for component in model.scene_components}
+                self._assert_bounds_almost_equal(
+                    components["sill_front_1"]["world_bounds"],
+                    {"min": [-6.0, -6.0, 0.0], "max": [246.0, 6.0, 10.0], "size": [252.0, 12.0, 10.0]},
+                )
+                self._assert_bounds_almost_equal(
+                    components["joist_story1_1"]["world_bounds"],
+                    {"min": [19.5, -234.0, 0.0], "max": [22.5, -6.0, 10.0], "size": [3.0, 228.0, 10.0]},
+                )
+            finally:
+                if previous_path is None:
+                    os.environ.pop("FRAMING_CONFIG_PATH", None)
+                else:
+                    os.environ["FRAMING_CONFIG_PATH"] = previous_path
+                load_json_config.cache_clear()
 
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")

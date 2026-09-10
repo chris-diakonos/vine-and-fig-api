@@ -5,6 +5,12 @@
     "chair_rail_height": 30.0,
     "roof_overhang": 12.0,
     "max_member_length": 240.0,
+    "sill_width": 8.0,
+    "sill_height": 10.0,
+    "post_width": 6.0,
+    "post_depth": 4.0,
+    "post_tenon_depth": 2.0,
+    "joist_width": 3.0,
     "compile_joinery": true,
     "color": [0.55, 0.45, 0.33, 1.0]
   },

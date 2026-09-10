@@ -67,17 +67,17 @@ class FramingBuilder:
         self.centerlines = self._calculate_centerlines()
         
         # Configuration
-        framing_defaults = load_json_config("framing", "FRAMING_CONFIG_PATH")["defaults"]
-        self.bay_spacing = framing_defaults["bay_spacing"]
-        self.lap = framing_defaults["lap"]
-        self.chair_rail_height = framing_defaults["chair_rail_height"]
-        self.max_member_length = framing_defaults["max_member_length"]
+        self.framing_defaults = load_json_config("framing", "FRAMING_CONFIG_PATH")["defaults"]
+        self.bay_spacing = self.framing_defaults["bay_spacing"]
+        self.lap = self.framing_defaults["lap"]
+        self.chair_rail_height = self.framing_defaults["chair_rail_height"]
+        self.max_member_length = self.framing_defaults["max_member_length"]
         self.joist_spacing = self.floorplan.spacing.joist_spacing
         self.stud_spacing = self.floorplan.spacing.stud_spacing
         self.rafter_spacing = self.floorplan.spacing.rafter_spacing
         self.ceiling_heights = self.floorplan.ceiling_heights or [120, 108]
         self.joist_heights = self.floorplan.joist_heights or [10, 9, 8]
-        self.roof_overhang = self.roof.roof_overhang if self.roof else framing_defaults["roof_overhang"]
+        self.roof_overhang = self.roof.roof_overhang if self.roof else self.framing_defaults["roof_overhang"]
         self.roof_pitch_degrees = self.roof.roof_pitch if self.roof else 40
         
         # Calculated heights (set by build method)
@@ -275,11 +275,11 @@ class FramingBuilder:
 
     def _build_migrated_framing_scene(self, x_offset: float = 0.0, y_offset: float = 0.0) -> SceneNode:
         """Build migrated framing members as cornerstone scene nodes."""
-        sill_width = 8.0
-        sill_height = 10.0
-        post_width = 6.0
-        post_depth = 4.0
-        post_tenon_depth = 2.0
+        sill_width = float(self.framing_defaults.get("sill_width", 8.0))
+        sill_height = float(self.framing_defaults.get("sill_height", 10.0))
+        post_width = float(self.framing_defaults.get("post_width", 6.0))
+        post_depth = float(self.framing_defaults.get("post_depth", 4.0))
+        post_tenon_depth = float(self.framing_defaults.get("post_tenon_depth", 2.0))
         stories = self.floorplan.stories
         post_height = self.calculated_ceiling_heights[stories - 1] - self.calculated_floor_heights[0]
 
@@ -333,7 +333,7 @@ class FramingBuilder:
         x_offset: float,
         y_offset: float,
     ) -> None:
-        joist_width = 3.0
+        joist_width = float(self.framing_defaults.get("joist_width", 3.0))
         joist_centerlines = self._joist_centerlines()
         for story in range(1, self.floorplan.stories + 2):
             joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
@@ -342,8 +342,8 @@ class FramingBuilder:
                 joist_length = self.faces["right"] + (self.roof_overhang * 2.0)
                 y_min = -self.faces["right"] - self.roof_overhang
             else:
-                joist_length = self.faces["right"]
-                y_min = -self.faces["right"]
+                joist_length = self.faces["right"] - datums.sill_width
+                y_min = -self.faces["right"] + datums.sill_width / 2.0
 
             for index, center_x in enumerate(joist_centerlines, start=1):
                 datum = datums.joist(

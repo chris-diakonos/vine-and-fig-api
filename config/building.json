@@ -10,7 +10,7 @@
     "tolerance": 0.01
   },
   "export": {
-    "flatten_glb": false,
+    "flatten_glb": true,
     "flatten_subsystems": {
       "foundation": true,
       "framing": false,
