@@ -579,6 +579,48 @@ class FramingBuilder:
                 )
             )
         specs.extend(self._declare_joist_sill_specs())
+        specs.extend(self._declare_post_girt_specs())
+        return specs
+
+    def _declare_post_girt_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        corners = [
+            ("front_left", "front", "min", "left", "max"),
+            ("front_right", "front", "max", "right", "max"),
+            ("rear_left", "rear", "min", "left", "min"),
+            ("rear_right", "rear", "max", "right", "min"),
+        ]
+        stories = sorted(
+            {
+                int(story)
+                for member in self.member_registry.values()
+                if member.role == "girt"
+                for story in [self._member_datum_value(member, "story")]
+                if story is not None
+            }
+        )
+        for story in stories:
+            for corner, face_a, end_a, face_b, end_b in corners:
+                post = self.member_registry.get(f"post_{corner}")
+                girt_a = self.member_registry.get(self._girt_id(face_a, story, end_a))
+                girt_b = self.member_registry.get(self._girt_id(face_b, story, end_b))
+                if post is None:
+                    continue
+                for girt, end in ((girt_a, end_a), (girt_b, end_b)):
+                    if girt is None:
+                        continue
+                    specs.append(
+                        JointSpec(
+                            id=f"post_girt_{corner}_{girt.id}",
+                            joint_type="post_girt",
+                            member_a=girt.id,
+                            member_b=post.id,
+                            params={
+                                "axis": self._member_datum_value(girt, "axis"),
+                                "girt_end": end,
+                            },
+                        )
+                    )
         return specs
 
     def _declare_joist_sill_specs(self) -> List[JointSpec]:
@@ -698,10 +740,26 @@ class FramingBuilder:
         sills.sort(key=lambda member: member.index or 0)
         return sills[0].id if end == "min" else sills[-1].id
 
+    def _girt_id(self, face: str, story: int, end: str) -> Optional[str]:
+        girts = [
+            member
+            for member in self.member_registry.values()
+            if (
+                member.role == "girt"
+                and member.face == face
+                and member.index is not None
+                and self._member_datum_value(member, "story") == story
+            )
+        ]
+        if not girts:
+            return None
+        girts.sort(key=lambda member: member.index or 0)
+        return girts[0].id if end == "min" else girts[-1].id
+
     @staticmethod
     def _face_for_component(component_name: str) -> Optional[str]:
         parts = component_name.split("_")
-        if len(parts) >= 3 and parts[0] == "sill":
+        if len(parts) >= 3 and parts[0] in ("sill", "girt"):
             return parts[1]
         return None
 
@@ -716,6 +774,11 @@ class FramingBuilder:
         if len(parts) >= 3 and parts[0] == "joist":
             try:
                 return int(parts[2])
+            except ValueError:
+                return None
+        if len(parts) >= 4 and parts[0] == "girt":
+            try:
+                return int(parts[3])
             except ValueError:
                 return None
         return None

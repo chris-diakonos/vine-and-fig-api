@@ -9,6 +9,10 @@ from app.services.joinery.joist_to_sill import (
     joist_to_sill_operations,
 )
 from app.services.joinery.plate_splice import plate_splice_operations, plate_splice_params
+from app.services.joinery.post_to_girt import (
+    default_post_to_girt_params,
+    post_to_girt_operations,
+)
 from app.services.joinery.post_to_sill_corner import (
     default_post_sill_corner_params,
     post_sill_corner_operations,
@@ -87,8 +91,53 @@ def joist_sill_handler(
         yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
 
 
+def post_girt_handler(
+    spec: JointSpec,
+    members: Dict[str, SceneNode],
+) -> Iterable[GeometryOperation]:
+    girt = members[spec.member_a]
+    post = members[spec.member_b]
+    girt_bounds = bounds_for_workplane(girt.geometry)
+    post_bounds = bounds_for_workplane(post.geometry)
+    if girt_bounds is None or post_bounds is None:
+        return []
+
+    girt_datums = girt.metadata.get("framing_datums", {})
+    post_datums = post.metadata.get("framing_datums", {})
+    girt_center = girt_datums.get("center")
+    post_min = post_datums.get("min_corner")
+    if not isinstance(girt_center, list) or not isinstance(post_min, list):
+        return []
+
+    axis = spec.params["axis"]
+    if axis == "x":
+        mortise_center = (
+            float(girt_center[1]) - float(post_min[1]),
+            float(girt_center[2]) - float(post_min[2]),
+        )
+    else:
+        mortise_center = (
+            float(girt_center[0]) - float(post_min[0]),
+            float(girt_center[2]) - float(post_min[2]),
+        )
+
+    params = default_post_to_girt_params()
+    for op in post_to_girt_operations(
+        girt_id=spec.member_a,
+        post_id=spec.member_b,
+        girt_size=girt_bounds.size,
+        post_size=post_bounds.size,
+        axis=axis,
+        girt_end=spec.params["girt_end"],
+        mortise_center=mortise_center,
+        params=params,
+    ):
+        yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
+
+
 FRAMING_JOINERY_HANDLERS = {
     "plate_splice": plate_splice_handler,
     "joist_sill": joist_sill_handler,
+    "post_girt": post_girt_handler,
     "post_sill_corner": post_sill_corner_handler,
 }

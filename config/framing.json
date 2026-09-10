@@ -46,6 +46,12 @@
       "side_clearance": 0.02,
       "vertical_clearance": 0.02
     },
+    "post_to_girt": {
+      "tenon_thickness": 1.5,
+      "tenon_height": 6.0,
+      "mortise_clearance": 0.02,
+      "through_clearance": 0.2
+    },
     "peg_bore": {
       "diameter": 0.75,
       "margin": 1.0

@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from app.services.joinery.base import apply_operations, box_at, workplane_bounds, workplane_volume  # noqa: E402
 from app.services.joinery.half_lap import default_bearing_notch_params, joist_bearing_notch  # noqa: E402
 from app.services.joinery.joist_to_sill import joist_to_sill_operations  # noqa: E402
+from app.services.joinery.post_to_girt import post_to_girt_operations  # noqa: E402
 from app.services.joinery.mortise_tenon import default_stub_tenon_params, stud_to_sill_fixture  # noqa: E402
 from app.services.joinery.plate_splice import plate_splice_fixture  # noqa: E402
 from app.services.joinery.post_to_sill_corner import post_to_sill_corner_fixture  # noqa: E402
@@ -78,6 +79,26 @@ class JoineryPrimitiveTest(unittest.TestCase):
         self.assertGreater(workplane_volume(joined_joist), workplane_volume(joist))
         self.assertLess(workplane_volume(joined_sill), workplane_volume(sill))
         self.assertGreater(workplane_bounds(joined_joist)[1][1], workplane_bounds(joist)[1][1])
+
+    def test_post_to_girt_adds_through_tenon_and_cuts_post_mortise(self):
+        post = box_at((6.0, 4.0, 48.0), (0.0, 0.0, 0.0))
+        girt = box_at((36.0, 4.0, 6.0), (0.0, 0.0, 0.0))
+        operations = post_to_girt_operations(
+            "girt",
+            "post",
+            girt_size=(36.0, 4.0, 6.0),
+            post_size=(6.0, 4.0, 48.0),
+            axis="x",
+            girt_end="min",
+            mortise_center=(2.0, 24.0),
+        )
+
+        joined_post = apply_operations(post, [op for op in operations if op.member_id == "post"])
+        joined_girt = apply_operations(girt, [op for op in operations if op.member_id == "girt"])
+
+        self.assertLess(workplane_volume(joined_post), workplane_volume(post))
+        self.assertGreater(workplane_volume(joined_girt), workplane_volume(girt))
+        self.assertLess(workplane_bounds(joined_girt)[0][0], workplane_bounds(girt)[0][0])
 
 
 if __name__ == "__main__":

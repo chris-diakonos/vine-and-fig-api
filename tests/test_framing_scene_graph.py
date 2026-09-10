@@ -338,6 +338,37 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertEqual(components["girt_front_story2_1"]["metadata"]["framing_datums"]["axis"], "x")
         self.assertEqual(components["girt_left_story2_1"]["metadata"]["framing_datums"]["axis"], "y")
 
+    def test_post_girt_joinery_compiles_for_two_story_drop_girts(self):
+        request = self._load_two_story_request()
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        builder = FramingBuilder(request.structure, "post-girt-joinery-test")
+        model, _ = builder.build(ceiling_heights, floor_heights, compile_joinery=True)
+        specs = builder._declare_joinery_specs()
+        post_girt_specs = [spec for spec in specs if spec.joint_type == "post_girt"]
+
+        self.assertEqual(len(post_girt_specs), 8)
+        self.assertTrue(any(spec.params["axis"] == "x" for spec in post_girt_specs))
+        self.assertTrue(any(spec.params["axis"] == "y" for spec in post_girt_specs))
+        components = {component["component_name"]: component for component in model.scene_components}
+        self.assertTrue(components["post_front_left"]["has_joined_geometry"])
+        self.assertTrue(components["girt_front_story2_1"]["has_joined_geometry"])
+        self.assertTrue(components["girt_left_story2_1"]["has_joined_geometry"])
+
+        joined_post = self._scene_node(model.scene_root, "post_front_left")
+        self.assertIn("post_girt_front_left_girt_front_story2_1", joined_post.metadata["joinery"]["joint_ids"])
+        self.assertIn("post_girt_front_left_girt_left_story2_1", joined_post.metadata["joinery"]["joint_ids"])
+
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
         floorplan = request.structure.floorplan
