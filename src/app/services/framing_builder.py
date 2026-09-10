@@ -580,6 +580,7 @@ class FramingBuilder:
             )
         specs.extend(self._declare_joist_sill_specs())
         specs.extend(self._declare_post_girt_specs())
+        specs.extend(self._declare_girt_splice_specs())
         return specs
 
     def _declare_post_girt_specs(self) -> List[JointSpec]:
@@ -635,6 +636,44 @@ class FramingBuilder:
         if end == "min":
             return abs(girt.world_bounds.min[1] - post.world_bounds.min[1]) + reveal
         return abs(post.world_bounds.max[1] - girt.world_bounds.max[1]) + reveal
+
+    def _declare_girt_splice_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        grouped: Dict[Tuple[str, int], List[FramingMember]] = {}
+        for member in self.member_registry.values():
+            if member.role != "girt" or member.face is None or member.index is None:
+                continue
+            story = self._member_datum_value(member, "story")
+            if story is None:
+                continue
+            grouped.setdefault((member.face, int(story)), []).append(member)
+
+        for (face, story), girts in grouped.items():
+            girts.sort(key=lambda member: member.index or 0)
+            for left, right in zip(girts, girts[1:]):
+                axis = self._member_datum_value(left, "axis")
+                if axis == "x":
+                    member_a_end, member_b_end = "max", "min"
+                    plate_width = left.local_bounds.size[1]
+                else:
+                    member_a_end, member_b_end = "min", "max"
+                    plate_width = left.local_bounds.size[0]
+                specs.append(
+                    JointSpec(
+                        id=f"girt_splice_{face}_story{story}_{left.index}_{right.index}",
+                        joint_type="plate_splice",
+                        member_a=left.id,
+                        member_b=right.id,
+                        params={
+                            "axis": axis,
+                            "member_a_end": member_a_end,
+                            "member_b_end": member_b_end,
+                            "plate_width": plate_width,
+                            "plate_height": left.local_bounds.size[2],
+                        },
+                    )
+                )
+        return specs
 
     def _declare_joist_sill_specs(self) -> List[JointSpec]:
         specs: List[JointSpec] = []

@@ -21,12 +21,16 @@ class FramingSceneGraphTest(unittest.TestCase):
         with open(path, "r", encoding="utf-8") as handle:
             return BuildingRequest(**json.load(handle))
 
-    def _load_two_story_request(self) -> BuildingRequest:
+    def _load_two_story_request(self, dimension: float = 240.0) -> BuildingRequest:
         with open(ROOT / "tests" / "fixtures" / "minimal_window_request.json", "r", encoding="utf-8") as handle:
             payload = json.load(handle)
         payload["structure"]["floorplan"]["stories"] = 2
         payload["structure"]["floorplan"]["ceiling_heights"] = [96.0, 96.0]
         payload["structure"]["floorplan"]["joist_heights"] = [10.0, 8.0, 8.0]
+        payload["structure"]["floorplan"]["dimensions"]["front"] = dimension
+        payload["structure"]["floorplan"]["dimensions"]["rear"] = dimension
+        payload["structure"]["floorplan"]["dimensions"]["left"] = dimension
+        payload["structure"]["floorplan"]["dimensions"]["right"] = dimension
         return BuildingRequest(**payload)
 
     def _framing_only_visibility(self) -> ComponentVisibility:
@@ -369,6 +373,39 @@ class FramingSceneGraphTest(unittest.TestCase):
         joined_post = self._scene_node(model.scene_root, "post_front_left")
         self.assertIn("post_girt_front_left_girt_front_story2_1", joined_post.metadata["joinery"]["joint_ids"])
         self.assertIn("post_girt_front_left_girt_left_story2_1", joined_post.metadata["joinery"]["joint_ids"])
+
+    def test_girt_splice_joinery_compiles_for_segmented_girts(self):
+        request = self._load_two_story_request(dimension=360.0)
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        builder = FramingBuilder(request.structure, "girt-splice-joinery-test")
+        model, _ = builder.build(ceiling_heights, floor_heights, compile_joinery=True)
+        specs = builder._declare_joinery_specs()
+        girt_splice_specs = [spec for spec in specs if spec.id.startswith("girt_splice_")]
+
+        self.assertEqual(len(girt_splice_specs), 4)
+        self.assertTrue(all(spec.joint_type == "plate_splice" for spec in girt_splice_specs))
+        front_splice = next(spec for spec in girt_splice_specs if spec.id == "girt_splice_front_story2_1_2")
+        left_splice = next(spec for spec in girt_splice_specs if spec.id == "girt_splice_left_story2_1_2")
+        self.assertEqual(front_splice.params["axis"], "x")
+        self.assertEqual(front_splice.params["member_a_end"], "max")
+        self.assertEqual(front_splice.params["member_b_end"], "min")
+        self.assertEqual(left_splice.params["axis"], "y")
+        self.assertEqual(left_splice.params["member_a_end"], "min")
+        self.assertEqual(left_splice.params["member_b_end"], "max")
+
+        joined_front = self._scene_node(model.scene_root, "girt_front_story2_1")
+        self.assertIn("girt_splice_front_story2_1_2", joined_front.metadata["joinery"]["joint_ids"])
 
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
