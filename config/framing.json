@@ -50,7 +50,8 @@
       "tenon_thickness": 1.5,
       "tenon_height": 6.0,
       "mortise_clearance": 0.02,
-      "through_clearance": 0.2
+      "through_clearance": 0.2,
+      "tenon_reveal": 0.125
     },
     "peg_bore": {
       "diameter": 0.75,

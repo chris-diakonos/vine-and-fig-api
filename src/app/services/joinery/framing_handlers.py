@@ -130,6 +130,7 @@ def post_girt_handler(
         axis=axis,
         girt_end=spec.params["girt_end"],
         mortise_center=mortise_center,
+        tenon_length=float(spec.params["tenon_length"]),
         params=params,
     ):
         yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)

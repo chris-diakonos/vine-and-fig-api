@@ -91,6 +91,7 @@ class JoineryPrimitiveTest(unittest.TestCase):
             axis="x",
             girt_end="min",
             mortise_center=(2.0, 24.0),
+            tenon_length=4.125,
         )
 
         joined_post = apply_operations(post, [op for op in operations if op.member_id == "post"])
@@ -98,7 +99,7 @@ class JoineryPrimitiveTest(unittest.TestCase):
 
         self.assertLess(workplane_volume(joined_post), workplane_volume(post))
         self.assertGreater(workplane_volume(joined_girt), workplane_volume(girt))
-        self.assertLess(workplane_bounds(joined_girt)[0][0], workplane_bounds(girt)[0][0])
+        self.assertAlmostEqual(workplane_bounds(joined_girt)[0][0], -4.125)
 
 
 if __name__ == "__main__":

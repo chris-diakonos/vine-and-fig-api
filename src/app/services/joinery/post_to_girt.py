@@ -18,6 +18,7 @@ class PostToGirtParams:
     tenon_height: float
     mortise_clearance: float
     through_clearance: float
+    tenon_reveal: float
 
 
 def default_post_to_girt_params() -> PostToGirtParams:
@@ -32,12 +33,13 @@ def post_to_girt_operations(
     axis: GirtAxis,
     girt_end: GirtEnd,
     mortise_center: Tuple[float, float],
+    tenon_length: Optional[float] = None,
     params: Optional[PostToGirtParams] = None,
 ) -> List[GeometryOperation]:
     """Return operations for a girt through-tenon and matching post mortise."""
     params = params or default_post_to_girt_params()
-    tenon_length = post_size[0] if axis == "x" else post_size[1]
-    tenon = _girt_tenon(girt_size, axis, girt_end, tenon_length, params)
+    default_length = post_size[0] if axis == "x" else post_size[1]
+    tenon = _girt_tenon(girt_size, axis, girt_end, tenon_length or default_length + params.tenon_reveal, params)
     mortise = _post_mortise(post_size, axis, mortise_center, params)
     return [
         GeometryOperation(post_id, "cut", mortise),

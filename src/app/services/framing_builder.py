@@ -618,10 +618,23 @@ class FramingBuilder:
                             params={
                                 "axis": self._member_datum_value(girt, "axis"),
                                 "girt_end": end,
+                                "tenon_length": self._post_girt_tenon_length(girt, post, end),
                             },
                         )
                     )
         return specs
+
+    def _post_girt_tenon_length(self, girt: FramingMember, post: FramingMember, end: str) -> float:
+        params = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {}).get("post_to_girt", {})
+        reveal = float(params.get("tenon_reveal", 0.125))
+        axis = self._member_datum_value(girt, "axis")
+        if axis == "x":
+            if end == "min":
+                return abs(girt.world_bounds.min[0] - post.world_bounds.min[0]) + reveal
+            return abs(post.world_bounds.max[0] - girt.world_bounds.max[0]) + reveal
+        if end == "min":
+            return abs(girt.world_bounds.min[1] - post.world_bounds.min[1]) + reveal
+        return abs(post.world_bounds.max[1] - girt.world_bounds.max[1]) + reveal
 
     def _declare_joist_sill_specs(self) -> List[JointSpec]:
         specs: List[JointSpec] = []

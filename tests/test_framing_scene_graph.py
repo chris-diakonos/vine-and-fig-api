@@ -360,6 +360,7 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertEqual(len(post_girt_specs), 8)
         self.assertTrue(any(spec.params["axis"] == "x" for spec in post_girt_specs))
         self.assertTrue(any(spec.params["axis"] == "y" for spec in post_girt_specs))
+        self.assertTrue(all(spec.params["tenon_length"] == 4.125 for spec in post_girt_specs))
         components = {component["component_name"]: component for component in model.scene_components}
         self.assertTrue(components["post_front_left"]["has_joined_geometry"])
         self.assertTrue(components["girt_front_story2_1"]["has_joined_geometry"])
