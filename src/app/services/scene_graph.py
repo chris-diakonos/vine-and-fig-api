@@ -77,6 +77,17 @@ class Transform:
             matrix = _multiply_matrices(_rotation_matrix(rotation), matrix)
         return _multiply_matrices(_translation_matrix(self.translation), matrix)
 
+    def inverse(self) -> "Transform":
+        inverse_rotations = tuple(
+            Rotation(rotation.axis, -rotation.angle_degrees)
+            for rotation in reversed(self.rotations)
+        )
+        x, y, z = self.translation
+        return Transform(
+            translation=_apply_rotation_chain((-x, -y, -z), inverse_rotations),
+            rotations=inverse_rotations,
+        )
+
     def as_dict(self) -> Dict[str, Any]:
         return {
             "translation": list(self.translation),
@@ -118,6 +129,8 @@ class SceneNode:
     role: str
     local_transform: Transform = field(default_factory=Transform.identity)
     geometry: Optional[cq.Workplane] = None
+    blank_geometry: Optional[cq.Workplane] = None
+    joined_geometry: Optional[cq.Workplane] = None
     color: Optional[cq.Color] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     children: List["SceneNode"] = field(default_factory=list)
@@ -259,6 +272,7 @@ def scene_from_assembly(
                     part_origin[2] - group_origin[2],
                 ),
                 geometry=record["obj"].translate((-part_origin[0], -part_origin[1], -part_origin[2])),
+                blank_geometry=record["obj"].translate((-part_origin[0], -part_origin[1], -part_origin[2])),
                 color=record["color"],
                 metadata={"component_name": record["component_name"]},
             )
@@ -290,6 +304,8 @@ def collect_component_metadata(scene: SceneNode) -> List[Dict[str, Any]]:
                 "world_matrix": node.world_matrix(),
                 "local_bounds": local_bounds.as_dict() if local_bounds else None,
                 "world_bounds": world_bounds.as_dict() if world_bounds else None,
+                "has_blank_geometry": node.blank_geometry is not None,
+                "has_joined_geometry": node.joined_geometry is not None,
                 "metadata": _serializable_metadata(node.metadata),
             }
         )
@@ -375,6 +391,26 @@ def _multiply_matrices(left: Matrix4, right: Matrix4) -> Matrix4:
             values.append(sum(left[row][idx] * right[idx][col] for idx in range(4)))
         rows.append(tuple(values))  # type: ignore[arg-type]
     return tuple(rows)  # type: ignore[return-value]
+
+
+def _apply_rotation_chain(
+    point: Tuple[float, float, float],
+    rotations: Sequence[Rotation],
+) -> Tuple[float, float, float]:
+    x, y, z = point
+    for rotation in rotations:
+        angle = math.radians(rotation.angle_degrees)
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        if rotation.axis == (1.0, 0.0, 0.0):
+            y, z = y * cos_a - z * sin_a, y * sin_a + z * cos_a
+        elif rotation.axis == (0.0, 1.0, 0.0):
+            x, z = x * cos_a + z * sin_a, -x * sin_a + z * cos_a
+        elif rotation.axis == (0.0, 0.0, 1.0):
+            x, y = x * cos_a - y * sin_a, x * sin_a + y * cos_a
+        else:
+            raise ValueError(f"Unsupported rotation axis: {rotation.axis}")
+    return (x, y, z)
 
 
 def _serializable_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:

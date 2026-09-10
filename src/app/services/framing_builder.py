@@ -16,6 +16,9 @@ from app.utils.materials_helper import (
 )
 from app.services.config_loader import load_json_config
 from app.services.framing_validation import validate_framing_scene
+from app.services.joinery.base import JointSpec
+from app.services.joinery.compiler import compile_joinery as run_joinery_compiler
+from app.services.joinery.framing_handlers import FRAMING_JOINERY_HANDLERS
 from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 
 
@@ -118,7 +121,8 @@ class FramingBuilder:
     def build(
         self,
         calculated_ceiling_heights: List[float],
-        calculated_floor_heights: List[float]
+        calculated_floor_heights: List[float],
+        compile_joinery: bool = False,
     ) -> Tuple[cq.Assembly, Dict[str, Any]]:
         """
         Build complete framing structure.
@@ -186,9 +190,9 @@ class FramingBuilder:
             "bom_levels": self.bom_levels
         }
         
-        return self._with_scene(assembly), bom_data
+        return self._with_scene(assembly, compile_joinery=compile_joinery), bom_data
 
-    def _with_scene(self, assembly: cq.Assembly) -> cq.Assembly:
+    def _with_scene(self, assembly: cq.Assembly, compile_joinery: bool = False) -> cq.Assembly:
         scene_root = scene_from_assembly(
             assembly,
             subsystem_name="framing",
@@ -197,12 +201,28 @@ class FramingBuilder:
             group_name_for_component=self._group_name_for_component,
             role_for_component=lambda name: name.split("_")[0] if name else "framing_member",
         )
+        scene_root.metadata["compile_joinery"] = compile_joinery
+        if compile_joinery:
+            specs = self._declare_joinery_specs(scene_root)
+            operations = run_joinery_compiler(scene_root, specs, FRAMING_JOINERY_HANDLERS)
+            scene_root.metadata["joinery_operation_count"] = len(operations)
         projected = cq.Assembly()
         project_scene_to_assembly(scene_root, projected)
         projected.scene_root = scene_root
         projected.scene_components = collect_component_metadata(scene_root)
         projected.validation_results = validate_framing_scene(scene_root)
         return projected
+
+    def _declare_joinery_specs(self, scene_root) -> List[JointSpec]:
+        """
+        Declare framing joints whose anchors are deterministic in member-local space.
+
+        The current framing builder still creates world-space solids before wrapping
+        them in scene nodes, so live building joins remain disabled until member
+        creation records explicit joint anchors.
+        """
+
+        return []
 
     @staticmethod
     def _group_name_for_component(component_name: str) -> str:
@@ -1153,4 +1173,3 @@ class FramingBuilder:
                 component_id, self.structure_hash, total_quantity, 3,
                 self.bom_quantities, self.bom_levels, self.bom_components
             )
-
