@@ -77,8 +77,8 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self.assertIsNotNone(bom_data)
         self.assertTrue(model.scene_root.metadata["compile_joinery"])
-        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 26)
-        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 72)
+        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 69)
+        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 158)
         components = {component["component_name"]: component for component in model.scene_components}
         names = set(components)
         self.assertIn("sill_front_1", names)
@@ -87,7 +87,7 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertTrue(components["joist_story1_1"]["has_joined_geometry"])
         self.assertTrue(components["post_front_left"]["has_joined_geometry"])
         specs = builder._declare_joinery_specs()
-        self.assertEqual(len(specs), 26)
+        self.assertEqual(len(specs), 69)
         post_sill_specs = [spec for spec in specs if spec.joint_type == "post_sill_corner"]
         joist_sill_specs = [spec for spec in specs if spec.joint_type == "joist_sill"]
         self.assertEqual(len(post_sill_specs), 4)
@@ -476,7 +476,7 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self._assert_bounds_almost_equal(
             components["bay_stud_front_story1_bay1_left"]["world_bounds"],
-            {"min": [96.5, 0.0, 8.0], "max": [101.5, 4.0, 108.0], "size": [5.0, 4.0, 100.0]},
+            {"min": [96.5, 0.0, 10.0], "max": [101.5, 4.0, 106.0], "size": [5.0, 4.0, 96.0]},
         )
         self._assert_bounds_almost_equal(
             components["cripple_stud_front_story1_bay1"]["world_bounds"],
@@ -484,6 +484,67 @@ class FramingSceneGraphTest(unittest.TestCase):
         )
         final_left_stud = self._scene_node(model.scene_root, "stud_left_story1_section6_wall1")
         self.assertAlmostEqual(final_left_stud.metadata["framing_datums"]["station"], 225.75)
+
+    def test_cornerstone_second_story_cripples_sit_on_girt_top_plane(self):
+        request = self._load_two_story_request()
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "cornerstone-second-story-stud-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        components = {component["component_name"]: component for component in model.scene_components}
+
+        self._assert_bounds_almost_equal(
+            components["cripple_stud_front_story2_bay1"]["world_bounds"],
+            {"min": [118.5, 0.0, 106.0], "max": [121.5, 4.0, 136.0], "size": [3.0, 4.0, 30.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["bay_stud_front_story1_bay1_left"]["world_bounds"],
+            {"min": [96.5, 0.0, 10.0], "max": [101.5, 4.0, 100.0], "size": [5.0, 4.0, 90.0]},
+        )
+
+    def test_stud_stub_tenon_joinery_compiles_against_sills_and_girts(self):
+        request = self._load_two_story_request()
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        builder = FramingBuilder(request.structure, "stud-stub-tenon-joinery-test")
+        model, _ = builder.build(ceiling_heights, floor_heights, compile_joinery=True)
+        specs = builder._declare_joinery_specs()
+        stud_specs = [spec for spec in specs if spec.joint_type == "stud_stub_tenon"]
+
+        self.assertTrue(stud_specs)
+        self.assertTrue(any(spec.params["endpoint"] == "bottom" for spec in stud_specs))
+        self.assertTrue(any(spec.params["endpoint"] == "top" for spec in stud_specs))
+
+        joined_stud = self._scene_node(model.scene_root, "bay_stud_front_story1_bay1_left")
+        joined_sill = self._scene_node(model.scene_root, "sill_front_1")
+        joined_girt = self._scene_node(model.scene_root, "girt_front_story2_1")
+        self.assertTrue(joined_stud.metadata["joinery"]["operation_count"] >= 2)
+        self.assertIn("stud_stub_bay_stud_front_story1_bay1_left_bottom_sill_front_1", joined_stud.metadata["joinery"]["joint_ids"])
+        self.assertTrue(joined_sill.metadata["joinery"]["operation_count"] >= 1)
+        self.assertTrue(joined_girt.metadata["joinery"]["operation_count"] >= 1)
 
     def test_cornerstone_door_bay_skips_cripple_stud(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")

@@ -375,6 +375,7 @@ class FramingBuilder:
             cripple_stud_width,
             cripple_stud_depth,
             stud_tenon_depth,
+            girt_depth,
         )
         return root
 
@@ -470,15 +471,15 @@ class FramingBuilder:
         cripple_stud_width: float,
         cripple_stud_depth: float,
         stud_tenon_depth: float,
+        girt_depth: float,
     ) -> None:
         station_records: Dict[Tuple[str, int], List[StudStation]] = defaultdict(list)
         bom_counts: Dict[Tuple[str, float, float, float], int] = defaultdict(int)
 
         for story in range(1, self.floorplan.stories + 1):
-            bottom_z, face_stud_length, side_stud_length = self._stud_story_verticals(story, stud_tenon_depth)
             for face in self.faces:
+                bottom_z, stud_length = self._stud_story_verticals(story, face, girt_depth)
                 centerlines = self.centerlines[face]
-                stud_length = face_stud_length if face in ("front", "rear") else side_stud_length
                 for index, centerline in enumerate(centerlines, start=1):
                     offset = (self.bay_spacing + bay_stud_width) / 2.0
                     for side, station in (("left", centerline - offset), ("right", centerline + offset)):
@@ -508,7 +509,7 @@ class FramingBuilder:
                             story,
                             index,
                             centerline,
-                            self.calculated_floor_heights[story - 1],
+                            bottom_z,
                             self.chair_rail_height,
                             cripple_stud_width,
                             cripple_stud_depth,
@@ -536,6 +537,7 @@ class FramingBuilder:
             stud_width,
             stud_depth,
             stud_tenon_depth,
+            girt_depth,
             bom_counts,
         )
         for (member_type, length, width, depth), quantity in bom_counts.items():
@@ -551,12 +553,12 @@ class FramingBuilder:
         stud_width: float,
         stud_depth: float,
         stud_tenon_depth: float,
+        girt_depth: float,
         bom_counts: Dict[Tuple[str, float, float, float], int],
     ) -> None:
         for story in range(1, self.floorplan.stories + 1):
-            bottom_z, face_stud_length, side_stud_length = self._stud_story_verticals(story, stud_tenon_depth)
             for face in self.faces:
-                stud_length = face_stud_length if face in ("front", "rear") else side_stud_length
+                bottom_z, stud_length = self._stud_story_verticals(story, face, girt_depth)
                 start, end = self._stud_run_boundaries(face)
                 boundaries = [
                     StudStation(start, 0.0, "boundary", f"{face}_start"),
@@ -586,17 +588,31 @@ class FramingBuilder:
                         self._add_migrated_member(studs_node, self._offset_datum(datum, x_offset, y_offset))
                         bom_counts[("stud", stud_length, stud_width, stud_depth)] += 1
 
-    def _stud_story_verticals(self, story: int, stud_tenon_depth: float) -> Tuple[float, float, float]:
+    def _stud_story_verticals(self, story: int, face: str, girt_depth: float) -> Tuple[float, float]:
         floor_height = self.calculated_floor_heights[story - 1]
         ceiling_height = self.calculated_ceiling_heights[story - 1]
-        next_floor_height = self.calculated_floor_heights[story]
-        joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
-        bottom_z = floor_height - stud_tenon_depth
-        if story != 1:
-            bottom_z = floor_height - (joist_height + stud_tenon_depth)
-        face_stud_length = (ceiling_height - floor_height) + (2.0 * stud_tenon_depth)
-        side_stud_length = (next_floor_height - floor_height) + (2.0 * stud_tenon_depth) - 6.0
-        return bottom_z, face_stud_length, side_stud_length
+        if story == 1:
+            bottom_z = floor_height
+        elif face in ("front", "rear"):
+            joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
+            bottom_z = floor_height - joist_height
+        else:
+            bottom_z = floor_height
+
+        if story < self.floorplan.stories:
+            next_floor_height = self.calculated_floor_heights[story]
+            next_joist_height = (
+                self.joist_heights[story]
+                if story < len(self.joist_heights)
+                else self.joist_heights[-1]
+            )
+            if face in ("front", "rear"):
+                top_z = next_floor_height - next_joist_height - girt_depth
+            else:
+                top_z = next_floor_height - girt_depth
+        else:
+            top_z = ceiling_height
+        return bottom_z, top_z - bottom_z
 
     def _stud_run_boundaries(self, face: str) -> Tuple[float, float]:
         if face in ("front", "rear"):
@@ -669,6 +685,7 @@ class FramingBuilder:
             story=datum.story,
             corner=datum.corner,
             axis=datum.axis,
+            metadata_extra=datum.metadata_extra,
         )
 
     @staticmethod
@@ -836,6 +853,7 @@ class FramingBuilder:
         specs.extend(self._declare_joist_sill_specs())
         specs.extend(self._declare_post_girt_specs())
         specs.extend(self._declare_girt_splice_specs())
+        specs.extend(self._declare_stud_stub_tenon_specs())
         return specs
 
     def _declare_post_girt_specs(self) -> List[JointSpec]:
@@ -933,6 +951,76 @@ class FramingBuilder:
                 )
         return specs
 
+    def _declare_stud_stub_tenon_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        for stud in self.member_registry.values():
+            if stud.role not in ("bay_stud", "cripple_stud", "stud") or stud.face is None:
+                continue
+            story = self._member_datum_value(stud, "story")
+            station = self._member_datum_value(stud, "station")
+            axis = self._member_datum_value(stud, "axis")
+            if story is None or station is None or axis is None:
+                continue
+
+            bottom_receiver = self._stud_bottom_receiver(stud.face, int(story), float(station))
+            if bottom_receiver is not None:
+                specs.append(
+                    JointSpec(
+                        id=f"stud_stub_{stud.id}_bottom_{bottom_receiver.id}",
+                        joint_type="stud_stub_tenon",
+                        member_a=stud.id,
+                        member_b=bottom_receiver.id,
+                        params=self._stud_stub_tenon_params(stud, bottom_receiver, "bottom", "top", axis),
+                    )
+                )
+
+            if stud.role == "cripple_stud" or int(story) >= self.floorplan.stories:
+                continue
+            top_receiver = self._girt_for_station(stud.face, int(story) + 1, float(station))
+            if top_receiver is not None:
+                specs.append(
+                    JointSpec(
+                        id=f"stud_stub_{stud.id}_top_{top_receiver.id}",
+                        joint_type="stud_stub_tenon",
+                        member_a=stud.id,
+                        member_b=top_receiver.id,
+                        params=self._stud_stub_tenon_params(stud, top_receiver, "top", "bottom", axis),
+                    )
+                )
+        return specs
+
+    def _stud_bottom_receiver(self, face: str, story: int, station: float) -> Optional[FramingMember]:
+        if story == 1:
+            return self._sill_for_station(face, station)
+        return self._girt_for_station(face, story, station)
+
+    def _stud_stub_tenon_params(
+        self,
+        stud: FramingMember,
+        receiver: FramingMember,
+        endpoint: str,
+        receiver_surface: str,
+        axis: str,
+    ) -> Dict[str, object]:
+        stud_center = self._member_datum_value(stud, "center")
+        receiver_min = self._member_datum_value(receiver, "min_corner")
+        if not isinstance(stud_center, list) or not isinstance(receiver_min, list):
+            return {
+                "axis": axis,
+                "endpoint": endpoint,
+                "receiver_surface": receiver_surface,
+                "mortise_center": [0.0, 0.0],
+            }
+        return {
+            "axis": axis,
+            "endpoint": endpoint,
+            "receiver_surface": receiver_surface,
+            "mortise_center": [
+                float(stud_center[0]) - float(receiver_min[0]),
+                float(stud_center[1]) - float(receiver_min[1]),
+            ],
+        }
+
     @staticmethod
     def _girt_splice_position(left: FramingMember, right: FramingMember, axis: str) -> Tuple[float, float]:
         if axis == "x":
@@ -1009,6 +1097,33 @@ class FramingBuilder:
             if float(min_corner[0]) <= x <= float(max_corner[0]):
                 return member
         return None
+
+    def _sill_for_station(self, face: str, station: float) -> Optional[FramingMember]:
+        for member in self.member_registry.values():
+            if member.role != "sill" or member.face != face:
+                continue
+            if self._member_contains_station(member, face, station):
+                return member
+        return None
+
+    def _girt_for_station(self, face: str, story: int, station: float) -> Optional[FramingMember]:
+        for member in self.member_registry.values():
+            if (
+                member.role != "girt"
+                or member.face != face
+                or self._member_datum_value(member, "story") != story
+            ):
+                continue
+            if self._member_contains_station(member, face, station):
+                return member
+        return None
+
+    @staticmethod
+    def _member_contains_station(member: FramingMember, face: str, station: float) -> bool:
+        if face in ("front", "rear"):
+            return member.world_bounds.min[0] <= station <= member.world_bounds.max[0]
+        world_y = -station
+        return member.world_bounds.min[1] <= world_y <= member.world_bounds.max[1]
 
     @staticmethod
     def _member_datum_value(member: FramingMember, key: str) -> Any:

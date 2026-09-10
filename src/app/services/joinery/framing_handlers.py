@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from typing import Dict, Iterable
 
-from app.services.joinery.base import GeometryOperation, JointSpec
+from app.services.joinery.base import GeometryOperation, JointSpec, box_at
 from app.services.joinery.joist_to_sill import (
     default_joist_to_sill_params,
     joist_to_sill_operations,
 )
+from app.services.joinery.mortise_tenon import default_stub_tenon_params
 from app.services.joinery.plate_splice import plate_splice_operations, plate_splice_params
 from app.services.joinery.post_to_girt import (
     default_post_to_girt_params,
@@ -164,9 +165,81 @@ def post_girt_handler(
         yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
 
 
+def stud_stub_tenon_handler(
+    spec: JointSpec,
+    members: Dict[str, SceneNode],
+) -> Iterable[GeometryOperation]:
+    stud = members[spec.member_a]
+    receiver = members[spec.member_b]
+    stud_bounds = bounds_for_workplane(stud.geometry)
+    receiver_bounds = bounds_for_workplane(receiver.geometry)
+    if stud_bounds is None or receiver_bounds is None:
+        return []
+
+    axis = spec.params["axis"]
+    endpoint = spec.params["endpoint"]
+    receiver_surface = spec.params["receiver_surface"]
+    mortise_center = spec.params["mortise_center"]
+    params = default_stub_tenon_params()
+
+    yield GeometryOperation(
+        spec.member_a,
+        "fuse",
+        _stud_tenon_shape(stud_bounds.size, axis, endpoint, params.width, params.thickness, params.length),
+        spec.id,
+    )
+    yield GeometryOperation(
+        spec.member_b,
+        "cut",
+        _stud_mortise_shape(
+            receiver_bounds.size,
+            axis,
+            receiver_surface,
+            (float(mortise_center[0]), float(mortise_center[1])),
+            params.width + params.clearance,
+            params.thickness + params.clearance,
+            params.length,
+        ),
+        spec.id,
+    )
+
+
+def _stud_tenon_shape(member_size, axis: str, endpoint: str, width: float, thickness: float, length: float):
+    center_x = member_size[0] / 2.0
+    center_y = member_size[1] / 2.0
+    z0 = -length if endpoint == "bottom" else member_size[2]
+    if axis == "x":
+        origin = (center_x - width / 2.0, center_y - thickness / 2.0, z0)
+        size = (width, thickness, length)
+    else:
+        origin = (center_x - thickness / 2.0, center_y - width / 2.0, z0)
+        size = (thickness, width, length)
+    return box_at(size, origin)
+
+
+def _stud_mortise_shape(
+    receiver_size,
+    axis: str,
+    receiver_surface: str,
+    center,
+    width: float,
+    thickness: float,
+    length: float,
+):
+    z0 = receiver_size[2] - length if receiver_surface == "top" else 0.0
+    if axis == "x":
+        origin = (center[0] - width / 2.0, center[1] - thickness / 2.0, z0)
+        size = (width, thickness, length)
+    else:
+        origin = (center[0] - thickness / 2.0, center[1] - width / 2.0, z0)
+        size = (thickness, width, length)
+    return box_at(size, origin)
+
+
 FRAMING_JOINERY_HANDLERS = {
     "plate_splice": plate_splice_handler,
     "joist_sill": joist_sill_handler,
     "post_girt": post_girt_handler,
     "post_sill_corner": post_sill_corner_handler,
+    "stud_stub_tenon": stud_stub_tenon_handler,
 }
