@@ -328,11 +328,11 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertIn("girt", framing_node.metadata["migrated_member_roles"])
         self._assert_bounds_almost_equal(
             components["girt_front_story2_1"]["world_bounds"],
-            {"min": [0.0, -2.0, 100.0], "max": [240.0, 2.0, 106.0], "size": [240.0, 4.0, 6.0]},
+            {"min": [0.0, 4.0, 100.0], "max": [240.0, 8.0, 106.0], "size": [240.0, 4.0, 6.0]},
         )
         self._assert_bounds_almost_equal(
             components["girt_left_story2_1"]["world_bounds"],
-            {"min": [-2.0, -240.0, 108.0], "max": [2.0, 0.0, 114.0], "size": [4.0, 240.0, 6.0]},
+            {"min": [-8.0, -240.0, 108.0], "max": [-4.0, 0.0, 114.0], "size": [4.0, 240.0, 6.0]},
         )
         self.assertEqual(components["girt_front_story2_1"]["metadata"]["framing_datums"]["story"], 2)
         self.assertEqual(components["girt_front_story2_1"]["metadata"]["framing_datums"]["axis"], "x")
