@@ -1,7 +1,7 @@
 """Framing placement datums in the cornerstone coordinate convention."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Literal, Optional, Tuple
 
 
@@ -24,6 +24,7 @@ class FramingMemberDatum:
     story: Optional[int] = None
     corner: Optional[CornerName] = None
     axis: AxisName = "z"
+    metadata_extra: Dict[str, object] = field(default_factory=dict)
 
     @property
     def max_corner(self) -> Point3:
@@ -42,23 +43,25 @@ class FramingMemberDatum:
         )
 
     def metadata(self) -> Dict[str, object]:
+        framing_datums = {
+            "coordinate_system": "cornerstone_legacy_y",
+            "role": self.role,
+            "face": self.face,
+            "index": self.index,
+            "story": self.story,
+            "corner": self.corner,
+            "axis": self.axis,
+            "size": list(self.size),
+            "min_corner": list(self.min_corner),
+            "max_corner": list(self.max_corner),
+            "center": list(self.center),
+            "top_z": self.max_corner[2],
+            "bottom_z": self.min_corner[2],
+        }
+        framing_datums.update(self.metadata_extra)
         return {
             "component_name": self.component_name,
-            "framing_datums": {
-                "coordinate_system": "cornerstone_legacy_y",
-                "role": self.role,
-                "face": self.face,
-                "index": self.index,
-                "story": self.story,
-                "corner": self.corner,
-                "axis": self.axis,
-                "size": list(self.size),
-                "min_corner": list(self.min_corner),
-                "max_corner": list(self.max_corner),
-                "center": list(self.center),
-                "top_z": self.max_corner[2],
-                "bottom_z": self.min_corner[2],
-            },
+            "framing_datums": framing_datums,
         }
 
 
@@ -187,6 +190,130 @@ class FramingPlacementDatums:
             axis=axis,
             size=size,
             min_corner=min_corner,
+        )
+
+    def bay_stud(
+        self,
+        face: WallFace,
+        story: int,
+        bay: int,
+        side: str,
+        station: float,
+        bottom_z: float,
+        length: float,
+        stud_width: float,
+        stud_depth: float,
+    ) -> FramingMemberDatum:
+        return self._vertical_wall_member(
+            component_name=f"bay_stud_{face}_story{story}_bay{bay}_{side}",
+            role="bay_stud",
+            face=face,
+            story=story,
+            index=bay,
+            station=station,
+            bottom_z=bottom_z,
+            length=length,
+            stud_width=stud_width,
+            stud_depth=stud_depth,
+            metadata_extra={"bay": bay, "side": side, "station": station},
+        )
+
+    def cripple_stud(
+        self,
+        face: WallFace,
+        story: int,
+        bay: int,
+        station: float,
+        bottom_z: float,
+        length: float,
+        stud_width: float,
+        stud_depth: float,
+    ) -> FramingMemberDatum:
+        return self._vertical_wall_member(
+            component_name=f"cripple_stud_{face}_story{story}_bay{bay}",
+            role="cripple_stud",
+            face=face,
+            story=story,
+            index=bay,
+            station=station,
+            bottom_z=bottom_z,
+            length=length,
+            stud_width=stud_width,
+            stud_depth=stud_depth,
+            metadata_extra={"bay": bay, "station": station},
+        )
+
+    def stud(
+        self,
+        face: WallFace,
+        story: int,
+        section: int,
+        wall: int,
+        station: float,
+        bottom_z: float,
+        length: float,
+        stud_width: float,
+        stud_depth: float,
+    ) -> FramingMemberDatum:
+        return self._vertical_wall_member(
+            component_name=f"stud_{face}_story{story}_section{section}_wall{wall}",
+            role="stud",
+            face=face,
+            story=story,
+            index=wall,
+            station=station,
+            bottom_z=bottom_z,
+            length=length,
+            stud_width=stud_width,
+            stud_depth=stud_depth,
+            metadata_extra={"section": section, "wall": wall, "station": station},
+        )
+
+    def _vertical_wall_member(
+        self,
+        component_name: str,
+        role: str,
+        face: WallFace,
+        story: int,
+        index: int,
+        station: float,
+        bottom_z: float,
+        length: float,
+        stud_width: float,
+        stud_depth: float,
+        metadata_extra: Dict[str, object],
+    ) -> FramingMemberDatum:
+        if face == "front":
+            size = (stud_width, stud_depth, length)
+            min_corner = (station - stud_width / 2.0, self.sill_width / 2.0 - stud_depth, bottom_z)
+            axis: AxisName = "x"
+        elif face == "rear":
+            size = (stud_width, stud_depth, length)
+            min_corner = (station - stud_width / 2.0, -self.depth - self.sill_width / 2.0, bottom_z)
+            axis = "x"
+        elif face == "left":
+            size = (stud_depth, stud_width, length)
+            min_corner = (-self.sill_width / 2.0, -station - stud_width / 2.0, bottom_z)
+            axis = "y"
+        else:
+            size = (stud_depth, stud_width, length)
+            min_corner = (
+                self.width + self.sill_width / 2.0 - stud_depth,
+                -station - stud_width / 2.0,
+                bottom_z,
+            )
+            axis = "y"
+
+        return FramingMemberDatum(
+            component_name=component_name,
+            role=role,
+            face=face,
+            index=index,
+            story=story,
+            axis=axis,
+            size=size,
+            min_corner=min_corner,
+            metadata_extra=metadata_extra,
         )
 
     def _wall_length(self, face: WallFace) -> float:

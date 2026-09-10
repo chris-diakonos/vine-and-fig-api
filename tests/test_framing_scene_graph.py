@@ -449,6 +449,67 @@ class FramingSceneGraphTest(unittest.TestCase):
             {"min": [-4.0, -360.0, 108.0], "max": [0.0, -174.0, 114.0], "size": [4.0, 186.0, 6.0]},
         )
 
+    def test_cornerstone_studs_follow_bay_cripple_and_regular_fill_hierarchy(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "cornerstone-stud-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        components = {component["component_name"]: component for component in model.scene_components}
+        framing_node = next(node for node in model.scene_root.iter_nodes() if node.name == "framing")
+        self.assertIn("bay_stud", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("cripple_stud", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("stud", framing_node.metadata["migrated_member_roles"])
+
+        self._assert_bounds_almost_equal(
+            components["bay_stud_front_story1_bay1_left"]["world_bounds"],
+            {"min": [96.5, 0.0, 8.0], "max": [101.5, 4.0, 108.0], "size": [5.0, 4.0, 100.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["cripple_stud_front_story1_bay1"]["world_bounds"],
+            {"min": [118.5, 0.0, 10.0], "max": [121.5, 4.0, 40.0], "size": [3.0, 4.0, 30.0]},
+        )
+        final_left_stud = self._scene_node(model.scene_root, "stud_left_story1_section6_wall1")
+        self.assertAlmostEqual(final_left_stud.metadata["framing_datums"]["station"], 225.75)
+
+    def test_cornerstone_door_bay_skips_cripple_stud(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(
+            request.structure,
+            "cornerstone-door-stud-test",
+            openings=[{"wall": "front", "position": 120.0, "floor": 1, "type": "door"}],
+        ).build(ceiling_heights, floor_heights, compile_joinery=False)
+
+        components = {component["component_name"] for component in model.scene_components}
+        self.assertIn("bay_stud_front_story1_bay1_left", components)
+        self.assertIn("bay_stud_front_story1_bay1_right", components)
+        self.assertNotIn("cripple_stud_front_story1_bay1", components)
+
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
         floorplan = request.structure.floorplan

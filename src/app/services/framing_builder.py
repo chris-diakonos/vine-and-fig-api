@@ -35,6 +35,14 @@ class FramingMember:
     world_bounds: Bounds
 
 
+@dataclass(frozen=True)
+class StudStation:
+    station: float
+    width: float
+    role: str
+    component_name: str
+
+
 class FramingBuilder:
     """Builds framing geometry and tracks BOM data."""
     
@@ -178,6 +186,7 @@ class FramingBuilder:
             include_sills_and_posts=False,
             include_joists=False,
             include_girts=False,
+            include_studs=False,
         )
         
         # Prepare BOM data
@@ -207,6 +216,7 @@ class FramingBuilder:
             include_sills_and_posts=True,
             include_joists=True,
             include_girts=True,
+            include_studs=True,
         )
         return self._with_scene(assembly, compile_joinery=compile_joinery)
 
@@ -218,6 +228,7 @@ class FramingBuilder:
         include_sills_and_posts: bool,
         include_joists: bool,
         include_girts: bool,
+        include_studs: bool,
     ) -> None:
         """Populate legacy world-coordinate framing members."""
         if include_sills_and_posts:
@@ -230,8 +241,9 @@ class FramingBuilder:
 
             if story in range(1, self.floorplan.stories + 1):
                 self._add_braces(assembly, story, x_offset, y_offset)
-                self._add_bays(assembly, story, x_offset, y_offset)
-                self._add_studs(assembly, story, x_offset, y_offset)
+                if include_studs:
+                    self._add_bays(assembly, story, x_offset, y_offset)
+                    self._add_studs(assembly, story, x_offset, y_offset)
 
             if include_girts and story not in (1, self.floorplan.stories + 1):
                 self._add_girts(assembly, story, x_offset, y_offset)
@@ -285,6 +297,13 @@ class FramingBuilder:
         post_tenon_depth = float(self.framing_defaults.get("post_tenon_depth", 2.0))
         girt_width = float(self.framing_defaults.get("girt_width", 4.0))
         girt_depth = float(self.framing_defaults.get("girt_depth", 6.0))
+        bay_stud_width = float(self.framing_defaults.get("bay_stud_width", 5.0))
+        bay_stud_depth = float(self.framing_defaults.get("bay_stud_depth", 4.0))
+        stud_width = float(self.framing_defaults.get("stud_width", 3.0))
+        stud_depth = float(self.framing_defaults.get("stud_depth", 4.0))
+        cripple_stud_width = float(self.framing_defaults.get("cripple_stud_width", 3.0))
+        cripple_stud_depth = float(self.framing_defaults.get("cripple_stud_depth", 4.0))
+        stud_tenon_depth = float(self.framing_defaults.get("stud_tenon_depth", 2.0))
         stories = self.floorplan.stories
         post_height = self.calculated_ceiling_heights[stories - 1] - self.calculated_floor_heights[0]
 
@@ -306,7 +325,15 @@ class FramingBuilder:
                 "framing",
                 metadata={
                     "coordinate_system": "cornerstone_legacy_y",
-                    "migrated_member_roles": ["sill", "post", "joist", "girt"],
+                    "migrated_member_roles": [
+                        "sill",
+                        "post",
+                        "joist",
+                        "girt",
+                        "bay_stud",
+                        "cripple_stud",
+                        "stud",
+                    ],
                 },
             )
         )
@@ -314,6 +341,9 @@ class FramingBuilder:
         posts_node = framing_node.add_child(SceneNode("posts", "assembly", "posts"))
         joists_node = framing_node.add_child(SceneNode("joists", "assembly", "joists"))
         girts_node = framing_node.add_child(SceneNode("girts", "assembly", "girts"))
+        bay_studs_node = framing_node.add_child(SceneNode("bay_studs", "assembly", "bay_studs"))
+        cripple_studs_node = framing_node.add_child(SceneNode("cripple_studs", "assembly", "cripple_studs"))
+        studs_node = framing_node.add_child(SceneNode("studs", "assembly", "studs"))
 
         total_sills = 0
         for face in self.faces:
@@ -331,6 +361,21 @@ class FramingBuilder:
         self._add_post_bom(4, post_width, post_depth, post_height)
         self._add_migrated_joists(joists_node, datums, x_offset, y_offset)
         self._add_migrated_girts(girts_node, datums, x_offset, y_offset, girt_width, girt_depth)
+        self._add_migrated_studs(
+            bay_studs_node,
+            cripple_studs_node,
+            studs_node,
+            datums,
+            x_offset,
+            y_offset,
+            bay_stud_width,
+            bay_stud_depth,
+            stud_width,
+            stud_depth,
+            cripple_stud_width,
+            cripple_stud_depth,
+            stud_tenon_depth,
+        )
         return root
 
     def _add_migrated_joists(
@@ -409,6 +454,187 @@ class FramingBuilder:
     def _girt_splice_extension() -> float:
         plate_splice = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {}).get("plate_splice", {})
         return float(plate_splice.get("lap_length", 12.0)) / 2.0
+
+    def _add_migrated_studs(
+        self,
+        bay_studs_node: SceneNode,
+        cripple_studs_node: SceneNode,
+        studs_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+        bay_stud_width: float,
+        bay_stud_depth: float,
+        stud_width: float,
+        stud_depth: float,
+        cripple_stud_width: float,
+        cripple_stud_depth: float,
+        stud_tenon_depth: float,
+    ) -> None:
+        station_records: Dict[Tuple[str, int], List[StudStation]] = defaultdict(list)
+        bom_counts: Dict[Tuple[str, float, float, float], int] = defaultdict(int)
+
+        for story in range(1, self.floorplan.stories + 1):
+            bottom_z, face_stud_length, side_stud_length = self._stud_story_verticals(story, stud_tenon_depth)
+            for face in self.faces:
+                centerlines = self.centerlines[face]
+                stud_length = face_stud_length if face in ("front", "rear") else side_stud_length
+                for index, centerline in enumerate(centerlines, start=1):
+                    offset = (self.bay_spacing + bay_stud_width) / 2.0
+                    for side, station in (("left", centerline - offset), ("right", centerline + offset)):
+                        datum = datums.bay_stud(
+                            face,
+                            story,
+                            index,
+                            side,
+                            station,
+                            bottom_z,
+                            stud_length,
+                            bay_stud_width,
+                            bay_stud_depth,
+                        )
+                        self._add_migrated_member(
+                            bay_studs_node,
+                            self._offset_datum(datum, x_offset, y_offset),
+                        )
+                        station_records[(face, story)].append(
+                            StudStation(station, bay_stud_width, "bay_stud", datum.component_name)
+                        )
+                        bom_counts[("bay_stud", stud_length, bay_stud_width, bay_stud_depth)] += 1
+
+                    if self._should_add_cripple(face, story, index, centerline):
+                        datum = datums.cripple_stud(
+                            face,
+                            story,
+                            index,
+                            centerline,
+                            self.calculated_floor_heights[story - 1],
+                            self.chair_rail_height,
+                            cripple_stud_width,
+                            cripple_stud_depth,
+                        )
+                        self._add_migrated_member(
+                            cripple_studs_node,
+                            self._offset_datum(datum, x_offset, y_offset),
+                        )
+                        station_records[(face, story)].append(
+                            StudStation(centerline, cripple_stud_width, "cripple_stud", datum.component_name)
+                        )
+                        bom_counts[(
+                            "cripple_stud",
+                            self.chair_rail_height,
+                            cripple_stud_width,
+                            cripple_stud_depth,
+                        )] += 1
+
+        self._add_migrated_regular_studs(
+            studs_node,
+            datums,
+            x_offset,
+            y_offset,
+            station_records,
+            stud_width,
+            stud_depth,
+            stud_tenon_depth,
+            bom_counts,
+        )
+        for (member_type, length, width, depth), quantity in bom_counts.items():
+            self._add_vertical_member_bom(member_type, quantity, length, width, depth)
+
+    def _add_migrated_regular_studs(
+        self,
+        studs_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+        station_records: Dict[Tuple[str, int], List[StudStation]],
+        stud_width: float,
+        stud_depth: float,
+        stud_tenon_depth: float,
+        bom_counts: Dict[Tuple[str, float, float, float], int],
+    ) -> None:
+        for story in range(1, self.floorplan.stories + 1):
+            bottom_z, face_stud_length, side_stud_length = self._stud_story_verticals(story, stud_tenon_depth)
+            for face in self.faces:
+                stud_length = face_stud_length if face in ("front", "rear") else side_stud_length
+                start, end = self._stud_run_boundaries(face)
+                boundaries = [
+                    StudStation(start, 0.0, "boundary", f"{face}_start"),
+                    *station_records.get((face, story), []),
+                    StudStation(end, 0.0, "boundary", f"{face}_end"),
+                ]
+                boundaries.sort(key=lambda station: station.station)
+                max_interval = len(boundaries) - 2
+                for interval_index, (previous, current) in enumerate(zip(boundaries, boundaries[1:])):
+                    prior_edge = previous.station + previous.width / 2.0
+                    current_edge = current.station - current.width / 2.0
+                    wall_length = current_edge - prior_edge
+                    wall_quantity = self._regular_stud_quantity(wall_length, interval_index, max_interval)
+                    for wall in range(wall_quantity):
+                        station = prior_edge + (wall_length / (wall_quantity + 1)) * (wall + 1)
+                        datum = datums.stud(
+                            face,
+                            story,
+                            interval_index,
+                            wall + 1,
+                            station,
+                            bottom_z,
+                            stud_length,
+                            stud_width,
+                            stud_depth,
+                        )
+                        self._add_migrated_member(studs_node, self._offset_datum(datum, x_offset, y_offset))
+                        bom_counts[("stud", stud_length, stud_width, stud_depth)] += 1
+
+    def _stud_story_verticals(self, story: int, stud_tenon_depth: float) -> Tuple[float, float, float]:
+        floor_height = self.calculated_floor_heights[story - 1]
+        ceiling_height = self.calculated_ceiling_heights[story - 1]
+        next_floor_height = self.calculated_floor_heights[story]
+        joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
+        bottom_z = floor_height - stud_tenon_depth
+        if story != 1:
+            bottom_z = floor_height - (joist_height + stud_tenon_depth)
+        face_stud_length = (ceiling_height - floor_height) + (2.0 * stud_tenon_depth)
+        side_stud_length = (next_floor_height - floor_height) + (2.0 * stud_tenon_depth) - 6.0
+        return bottom_z, face_stud_length, side_stud_length
+
+    def _stud_run_boundaries(self, face: str) -> Tuple[float, float]:
+        if face in ("front", "rear"):
+            post_clearance = float(self.framing_defaults.get("post_width", 6.0))
+            return post_clearance, self.faces[face] - post_clearance
+        post_clearance = float(self.framing_defaults.get("post_depth", 4.0))
+        return post_clearance, self.faces[face] - post_clearance
+
+    def _should_add_cripple(self, face: str, story: int, bay: int, station: float) -> bool:
+        matching_openings = [
+            opening
+            for opening in self.openings
+            if (
+                opening.get("wall") == face
+                and opening.get("position") == station
+                and opening.get("floor") == story
+            )
+        ]
+        if matching_openings:
+            return not any(opening.get("type") == "door" for opening in matching_openings)
+        if face in ("left", "right") and bay in (1, 2):
+            return True
+        return face in ("front", "rear")
+
+    def _regular_stud_quantity(self, wall_length: float, interval_index: int, max_interval: int) -> int:
+        if wall_length <= 0.0:
+            return 0
+        if wall_length / 4.0 >= 13.0:
+            return 3
+        if wall_length / 3.0 >= 13.0:
+            return 2
+        if wall_length / 2.0 > 16.0:
+            return 1
+        if wall_length / 2.0 <= 16.0 and interval_index == max_interval:
+            return 1
+        if wall_length % (2.0 * self.stud_spacing) >= 22.0:
+            return math.ceil(wall_length / (2.0 * self.stud_spacing))
+        return math.floor(wall_length / (2.0 * self.stud_spacing))
 
     def _add_migrated_member(self, parent: SceneNode, datum: FramingMemberDatum) -> None:
         parent.add_child(
@@ -518,6 +744,26 @@ class FramingBuilder:
     def _add_girt_bom(self, quantity: int, girt_length: float, girt_width: float, girt_depth: float) -> None:
         raw_material_id, component_id = add_framing_materials(
             "girt", girt_length / 12, girt_width, girt_depth, self.materials
+        )
+        add_production_bom_quantities(
+            component_id, raw_material_id, 1, 2,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+        add_sales_bom_quantities(
+            component_id, self.structure_hash, quantity, 3,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+
+    def _add_vertical_member_bom(
+        self,
+        member_type: str,
+        quantity: int,
+        length: float,
+        width: float,
+        depth: float,
+    ) -> None:
+        raw_material_id, component_id = add_framing_materials(
+            member_type, length / 12, width, depth, self.materials
         )
         add_production_bom_quantities(
             component_id, raw_material_id, 1, 2,
@@ -837,6 +1083,12 @@ class FramingBuilder:
         parts = component_name.split("_")
         if len(parts) >= 3 and parts[0] in ("sill", "girt"):
             return parts[1]
+        if len(parts) >= 4 and parts[0] == "bay" and parts[1] == "stud":
+            return parts[2]
+        if len(parts) >= 4 and parts[0] == "cripple" and parts[1] == "stud":
+            return parts[2]
+        if len(parts) >= 3 and parts[0] == "stud":
+            return parts[1]
         return None
 
     @staticmethod
@@ -855,6 +1107,16 @@ class FramingBuilder:
         if len(parts) >= 4 and parts[0] == "girt":
             try:
                 return int(parts[3])
+            except ValueError:
+                return None
+        if len(parts) >= 5 and parts[0] == "bay" and parts[1] == "stud":
+            try:
+                return int(parts[4].removeprefix("bay"))
+            except ValueError:
+                return None
+        if len(parts) >= 5 and parts[0] == "cripple" and parts[1] == "stud":
+            try:
+                return int(parts[4].removeprefix("bay"))
             except ValueError:
                 return None
         return None

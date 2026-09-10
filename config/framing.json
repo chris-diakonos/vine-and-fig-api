@@ -13,6 +13,13 @@
     "joist_width": 3.0,
     "girt_width": 4.0,
     "girt_depth": 6.0,
+    "bay_stud_width": 5.0,
+    "bay_stud_depth": 4.0,
+    "stud_width": 3.0,
+    "stud_depth": 4.0,
+    "cripple_stud_width": 3.0,
+    "cripple_stud_depth": 4.0,
+    "stud_tenon_depth": 2.0,
     "compile_joinery": true,
     "color": [0.55, 0.45, 0.33, 1.0]
   },
