@@ -21,6 +21,14 @@ class FramingSceneGraphTest(unittest.TestCase):
         with open(path, "r", encoding="utf-8") as handle:
             return BuildingRequest(**json.load(handle))
 
+    def _load_two_story_request(self) -> BuildingRequest:
+        with open(ROOT / "tests" / "fixtures" / "minimal_window_request.json", "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        payload["structure"]["floorplan"]["stories"] = 2
+        payload["structure"]["floorplan"]["ceiling_heights"] = [96.0, 96.0]
+        payload["structure"]["floorplan"]["joist_heights"] = [10.0, 8.0, 8.0]
+        return BuildingRequest(**payload)
+
     def _framing_only_visibility(self) -> ComponentVisibility:
         return ComponentVisibility(
             foundation=False,
@@ -284,6 +292,51 @@ class FramingSceneGraphTest(unittest.TestCase):
                 else:
                     os.environ["FRAMING_CONFIG_PATH"] = previous_path
                 load_json_config.cache_clear()
+
+    def test_cornerstone_girts_use_drop_girt_story_datums(self):
+        request = self._load_two_story_request()
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "cornerstone-girt-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+
+        components = {component["component_name"]: component for component in model.scene_components}
+        girt_names = {name for name in components if name and name.startswith("girt_")}
+        self.assertEqual(
+            girt_names,
+            {
+                "girt_front_story2_1",
+                "girt_rear_story2_1",
+                "girt_left_story2_1",
+                "girt_right_story2_1",
+            },
+        )
+        framing_node = next(node for node in model.scene_root.iter_nodes() if node.name == "framing")
+        self.assertIn("girt", framing_node.metadata["migrated_member_roles"])
+        self._assert_bounds_almost_equal(
+            components["girt_front_story2_1"]["world_bounds"],
+            {"min": [0.0, -2.0, 100.0], "max": [240.0, 2.0, 106.0], "size": [240.0, 4.0, 6.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["girt_left_story2_1"]["world_bounds"],
+            {"min": [-2.0, -240.0, 108.0], "max": [2.0, 0.0, 114.0], "size": [4.0, 240.0, 6.0]},
+        )
+        self.assertEqual(components["girt_front_story2_1"]["metadata"]["framing_datums"]["story"], 2)
+        self.assertEqual(components["girt_front_story2_1"]["metadata"]["framing_datums"]["axis"], "x")
+        self.assertEqual(components["girt_left_story2_1"]["metadata"]["framing_datums"]["axis"], "y")
 
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")

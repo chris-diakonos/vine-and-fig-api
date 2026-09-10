@@ -132,6 +132,49 @@ class FramingPlacementDatums:
             min_corner=(center_x - joist_width / 2.0, y_min, floor_height - joist_height),
         )
 
+    def girt(
+        self,
+        face: WallFace,
+        story: int,
+        segment_index: int,
+        segment_length: float,
+        floor_height: float,
+        joist_height: float,
+        girt_width: float,
+        girt_depth: float,
+    ) -> FramingMemberDatum:
+        counter = segment_index + 1
+        run_min = segment_index * segment_length
+        run_max = (segment_index + 1) * segment_length
+        run_length = run_max - run_min
+        if face == "front":
+            size = (run_length, girt_width, girt_depth)
+            min_corner = (run_min, -girt_width / 2.0, floor_height - joist_height - girt_depth)
+            axis: AxisName = "x"
+        elif face == "rear":
+            size = (run_length, girt_width, girt_depth)
+            min_corner = (run_min, -self.depth - girt_width / 2.0, floor_height - joist_height - girt_depth)
+            axis = "x"
+        elif face == "left":
+            size = (girt_width, run_length, girt_depth)
+            min_corner = (-girt_width / 2.0, -run_max, floor_height - girt_depth)
+            axis = "y"
+        else:
+            size = (girt_width, run_length, girt_depth)
+            min_corner = (self.width - girt_width / 2.0, -run_max, floor_height - girt_depth)
+            axis = "y"
+
+        return FramingMemberDatum(
+            component_name=f"girt_{face}_story{story}_{counter}",
+            role="girt",
+            face=face,
+            index=counter,
+            story=story,
+            axis=axis,
+            size=size,
+            min_corner=min_corner,
+        )
+
     def _wall_length(self, face: WallFace) -> float:
         return self.width if face in ("front", "rear") else self.depth
 

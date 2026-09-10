@@ -177,6 +177,7 @@ class FramingBuilder:
             y_offset,
             include_sills_and_posts=False,
             include_joists=False,
+            include_girts=False,
         )
         
         # Prepare BOM data
@@ -205,6 +206,7 @@ class FramingBuilder:
             0.0,
             include_sills_and_posts=True,
             include_joists=True,
+            include_girts=True,
         )
         return self._with_scene(assembly, compile_joinery=compile_joinery)
 
@@ -215,6 +217,7 @@ class FramingBuilder:
         y_offset: float,
         include_sills_and_posts: bool,
         include_joists: bool,
+        include_girts: bool,
     ) -> None:
         """Populate legacy world-coordinate framing members."""
         if include_sills_and_posts:
@@ -230,7 +233,7 @@ class FramingBuilder:
                 self._add_bays(assembly, story, x_offset, y_offset)
                 self._add_studs(assembly, story, x_offset, y_offset)
 
-            if story not in (1, self.floorplan.stories + 1):
+            if include_girts and story not in (1, self.floorplan.stories + 1):
                 self._add_girts(assembly, story, x_offset, y_offset)
 
             if story == self.floorplan.stories:
@@ -280,6 +283,8 @@ class FramingBuilder:
         post_width = float(self.framing_defaults.get("post_width", 6.0))
         post_depth = float(self.framing_defaults.get("post_depth", 4.0))
         post_tenon_depth = float(self.framing_defaults.get("post_tenon_depth", 2.0))
+        girt_width = float(self.framing_defaults.get("girt_width", 4.0))
+        girt_depth = float(self.framing_defaults.get("girt_depth", 6.0))
         stories = self.floorplan.stories
         post_height = self.calculated_ceiling_heights[stories - 1] - self.calculated_floor_heights[0]
 
@@ -301,13 +306,14 @@ class FramingBuilder:
                 "framing",
                 metadata={
                     "coordinate_system": "cornerstone_legacy_y",
-                    "migrated_member_roles": ["sill", "post", "joist"],
+                    "migrated_member_roles": ["sill", "post", "joist", "girt"],
                 },
             )
         )
         sills_node = framing_node.add_child(SceneNode("sills", "assembly", "sills"))
         posts_node = framing_node.add_child(SceneNode("posts", "assembly", "posts"))
         joists_node = framing_node.add_child(SceneNode("joists", "assembly", "joists"))
+        girts_node = framing_node.add_child(SceneNode("girts", "assembly", "girts"))
 
         total_sills = 0
         for face in self.faces:
@@ -324,6 +330,7 @@ class FramingBuilder:
         self._add_sill_bom(total_sills, sill_width, sill_height)
         self._add_post_bom(4, post_width, post_depth, post_height)
         self._add_migrated_joists(joists_node, datums, x_offset, y_offset)
+        self._add_migrated_girts(girts_node, datums, x_offset, y_offset, girt_width, girt_depth)
         return root
 
     def _add_migrated_joists(
@@ -358,6 +365,41 @@ class FramingBuilder:
                 )
                 self._add_migrated_member(joists_node, self._offset_datum(datum, x_offset, y_offset))
             self._add_joist_bom(len(joist_centerlines), joist_length, joist_width, joist_height)
+
+    def _add_migrated_girts(
+        self,
+        girts_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+        girt_width: float,
+        girt_depth: float,
+    ) -> None:
+        total_quantity = 0
+        last_girt_length = 0.0
+        for story in range(1, self.floorplan.stories + 2):
+            if story in (1, self.floorplan.stories + 1):
+                continue
+            floor_height = self.calculated_floor_heights[story - 1]
+            joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
+            for face in self.faces:
+                quantity, girt_length = self._member_quantity_and_length(self.faces[face])
+                last_girt_length = girt_length
+                total_quantity += quantity
+                for segment_index in range(quantity):
+                    datum = datums.girt(
+                        face,
+                        story,
+                        segment_index,
+                        girt_length,
+                        floor_height,
+                        joist_height,
+                        girt_width,
+                        girt_depth,
+                    )
+                    self._add_migrated_member(girts_node, self._offset_datum(datum, x_offset, y_offset))
+        if total_quantity:
+            self._add_girt_bom(total_quantity, last_girt_length, girt_width, girt_depth)
 
     def _add_migrated_member(self, parent: SceneNode, datum: FramingMemberDatum) -> None:
         parent.add_child(
@@ -400,6 +442,7 @@ class FramingBuilder:
         source_framing = FramingBuilder._first_child_named(migrated_scene, "framing")
         if target_framing is None or source_framing is None:
             return
+        target_framing.metadata.update(source_framing.metadata)
         for child in list(source_framing.children):
             target_framing.add_child(child)
 
@@ -453,6 +496,19 @@ class FramingBuilder:
     def _add_joist_bom(self, quantity: int, joist_length: float, joist_width: float, joist_height: float) -> None:
         raw_material_id, component_id = add_framing_materials(
             "joist", joist_length / 12, joist_width, joist_height, self.materials
+        )
+        add_production_bom_quantities(
+            component_id, raw_material_id, 1, 2,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+        add_sales_bom_quantities(
+            component_id, self.structure_hash, quantity, 3,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+
+    def _add_girt_bom(self, quantity: int, girt_length: float, girt_width: float, girt_depth: float) -> None:
+        raw_material_id, component_id = add_framing_materials(
+            "girt", girt_length / 12, girt_width, girt_depth, self.materials
         )
         add_production_bom_quantities(
             component_id, raw_material_id, 1, 2,
@@ -1196,8 +1252,8 @@ class FramingBuilder:
         """Add girts for a story."""
         member_type = "girt"
         total_quantity = 0
-        girt_width = 4
-        girt_depth = 6
+        girt_width = float(self.framing_defaults.get("girt_width", 4.0))
+        girt_depth = float(self.framing_defaults.get("girt_depth", 6.0))
         
         ceiling_heights = self.calculated_ceiling_heights
         floor_heights = self.calculated_floor_heights
@@ -1258,17 +1314,7 @@ class FramingBuilder:
                 assembly.add(girt, name=f"{member_type}_{face}_story{story}_{girt_counter}", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
         
         # Add BOM tracking
-        raw_material_id, component_id = add_framing_materials(
-            member_type, girt_length / 12, girt_width, girt_depth, self.materials
-        )
-        add_production_bom_quantities(
-            component_id, raw_material_id, 1, 2,
-            self.bom_quantities, self.bom_levels, self.bom_components
-        )
-        add_sales_bom_quantities(
-            component_id, self.structure_hash, total_quantity, 3,
-            self.bom_quantities, self.bom_levels, self.bom_components
-        )
+        self._add_girt_bom(total_quantity, girt_length, girt_width, girt_depth)
     
     def _add_plates(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add plates for a story."""
