@@ -37,6 +37,13 @@ def post_sill_corner_handler(
         return []
 
     params = default_post_sill_corner_params()
+    joint_datums = spec.params.get("joint_datums", {})
+    side_mortise_center = None
+    if "side_sill_mortise_center_x" in joint_datums and "side_sill_mortise_center_y" in joint_datums:
+        side_mortise_center = (
+            float(joint_datums["side_sill_mortise_center_x"]),
+            float(joint_datums["side_sill_mortise_center_y"]),
+        )
     for op in post_sill_corner_operations(
         post_id=spec.member_a,
         cross_sill_id=cross_sill_id,
@@ -47,6 +54,7 @@ def post_sill_corner_handler(
         cross_sill_end=spec.params["cross_sill_end"],
         side_sill_end=spec.params["side_sill_end"],
         tenon_height=spec.params["tenon_height"],
+        side_mortise_center=side_mortise_center,
         params=params,
     ):
         yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)

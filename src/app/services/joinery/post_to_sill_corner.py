@@ -52,6 +52,7 @@ def post_sill_corner_operations(
     cross_sill_end: CornerEnd,
     side_sill_end: CornerEnd,
     tenon_height: float,
+    side_mortise_center: Optional[Tuple[float, float]] = None,
     params: Optional[PostSillCornerParams] = None,
 ) -> List[GeometryOperation]:
     params = params or default_post_sill_corner_params()
@@ -78,7 +79,7 @@ def post_sill_corner_operations(
                 (0.0, side_y0, 0.0),
             ),
         ),
-        _side_sill_mortise(side_sill_id, side_sill_size, side_sill_end, tenon_height, params),
+        _side_sill_mortise(side_sill_id, side_sill_size, side_sill_end, tenon_height, params, side_mortise_center),
     ]
     operations.extend(_post_bottom_tenon_shoulder_cuts(post_id, post_size, tenon_height, params))
     return operations
@@ -96,12 +97,16 @@ def _side_sill_mortise(
     side_sill_end: CornerEnd,
     tenon_height: float,
     params: PostSillCornerParams,
+    side_mortise_center: Optional[Tuple[float, float]] = None,
 ) -> GeometryOperation:
     mortise_width = params.tenon_width + params.mortise_clearance
     mortise_depth = params.tenon_depth + params.mortise_clearance
     mortise_height = tenon_height + params.mortise_extra_depth
-    center_x = side_sill_size[0] / 2.0
-    center_y = 0.0 if side_sill_end == "min" else side_sill_size[1]
+    if side_mortise_center is None:
+        center_x = side_sill_size[0] / 2.0
+        center_y = 0.0 if side_sill_end == "min" else side_sill_size[1]
+    else:
+        center_x, center_y = side_mortise_center
     return GeometryOperation(
         side_sill_id,
         "cut",

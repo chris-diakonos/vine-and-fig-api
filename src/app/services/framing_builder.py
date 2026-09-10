@@ -466,7 +466,15 @@ class FramingBuilder:
         post_bottom_z = post_datums.get("bottom_z")
         cross_sill_top_z = cross_datums.get("top_z")
         side_sill_top_z = side_datums.get("top_z")
-        if post_bottom_z is None or cross_sill_top_z is None or side_sill_top_z is None:
+        post_center = post_datums.get("center")
+        side_min = side_datums.get("min_corner")
+        if (
+            post_bottom_z is None
+            or cross_sill_top_z is None
+            or side_sill_top_z is None
+            or not isinstance(post_center, list)
+            or not isinstance(side_min, list)
+        ):
             return None
         sill_top_z = min(float(cross_sill_top_z), float(side_sill_top_z))
         return {
@@ -474,6 +482,8 @@ class FramingBuilder:
             "post_bottom_z": float(post_bottom_z),
             "cross_sill_top_z": float(cross_sill_top_z),
             "side_sill_top_z": float(side_sill_top_z),
+            "side_sill_mortise_center_x": float(post_center[0]) - float(side_min[0]),
+            "side_sill_mortise_center_y": float(post_center[1]) - float(side_min[1]),
             "tenon_height": sill_top_z - float(post_bottom_z),
         }
 

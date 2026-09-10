@@ -74,21 +74,29 @@ class FramingPlacementDatums:
 
     def sill(self, face: WallFace, segment_index: int, segment_length: float) -> FramingMemberDatum:
         counter = segment_index + 1
+        run_min = segment_index * segment_length
+        run_max = (segment_index + 1) * segment_length
+        if segment_index == 0:
+            run_min -= self.sill_width / 2.0
+        if run_max >= self._wall_length(face):
+            run_max += self.sill_width / 2.0
+        run_length = run_max - run_min
+
         if face == "front":
-            size = (segment_length, self.sill_width, self.sill_height)
-            min_corner = (segment_index * segment_length, -self.sill_width / 2.0, 0.0)
+            size = (run_length, self.sill_width, self.sill_height)
+            min_corner = (run_min, -self.sill_width / 2.0, 0.0)
             axis: AxisName = "x"
         elif face == "rear":
-            size = (segment_length, self.sill_width, self.sill_height)
-            min_corner = (segment_index * segment_length, -self.depth - self.sill_width / 2.0, 0.0)
+            size = (run_length, self.sill_width, self.sill_height)
+            min_corner = (run_min, -self.depth - self.sill_width / 2.0, 0.0)
             axis = "x"
         elif face == "left":
-            size = (self.sill_width, segment_length, self.sill_height)
-            min_corner = (-self.sill_width / 2.0, -(segment_index + 1) * segment_length, 0.0)
+            size = (self.sill_width, run_length, self.sill_height)
+            min_corner = (-self.sill_width / 2.0, -run_max, 0.0)
             axis = "y"
         else:
-            size = (self.sill_width, segment_length, self.sill_height)
-            min_corner = (self.width - self.sill_width / 2.0, -(segment_index + 1) * segment_length, 0.0)
+            size = (self.sill_width, run_length, self.sill_height)
+            min_corner = (self.width - self.sill_width / 2.0, -run_max, 0.0)
             axis = "y"
 
         return FramingMemberDatum(
@@ -100,6 +108,9 @@ class FramingPlacementDatums:
             size=size,
             min_corner=min_corner,
         )
+
+    def _wall_length(self, face: WallFace) -> float:
+        return self.width if face in ("front", "rear") else self.depth
 
     def post(self, corner: CornerName, floor_height: float, post_height: float) -> FramingMemberDatum:
         x = self.width if corner.endswith("right") else 0.0
