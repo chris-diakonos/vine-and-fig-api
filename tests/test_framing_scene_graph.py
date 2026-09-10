@@ -77,7 +77,7 @@ class FramingSceneGraphTest(unittest.TestCase):
             self.assertEqual(spec.params["joint_datums"]["tenon_height"], 2.0)
             if spec.id == "post_sill_corner_front_left":
                 self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_x"], 3.0)
-                self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_y"], 246.0)
+                self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_y"], 238.0)
 
         unjoined_builder = FramingBuilder(request.structure, request.structure_hash or "joinery-flag-test")
         unjoined_model, _ = unjoined_builder.build(ceiling_heights, floor_heights, compile_joinery=False)
@@ -129,14 +129,11 @@ class FramingSceneGraphTest(unittest.TestCase):
             cornerstone_node = self._scene_node(cornerstone_model.scene_root, name)
             legacy_node = self._scene_node(legacy_model.scene_root, name)
             self.assertIn("framing_datums", cornerstone_node.metadata)
-            if name.startswith("post_"):
-                self.assertAlmostEqual(
-                    workplane_volume(cornerstone_node.geometry),
-                    workplane_volume(legacy_node.geometry),
-                    places=5,
-                )
-            else:
-                self.assertGreater(workplane_volume(cornerstone_node.geometry), workplane_volume(legacy_node.geometry))
+            self.assertAlmostEqual(
+                workplane_volume(cornerstone_node.geometry),
+                workplane_volume(legacy_node.geometry),
+                places=5,
+            )
 
     def test_side_sills_follow_left_and_right_wall_lines(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
@@ -161,11 +158,11 @@ class FramingSceneGraphTest(unittest.TestCase):
         components = {component["component_name"]: component for component in model.scene_components}
         self._assert_bounds_almost_equal(
             components["sill_left_1"]["world_bounds"],
-            {"min": [-4.0, -244.0, 0.0], "max": [4.0, 4.0, 10.0], "size": [8.0, 248.0, 10.0]},
+            {"min": [0.0, -240.0, 0.0], "max": [8.0, 0.0, 10.0], "size": [8.0, 240.0, 10.0]},
         )
         self._assert_bounds_almost_equal(
             components["sill_right_1"]["world_bounds"],
-            {"min": [236.0, -244.0, 0.0], "max": [244.0, 4.0, 10.0], "size": [8.0, 248.0, 10.0]},
+            {"min": [232.0, -240.0, 0.0], "max": [240.0, 0.0, 10.0], "size": [8.0, 240.0, 10.0]},
         )
 
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
@@ -191,19 +188,19 @@ class FramingSceneGraphTest(unittest.TestCase):
         components = {component["component_name"]: component for component in model.scene_components}
         self._assert_bounds_almost_equal(
             components["post_front_left"]["world_bounds"],
-            {"min": [-4.0, 0.0, 8.0], "max": [2.0, 4.0, 104.0], "size": [6.0, 4.0, 96.0]},
+            {"min": [0.0, -4.0, 8.0], "max": [6.0, 0.0, 104.0], "size": [6.0, 4.0, 96.0]},
         )
         self._assert_bounds_almost_equal(
             components["post_front_right"]["world_bounds"],
-            {"min": [238.0, 0.0, 8.0], "max": [244.0, 4.0, 104.0], "size": [6.0, 4.0, 96.0]},
+            {"min": [234.0, -4.0, 8.0], "max": [240.0, 0.0, 104.0], "size": [6.0, 4.0, 96.0]},
         )
         self._assert_bounds_almost_equal(
             components["post_rear_left"]["world_bounds"],
-            {"min": [-4.0, -244.0, 8.0], "max": [2.0, -240.0, 104.0], "size": [6.0, 4.0, 96.0]},
+            {"min": [0.0, -240.0, 8.0], "max": [6.0, -236.0, 104.0], "size": [6.0, 4.0, 96.0]},
         )
         self._assert_bounds_almost_equal(
             components["post_rear_right"]["world_bounds"],
-            {"min": [238.0, -244.0, 8.0], "max": [244.0, -240.0, 104.0], "size": [6.0, 4.0, 96.0]},
+            {"min": [234.0, -240.0, 8.0], "max": [240.0, -236.0, 104.0], "size": [6.0, 4.0, 96.0]},
         )
 
     def test_corner_sills_overlap_by_full_sill_width(self):

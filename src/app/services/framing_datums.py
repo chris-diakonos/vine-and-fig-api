@@ -76,27 +76,23 @@ class FramingPlacementDatums:
         counter = segment_index + 1
         run_min = segment_index * segment_length
         run_max = (segment_index + 1) * segment_length
-        if segment_index == 0:
-            run_min -= self.sill_width / 2.0
-        if run_max >= self._wall_length(face):
-            run_max += self.sill_width / 2.0
         run_length = run_max - run_min
 
         if face == "front":
             size = (run_length, self.sill_width, self.sill_height)
-            min_corner = (run_min, -self.sill_width / 2.0, 0.0)
+            min_corner = (run_min, -self.sill_width, 0.0)
             axis: AxisName = "x"
         elif face == "rear":
             size = (run_length, self.sill_width, self.sill_height)
-            min_corner = (run_min, -self.depth - self.sill_width / 2.0, 0.0)
+            min_corner = (run_min, -self.depth, 0.0)
             axis = "x"
         elif face == "left":
             size = (self.sill_width, run_length, self.sill_height)
-            min_corner = (-self.sill_width / 2.0, -run_max, 0.0)
+            min_corner = (0.0, -run_max, 0.0)
             axis = "y"
         else:
             size = (self.sill_width, run_length, self.sill_height)
-            min_corner = (self.width - self.sill_width / 2.0, -run_max, 0.0)
+            min_corner = (self.width - self.sill_width, -run_max, 0.0)
             axis = "y"
 
         return FramingMemberDatum(
@@ -114,13 +110,13 @@ class FramingPlacementDatums:
 
     def post(self, corner: CornerName, floor_height: float, post_height: float) -> FramingMemberDatum:
         if corner.endswith("right"):
-            x = self.width + self.sill_width / 2.0 - self.post_width
+            x = self.width - self.post_width
         else:
-            x = -self.sill_width / 2.0
+            x = 0.0
         if corner.startswith("rear"):
-            y = -self.depth - self.sill_width / 2.0
+            y = -self.depth
         else:
-            y = self.sill_width / 2.0 - self.post_depth
+            y = -self.post_depth
         min_corner = (
             x,
             y,
