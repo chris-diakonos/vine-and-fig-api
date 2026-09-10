@@ -266,3 +266,87 @@ button {
     inset: auto 16px 16px 16px;
   }
 }
+
+.validation-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 400px;
+  max-height: calc(100vh - 200px);
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.validation-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.validation-content {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.validation-item {
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.validation-item.error {
+  border-color: var(--danger);
+  background: rgba(141, 47, 47, 0.08);
+}
+
+.validation-item.warning {
+  border-color: #c4852a;
+  background: rgba(196, 133, 42, 0.08);
+}
+
+.validation-code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.validation-message {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.validation-target {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0;
+}
+
+.close-btn:hover {
+  color: var(--ink);
+}
+

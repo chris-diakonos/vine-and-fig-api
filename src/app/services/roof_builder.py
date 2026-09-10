@@ -327,25 +327,27 @@ class RoofBuilder:
             
             # For side-gable roofs, account for gable overhang on both ends
             if gable_direction == "side":
-                # Gable overhang should be exactly 12" past framing outer face on both ends
-                # Note: Gable ends have no weatherboard extension in X direction (weatherboard only on front/rear)
-                # Total roof span: framing width + overhangs = roof_length + 2*overhang
-                effective_roof_length = roof_length + (2 * roof.roof_overhang)
-                # Start position: left framing edge - overhang = -overhang
-                gable_overhang_offset = -roof.roof_overhang
+                # Gable overhang should be exactly 12" past corner post outer faces
+                # Corner posts are 6" wide centered at x=0 and x=roof_length
+                # Post outer faces are at x=-3 and x=roof_length+3
+                # Target: 12" past post faces = x=-15 to x=roof_length+15
+                post_half_width = 3.0
+                left_target_x = -post_half_width - roof.roof_overhang
+                right_target_x = roof_length + post_half_width + roof.roof_overhang
+                target_span = right_target_x - left_target_x
                 
-                # Calculate panel quantity accounting for panel width
-                # First panel covers full profile width, subsequent panels add exposure width
+                # Calculate panel quantity: first panel covers profile width, subsequent panels add exposure
                 panel_profile_width = RoofBuilder._config()["defaults"]["ag_panel_profile_width"]
-                if effective_roof_length <= panel_profile_width:
+                if target_span <= panel_profile_width:
                     quantity = 1
                 else:
-                    # First panel covers profile width, additional panels add exposure each
-                    remaining_length = effective_roof_length - panel_profile_width
-                    # Use ceil to ensure we cover at least the target length
-                    additional_panels_exact = remaining_length / roof_panel_exposure
-                    additional_panels = math.ceil(additional_panels_exact)
-                    quantity = 1 + additional_panels
+                    # Calculate panels needed to cover span
+                    remaining_length = target_span - panel_profile_width
+                    quantity = 1 + math.ceil(remaining_length / roof_panel_exposure)
+                
+                # Start first panel at left target to ensure 12" overhang on left
+                # Panels will naturally extend to provide 12" on right
+                gable_overhang_offset = left_target_x
             else:
                 effective_roof_length = roof_length
                 gable_overhang_offset = 0

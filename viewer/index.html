@@ -47,6 +47,13 @@
             <button id="fit-visible" type="button" class="camera-btn fit-btn">Fit</button>
           </div>
         </aside>
+        <aside class="validation-panel" aria-label="Validation results" id="validation-panel" hidden>
+          <div class="validation-panel-header">
+            <span>Validation</span>
+            <button id="validation-close" type="button" class="close-btn">×</button>
+          </div>
+          <div id="validation-content" class="validation-content"></div>
+        </aside>
         <div id="model-status" class="model-status">Loading GLB...</div>
         <div id="error-message" class="error-message" hidden></div>
       </section>
