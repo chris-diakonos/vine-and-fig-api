@@ -170,8 +170,14 @@ class FramingBuilder:
         x_offset = 0 #-front_dimension / 2
         y_offset = 0 #right_dimension / 2
         
-        sill_post_scene = self._build_sill_post_scene(x_offset, y_offset)
-        self._populate_legacy_assembly(assembly, x_offset, y_offset, include_sills_and_posts=False)
+        migrated_scene = self._build_migrated_framing_scene(x_offset, y_offset)
+        self._populate_legacy_assembly(
+            assembly,
+            x_offset,
+            y_offset,
+            include_sills_and_posts=False,
+            include_joists=False,
+        )
         
         # Prepare BOM data
         bom_data = {
@@ -181,7 +187,7 @@ class FramingBuilder:
             "bom_levels": self.bom_levels
         }
         
-        return self._with_scene(assembly, compile_joinery=compile_joinery, migrated_scene=sill_post_scene), bom_data
+        return self._with_scene(assembly, compile_joinery=compile_joinery, migrated_scene=migrated_scene), bom_data
 
     def build_legacy_reference(
         self,
@@ -193,7 +199,13 @@ class FramingBuilder:
         self.calculated_ceiling_heights = calculated_ceiling_heights
         self.calculated_floor_heights = calculated_floor_heights
         assembly = cq.Assembly()
-        self._populate_legacy_assembly(assembly, 0.0, 0.0, include_sills_and_posts=True)
+        self._populate_legacy_assembly(
+            assembly,
+            0.0,
+            0.0,
+            include_sills_and_posts=True,
+            include_joists=True,
+        )
         return self._with_scene(assembly, compile_joinery=compile_joinery)
 
     def _populate_legacy_assembly(
@@ -202,6 +214,7 @@ class FramingBuilder:
         x_offset: float,
         y_offset: float,
         include_sills_and_posts: bool,
+        include_joists: bool,
     ) -> None:
         """Populate legacy world-coordinate framing members."""
         if include_sills_and_posts:
@@ -209,7 +222,8 @@ class FramingBuilder:
             self._add_posts(assembly, x_offset, y_offset)
 
         for story in range(1, self.floorplan.stories + 2):
-            self._add_joists(assembly, story, -y_offset, x_offset)
+            if include_joists:
+                self._add_joists(assembly, story, -y_offset, x_offset)
 
             if story in range(1, self.floorplan.stories + 1):
                 self._add_braces(assembly, story, x_offset, y_offset)
@@ -259,8 +273,8 @@ class FramingBuilder:
         projected.validation_results = validate_framing_scene(scene_root)
         return projected
 
-    def _build_sill_post_scene(self, x_offset: float = 0.0, y_offset: float = 0.0) -> SceneNode:
-        """Build migrated sill and corner-post members as cornerstone scene nodes."""
+    def _build_migrated_framing_scene(self, x_offset: float = 0.0, y_offset: float = 0.0) -> SceneNode:
+        """Build migrated framing members as cornerstone scene nodes."""
         sill_width = 8.0
         sill_height = 10.0
         post_width = 6.0
@@ -287,12 +301,13 @@ class FramingBuilder:
                 "framing",
                 metadata={
                     "coordinate_system": "cornerstone_legacy_y",
-                    "migrated_member_roles": ["sill", "post"],
+                    "migrated_member_roles": ["sill", "post", "joist"],
                 },
             )
         )
         sills_node = framing_node.add_child(SceneNode("sills", "assembly", "sills"))
         posts_node = framing_node.add_child(SceneNode("posts", "assembly", "posts"))
+        joists_node = framing_node.add_child(SceneNode("joists", "assembly", "joists"))
 
         total_sills = 0
         for face in self.faces:
@@ -308,7 +323,41 @@ class FramingBuilder:
 
         self._add_sill_bom(total_sills, sill_width, sill_height)
         self._add_post_bom(4, post_width, post_depth, post_height)
+        self._add_migrated_joists(joists_node, datums, x_offset, y_offset)
         return root
+
+    def _add_migrated_joists(
+        self,
+        joists_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+    ) -> None:
+        joist_width = 3.0
+        joist_centerlines = self._joist_centerlines()
+        for story in range(1, self.floorplan.stories + 2):
+            joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
+            floor_height = self.calculated_floor_heights[story - 1]
+            if story == len(self.joist_heights):
+                joist_length = self.faces["right"] + (self.roof_overhang * 2.0)
+                y_min = -self.faces["right"] - self.roof_overhang
+            else:
+                joist_length = self.faces["right"]
+                y_min = -self.faces["right"]
+
+            for index, center_x in enumerate(joist_centerlines, start=1):
+                datum = datums.joist(
+                    story,
+                    index,
+                    center_x,
+                    y_min,
+                    joist_length,
+                    joist_width,
+                    joist_height,
+                    floor_height,
+                )
+                self._add_migrated_member(joists_node, self._offset_datum(datum, x_offset, y_offset))
+            self._add_joist_bom(len(joist_centerlines), joist_length, joist_width, joist_height)
 
     def _add_migrated_member(self, parent: SceneNode, datum: FramingMemberDatum) -> None:
         parent.add_child(
@@ -340,6 +389,7 @@ class FramingBuilder:
             min_corner=min_corner,
             face=datum.face,
             index=datum.index,
+            story=datum.story,
             corner=datum.corner,
             axis=datum.axis,
         )
@@ -366,6 +416,14 @@ class FramingBuilder:
         quantity = math.ceil(dimension / self.max_member_length)
         return quantity, dimension / quantity
 
+    def _joist_centerlines(self) -> List[float]:
+        centerlines: List[float] = []
+        position = self.joist_spacing
+        while position < self.faces["front"]:
+            centerlines.append(position)
+            position += self.joist_spacing
+        return centerlines
+
     def _add_sill_bom(self, quantity: int, sill_width: float, sill_height: float) -> None:
         raw_material_id, component_id = add_framing_materials(
             "sill", sill_height / 12, sill_width, sill_height, self.materials
@@ -382,6 +440,19 @@ class FramingBuilder:
     def _add_post_bom(self, quantity: int, post_width: float, post_depth: float, post_height: float) -> None:
         raw_material_id, component_id = add_framing_materials(
             "post", post_width / 12, post_depth, post_height, self.materials
+        )
+        add_production_bom_quantities(
+            component_id, raw_material_id, 1, 2,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+        add_sales_bom_quantities(
+            component_id, self.structure_hash, quantity, 3,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+
+    def _add_joist_bom(self, quantity: int, joist_length: float, joist_width: float, joist_height: float) -> None:
+        raw_material_id, component_id = add_framing_materials(
+            "joist", joist_length / 12, joist_width, joist_height, self.materials
         )
         add_production_bom_quantities(
             component_id, raw_material_id, 1, 2,

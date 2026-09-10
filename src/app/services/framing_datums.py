@@ -21,6 +21,7 @@ class FramingMemberDatum:
     min_corner: Point3
     face: Optional[WallFace] = None
     index: Optional[int] = None
+    story: Optional[int] = None
     corner: Optional[CornerName] = None
     axis: AxisName = "z"
 
@@ -48,6 +49,7 @@ class FramingMemberDatum:
                 "role": self.role,
                 "face": self.face,
                 "index": self.index,
+                "story": self.story,
                 "corner": self.corner,
                 "axis": self.axis,
                 "size": list(self.size),
@@ -109,6 +111,27 @@ class FramingPlacementDatums:
             min_corner=min_corner,
         )
 
+    def joist(
+        self,
+        story: int,
+        index: int,
+        center_x: float,
+        y_min: float,
+        joist_length: float,
+        joist_width: float,
+        joist_height: float,
+        floor_height: float,
+    ) -> FramingMemberDatum:
+        return FramingMemberDatum(
+            component_name=f"joist_story{story}_{index}",
+            role="joist",
+            index=index,
+            story=story,
+            axis="y",
+            size=(joist_width, joist_length, joist_height),
+            min_corner=(center_x - joist_width / 2.0, y_min, floor_height - joist_height),
+        )
+
     def _wall_length(self, face: WallFace) -> float:
         return self.width if face in ("front", "rear") else self.depth
 
@@ -132,4 +155,5 @@ class FramingPlacementDatums:
             corner=corner,
             size=(self.post_width, self.post_depth, post_height),
             min_corner=min_corner,
+            story=1,
         )

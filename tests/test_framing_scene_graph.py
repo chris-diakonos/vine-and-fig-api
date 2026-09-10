@@ -168,6 +168,53 @@ class FramingSceneGraphTest(unittest.TestCase):
             {"min": [236.0, -244.0, 0.0], "max": [244.0, 4.0, 10.0], "size": [8.0, 248.0, 10.0]},
         )
 
+    def test_cornerstone_joists_remove_legacy_edge_joist(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        legacy_model = FramingBuilder(request.structure, "legacy-joist-test").build_legacy_reference(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        cornerstone_model, _ = FramingBuilder(request.structure, "cornerstone-joist-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+
+        legacy_names = {component["component_name"] for component in legacy_model.scene_components}
+        components = {component["component_name"]: component for component in cornerstone_model.scene_components}
+        joist_names = {name for name in components if name and name.startswith("joist_")}
+
+        self.assertIn("joist_story1_12", legacy_names)
+        self.assertNotIn("joist_story1_12", joist_names)
+        self.assertNotIn("joist_story2_12", joist_names)
+        self.assertEqual(len(joist_names), 22)
+        self._assert_bounds_almost_equal(
+            components["joist_story1_1"]["world_bounds"],
+            {"min": [19.5, -240.0, 0.0], "max": [22.5, 0.0, 10.0], "size": [3.0, 240.0, 10.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["joist_story1_11"]["world_bounds"],
+            {"min": [229.5, -240.0, 0.0], "max": [232.5, 0.0, 10.0], "size": [3.0, 240.0, 10.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["joist_story2_1"]["world_bounds"],
+            {"min": [19.5, -252.0, 106.0], "max": [22.5, 12.0, 114.0], "size": [3.0, 264.0, 8.0]},
+        )
+        self.assertEqual(components["joist_story1_1"]["metadata"]["framing_datums"]["story"], 1)
+
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
         floorplan = request.structure.floorplan
