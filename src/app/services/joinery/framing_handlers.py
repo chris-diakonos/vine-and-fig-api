@@ -75,6 +75,7 @@ def joist_sill_handler(
         sill_id=spec.member_b,
         joist_end_y=float(joint_datums["joist_end_y"]),
         joist_top_z=float(joint_datums["joist_top_z"]),
+        joist_tail_center_x=float(joint_datums["joist_tail_center_x"]),
         sill_socket_center=(
             float(joint_datums["sill_socket_center_x"]),
             float(joint_datums["sill_socket_center_y"]),

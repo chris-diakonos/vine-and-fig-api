@@ -66,6 +66,7 @@ class JoineryPrimitiveTest(unittest.TestCase):
             "sill",
             joist_end_y=72.0,
             joist_top_z=8.0,
+            joist_tail_center_x=1.5,
             sill_socket_center=(24.0, 4.0),
             sill_top_z=10.0,
             direction=1,

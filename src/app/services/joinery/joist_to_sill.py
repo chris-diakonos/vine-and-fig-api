@@ -36,6 +36,7 @@ def joist_to_sill_operations(
     sill_id: str,
     joist_end_y: float,
     joist_top_z: float,
+    joist_tail_center_x: float,
     sill_socket_center: Tuple[float, float],
     sill_top_z: float,
     direction: int,
@@ -50,7 +51,7 @@ def joist_to_sill_operations(
         params.bottom_width,
         params.cutter_angle,
         direction,
-    ).translate((0.0, joist_end_y, joist_top_z))
+    ).translate((joist_tail_center_x, joist_end_y, joist_top_z))
     socket = _oriented_tail(
         params.profile_height + params.vertical_clearance,
         params.female_insertion_depth,

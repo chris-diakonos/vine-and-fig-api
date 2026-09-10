@@ -567,6 +567,7 @@ class FramingBuilder:
                                 "direction": direction,
                                 "joist_end_y": joist_end_y,
                                 "joist_top_z": float(size[2]),
+                                "joist_tail_center_x": float(size[0]) / 2.0,
                                 "sill_socket_center_x": joist_center_x - float(sill_min[0]),
                                 "sill_socket_center_y": joist_end_world_y - float(sill_min[1]),
                                 "sill_top_z": float(sill_size[2]),

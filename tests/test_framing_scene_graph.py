@@ -89,11 +89,13 @@ class FramingSceneGraphTest(unittest.TestCase):
         front_joist_spec = next(spec for spec in joist_sill_specs if spec.id == "joist_sill_story1_1_front")
         self.assertEqual(front_joist_spec.params["joint_datums"]["direction"], 1)
         self.assertEqual(front_joist_spec.params["joint_datums"]["joist_end_y"], 232.0)
+        self.assertEqual(front_joist_spec.params["joint_datums"]["joist_tail_center_x"], 1.5)
         self.assertEqual(front_joist_spec.params["joint_datums"]["sill_socket_center_x"], 25.0)
         self.assertEqual(front_joist_spec.params["joint_datums"]["sill_socket_center_y"], 0.0)
         rear_joist_spec = next(spec for spec in joist_sill_specs if spec.id == "joist_sill_story1_1_rear")
         self.assertEqual(rear_joist_spec.params["joint_datums"]["direction"], -1)
         self.assertEqual(rear_joist_spec.params["joint_datums"]["joist_end_y"], 0.0)
+        self.assertEqual(rear_joist_spec.params["joint_datums"]["joist_tail_center_x"], 1.5)
         self.assertEqual(rear_joist_spec.params["joint_datums"]["sill_socket_center_x"], 25.0)
         self.assertEqual(rear_joist_spec.params["joint_datums"]["sill_socket_center_y"], 8.0)
 
