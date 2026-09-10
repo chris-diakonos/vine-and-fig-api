@@ -570,6 +570,18 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertIn("bay_stud_front_story1_bay1_left", components)
         self.assertIn("bay_stud_front_story1_bay1_right", components)
         self.assertNotIn("cripple_stud_front_story1_bay1", components)
+        front_regular_studs = [
+            node
+            for node in model.scene_root.iter_nodes()
+            if node.role == "stud" and node.metadata.get("framing_datums", {}).get("face") == "front"
+        ]
+        self.assertFalse(
+            [
+                node.name
+                for node in front_regular_studs
+                if 102.0 <= float(node.metadata["framing_datums"]["station"]) <= 138.0
+            ]
+        )
 
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")

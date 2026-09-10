@@ -527,6 +527,7 @@ class FramingBuilder:
                             cripple_stud_width,
                             cripple_stud_depth,
                         )] += 1
+                self._record_door_opening_stations(face, story, station_records)
 
         self._add_migrated_regular_studs(
             studs_node,
@@ -636,6 +637,26 @@ class FramingBuilder:
         if face in ("left", "right") and bay in (1, 2):
             return True
         return face in ("front", "rear")
+
+    def _record_door_opening_stations(
+        self,
+        face: str,
+        story: int,
+        station_records: Dict[Tuple[str, int], List[StudStation]],
+    ) -> None:
+        for opening in self.openings:
+            if (
+                opening.get("wall") != face
+                or opening.get("floor") != story
+                or opening.get("type") != "door"
+                or opening.get("position") is None
+            ):
+                continue
+            station = float(opening["position"])
+            opening_width = float(opening.get("width") or self.bay_spacing)
+            station_records[(face, story)].append(
+                StudStation(station, opening_width, "door_opening", f"door_opening_{face}_story{story}_{station:g}")
+            )
 
     def _regular_stud_quantity(self, wall_length: float, interval_index: int, max_interval: int) -> int:
         if wall_length <= 0.0:

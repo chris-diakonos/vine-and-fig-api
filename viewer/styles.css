@@ -122,7 +122,7 @@ p {
   box-shadow: 0 16px 40px rgba(31, 39, 37, 0.13);
 }
 
-.explode-panel {
+.member-panel {
   position: absolute;
   top: 174px;
   left: 18px;
@@ -174,7 +174,7 @@ p {
   grid-column: span 3;
 }
 
-.explode-panel-header {
+.member-panel-header {
   margin-bottom: 10px;
   font-size: 13px;
   font-weight: 750;
@@ -182,8 +182,7 @@ p {
   color: var(--muted);
 }
 
-.explode-input,
-.explode-amount {
+.member-select {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--line);
@@ -193,20 +192,15 @@ p {
   font: inherit;
 }
 
-.explode-controls {
-  display: grid;
-  grid-template-columns: 72px 1fr 1fr;
-  gap: 8px;
+.member-btn {
+  width: 100%;
   margin-top: 8px;
-}
-
-.explode-btn {
   padding: 8px 10px;
   font-size: 13px;
   font-weight: 600;
 }
 
-.explode-status {
+.member-status {
   margin-top: 8px;
   font-size: 12px;
 }
@@ -310,7 +304,7 @@ button {
     width: calc(100% - 24px);
   }
 
-  .explode-panel {
+  .member-panel {
     top: auto;
     bottom: 220px;
     left: 12px;
@@ -322,88 +316,5 @@ button {
   .error-message {
     inset: auto 16px 16px 16px;
   }
-}
-
-.validation-panel {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  width: 400px;
-  max-height: calc(100vh - 200px);
-  padding: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  z-index: 10;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.validation-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-  font-weight: 600;
-}
-
-.validation-content {
-  overflow-y: auto;
-  flex: 1;
-}
-
-.validation-item {
-  padding: 10px;
-  margin-bottom: 8px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.5);
-}
-
-.validation-item.error {
-  border-color: var(--danger);
-  background: rgba(141, 47, 47, 0.08);
-}
-
-.validation-item.warning {
-  border-color: #c4852a;
-  background: rgba(196, 133, 42, 0.08);
-}
-
-.validation-code {
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-
-.validation-message {
-  font-size: 14px;
-  margin-bottom: 6px;
-}
-
-.validation-target {
-  font-size: 12px;
-  color: var(--muted);
-  font-style: italic;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  line-height: 1;
-  cursor: pointer;
-  color: var(--muted);
-  padding: 0;
-}
-
-.close-btn:hover {
-  color: var(--ink);
 }
 

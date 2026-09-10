@@ -41,15 +41,16 @@ const errorMessage = document.getElementById("error-message");
 const statusMessage = document.getElementById("model-status");
 const layerControls = document.getElementById("layer-controls");
 const showAllButton = document.getElementById("show-all");
-const explodeTargetInput = document.getElementById("explode-target");
-const explodeAmountInput = document.getElementById("explode-amount");
-const explodeApplyButton = document.getElementById("explode-apply");
-const explodeClearButton = document.getElementById("explode-clear");
-const explodeStatus = document.getElementById("explode-status");
+const framingMemberSelect = document.getElementById("framing-member-select");
+const memberClearButton = document.getElementById("member-clear");
+const memberStatus = document.getElementById("member-status");
 
 const layerState = new Map(LAYERS.map((layer) => [layer.id, true]));
 const layerInputs = new Map();
+const framingMemberMeshes = new Map();
 let modelRoot = null;
+let viewerScene = null;
+let selectedMemberOutline = null;
 
 function showError(message) {
   errorMessage.textContent = message;
@@ -247,15 +248,23 @@ function inferLayer(object) {
   return "other";
 }
 
+function isComponentLikeName(name) {
+  return /^(bay_stud|cripple_stud|false_plate|sill|post|joist|brace|stud|girt|plate|rafter|window|door|foundation|floor|plank|sheathing|weatherboard|roof|cornice|crown|bed_molding|cavetto)_/i.test(name);
+}
+
 function componentName(object) {
   let current = object;
+  let fallback = "";
   while (current) {
     if (current.name) {
-      return current.name;
+      if (isComponentLikeName(current.name)) {
+        return current.name;
+      }
+      fallback = fallback || current.name;
     }
     current = current.parent;
   }
-  return "";
+  return fallback;
 }
 
 function rememberOriginalPositions(root) {
@@ -267,106 +276,92 @@ function rememberOriginalPositions(root) {
   });
 }
 
-function resolveExplodeTargets(value) {
-  const rawTargets = value
-    .split(/[\s,]+/)
-    .map((target) => target.trim())
-    .filter(Boolean);
-  const resolved = [];
-
-  for (const target of rawTargets) {
-    const joistMatch = target.match(/^joist_sill_story(\d+)_(\d+)_(front|rear)$/i);
-    if (joistMatch) {
-      resolved.push(`joist_story${joistMatch[1]}_${joistMatch[2]}`, `sill_${joistMatch[3]}`);
-      continue;
-    }
-
-    const postMatch = target.match(/^post_sill_corner_(front|rear)_(left|right)$/i);
-    if (postMatch) {
-      resolved.push(`post_${postMatch[1]}_${postMatch[2]}`, `sill_${postMatch[1]}`, `sill_${postMatch[2]}`);
-      continue;
-    }
-
-    resolved.push(target);
-  }
-
-  return [...new Set(resolved.map((target) => target.toLowerCase()))];
-}
-
-function resetExplode() {
-  if (!modelRoot) {
-    return;
-  }
-  modelRoot.traverse((object) => {
-    if (object.isMesh && object.userData.originalPosition) {
-      object.position.copy(object.userData.originalPosition);
-    }
-  });
-  modelRoot.updateMatrixWorld(true);
-}
-
-function matchingExplodeMeshes(targets) {
-  const matches = [];
-  modelRoot.traverse((object) => {
-    if (!object.isMesh) {
+function indexFramingMembers(root) {
+  framingMemberMeshes.clear();
+  root.traverse((object) => {
+    if (!object.isMesh || object.userData.layer !== "framing") {
       return;
     }
-    const name = `${object.userData.componentName || ""} ${lineageName(object)}`.toLowerCase();
-    if (targets.some((target) => name.includes(target))) {
-      matches.push(object);
+    const name = object.userData.componentName || componentName(object);
+    if (!name) {
+      return;
     }
+    if (!framingMemberMeshes.has(name)) {
+      framingMemberMeshes.set(name, []);
+    }
+    framingMemberMeshes.get(name).push(object);
   });
-  return matches;
 }
 
-function applyExplode(value, amount, updateUrl = true) {
-  if (!modelRoot) {
+function renderFramingMemberSelect() {
+  framingMemberSelect.innerHTML = "";
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = framingMemberMeshes.size
+    ? "Choose a framing member"
+    : "No framing members found";
+  framingMemberSelect.appendChild(placeholder);
+
+  for (const name of [...framingMemberMeshes.keys()].sort()) {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    framingMemberSelect.appendChild(option);
+  }
+  memberStatus.textContent = framingMemberMeshes.size
+    ? "Choose a framing member to outline it."
+    : "No framing meshes were found in this GLB.";
+}
+
+function clearMemberOutline(updateUrl = true) {
+  if (selectedMemberOutline) {
+    selectedMemberOutline.removeFromParent();
+    selectedMemberOutline.geometry.dispose();
+    selectedMemberOutline.material.dispose();
+    selectedMemberOutline = null;
+  }
+  memberStatus.textContent = "Choose a framing member to outline it.";
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("member");
+    window.history.replaceState({}, "", url);
+  }
+}
+
+function outlineFramingMember(name, updateUrl = true) {
+  clearMemberOutline(false);
+  if (!viewerScene) {
     return;
   }
-  resetExplode();
-
-  const targets = resolveExplodeTargets(value);
-  if (targets.length === 0) {
-    explodeStatus.textContent = "Use joint IDs or component names.";
-    return;
-  }
-
-  const matches = matchingExplodeMeshes(targets);
-  if (matches.length === 0) {
-    explodeStatus.textContent = `No meshes matched: ${targets.join(", ")}`;
-    return;
-  }
-
-  const groupBox = new THREE.Box3();
-  for (const object of matches) {
-    groupBox.expandByObject(object);
-  }
-  const groupCenter = groupBox.getCenter(new THREE.Vector3());
-
-  for (const object of matches) {
-    const objectBox = new THREE.Box3().setFromObject(object);
-    const objectCenter = objectBox.getCenter(new THREE.Vector3());
-    const worldDirection = objectCenter.sub(groupCenter);
-    if (worldDirection.lengthSq() < 0.0001) {
-      worldDirection.set(1, 0, 0);
+  if (!name) {
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("member");
+      window.history.replaceState({}, "", url);
     }
-    worldDirection.normalize();
-
-    if (object.parent) {
-      const parentRotation = new THREE.Quaternion();
-      object.parent.getWorldQuaternion(parentRotation);
-      worldDirection.applyQuaternion(parentRotation.invert());
-    }
-
-    object.position.copy(object.userData.originalPosition).add(worldDirection.multiplyScalar(amount));
+    return;
   }
-  modelRoot.updateMatrixWorld(true);
-  explodeStatus.textContent = `Exploded ${matches.length} mesh(es): ${targets.join(", ")}`;
+
+  const meshes = framingMemberMeshes.get(name) || [];
+  if (!meshes.length) {
+    memberStatus.textContent = `No mesh found for ${name}.`;
+    return;
+  }
+
+  const box = new THREE.Box3();
+  for (const mesh of meshes) {
+    box.expandByObject(mesh);
+  }
+  selectedMemberOutline = new THREE.Box3Helper(box, 0xffcc00);
+  selectedMemberOutline.name = `outline_${name}`;
+  selectedMemberOutline.renderOrder = 999;
+  viewerScene.add(selectedMemberOutline);
+  memberStatus.textContent = `Outlined ${name}.`;
 
   if (updateUrl) {
     const url = new URL(window.location.href);
-    url.searchParams.set("explode", value);
-    url.searchParams.set("explodeAmount", `${amount}`);
+    url.searchParams.set("member", name);
     window.history.replaceState({}, "", url);
   }
 }
@@ -416,44 +411,6 @@ function renderLayerControls(counts) {
   }
 }
 
-function renderValidationResults(validation) {
-  if (!validation || !validation.results || validation.results.length === 0) {
-    return;
-  }
-  
-  validationContent.innerHTML = "";
-  let hasErrors = false;
-  
-  for (const result of validation.results) {
-    const item = document.createElement("div");
-    item.className = `validation-item ${result.severity || "warning"}`;
-    
-    const code = document.createElement("div");
-    code.className = "validation-code";
-    code.textContent = result.code || "UNKNOWN";
-    
-    const message = document.createElement("div");
-    message.className = "validation-message";
-    message.textContent = result.message || "Validation issue";
-    
-    const target = document.createElement("div");
-    target.className = "validation-target";
-    target.textContent = result.target || "";
-    
-    item.append(code, message, target);
-    validationContent.appendChild(item);
-    
-    if (result.severity === "error") {
-      hasErrors = true;
-    }
-  }
-  
-  // Only show panel if there are validation issues
-  if (validation.results.length > 0) {
-    validationPanel.hidden = false;
-  }
-}
-
 async function loadManifest() {
   const response = await fetch("./manifest.json", { cache: "no-store" });
   if (!response.ok) {
@@ -465,6 +422,7 @@ async function loadManifest() {
 async function main() {
   const renderer = createRenderer();
   const scene = createScene();
+  viewerScene = scene;
   
   // Create both perspective and orthographic cameras
   let camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 1000);
@@ -481,13 +439,6 @@ async function main() {
   const viewLeftBtn = document.getElementById("view-left");
   const viewRightBtn = document.getElementById("view-right");
   const fitVisibleBtn = document.getElementById("fit-visible");
-  const validationPanel = document.getElementById("validation-panel");
-  const validationContent = document.getElementById("validation-content");
-  const validationCloseBtn = document.getElementById("validation-close");
-  
-  validationCloseBtn.addEventListener("click", () => {
-    validationPanel.hidden = true;
-  });
   
   viewPerspectiveBtn.addEventListener("click", () => {
     camera = perspectiveCamera;
@@ -525,18 +476,13 @@ async function main() {
     fitCameraToVisible(camera, controls, scene);
   });
 
-  explodeApplyButton.addEventListener("click", () => {
-    applyExplode(explodeTargetInput.value, Number(explodeAmountInput.value) || 0);
+  framingMemberSelect.addEventListener("change", () => {
+    outlineFramingMember(framingMemberSelect.value);
   });
 
-  explodeClearButton.addEventListener("click", () => {
-    resetExplode();
-    explodeTargetInput.value = "";
-    explodeStatus.textContent = "Use joint IDs or component names.";
-    const url = new URL(window.location.href);
-    url.searchParams.delete("explode");
-    url.searchParams.delete("explodeAmount");
-    window.history.replaceState({}, "", url);
+  memberClearButton.addEventListener("click", () => {
+    framingMemberSelect.value = "";
+    clearMemberOutline();
   });
 
   showAllButton.addEventListener("click", () => {
@@ -621,19 +567,14 @@ async function main() {
 
     scene.add(modelRoot);
     renderLayerControls(counts);
+    indexFramingMembers(modelRoot);
+    renderFramingMemberSelect();
     fitCameraToObject(camera, controls, modelRoot);
     const urlParams = new URLSearchParams(window.location.search);
-    const explodeTarget = urlParams.get("explode");
-    if (explodeTarget) {
-      const explodeAmount = Number(urlParams.get("explodeAmount") || explodeAmountInput.value) || 18;
-      explodeTargetInput.value = explodeTarget;
-      explodeAmountInput.value = `${explodeAmount}`;
-      applyExplode(explodeTarget, explodeAmount, false);
-    }
-    
-    // Render validation results if present
-    if (manifest.validation) {
-      renderValidationResults(manifest.validation);
+    const selectedMember = urlParams.get("member");
+    if (selectedMember && framingMemberMeshes.has(selectedMember)) {
+      framingMemberSelect.value = selectedMember;
+      outlineFramingMember(selectedMember, false);
     }
     
     statusMessage.hidden = true;

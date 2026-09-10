@@ -47,24 +47,15 @@
             <button id="fit-visible" type="button" class="camera-btn fit-btn">Fit</button>
           </div>
         </aside>
-        <aside class="explode-panel" aria-label="Exploded joint controls">
-          <div class="explode-panel-header">
-            <span>Explode Joint</span>
+        <aside class="member-panel" aria-label="Framing member selection">
+          <div class="member-panel-header">
+            <span>Framing Member</span>
           </div>
-          <input id="explode-target" class="explode-input" type="text" placeholder="joist_sill_story1_1_front">
-          <div class="explode-controls">
-            <input id="explode-amount" class="explode-amount" type="number" min="0" step="1" value="18" aria-label="Explode distance">
-            <button id="explode-apply" type="button" class="explode-btn">Apply</button>
-            <button id="explode-clear" type="button" class="explode-btn">Clear</button>
-          </div>
-          <p id="explode-status" class="explode-status">Use joint IDs or component names.</p>
-        </aside>
-        <aside class="validation-panel" aria-label="Validation results" id="validation-panel" hidden>
-          <div class="validation-panel-header">
-            <span>Validation</span>
-            <button id="validation-close" type="button" class="close-btn">×</button>
-          </div>
-          <div id="validation-content" class="validation-content"></div>
+          <select id="framing-member-select" class="member-select">
+            <option value="">Load a GLB to choose a member</option>
+          </select>
+          <button id="member-clear" type="button" class="member-btn">Clear Outline</button>
+          <p id="member-status" class="member-status">Choose a framing member to outline it.</p>
         </aside>
         <div id="model-status" class="model-status">Loading GLB...</div>
         <div id="error-message" class="error-message" hidden></div>
