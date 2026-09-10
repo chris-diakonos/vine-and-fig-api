@@ -400,12 +400,54 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertEqual(front_splice.params["axis"], "x")
         self.assertEqual(front_splice.params["member_a_end"], "max")
         self.assertEqual(front_splice.params["member_b_end"], "min")
+        self.assertEqual(front_splice.params["member_a_splice_position"], 180.0)
+        self.assertEqual(front_splice.params["member_b_splice_position"], 6.0)
         self.assertEqual(left_splice.params["axis"], "y")
         self.assertEqual(left_splice.params["member_a_end"], "min")
         self.assertEqual(left_splice.params["member_b_end"], "max")
+        self.assertEqual(left_splice.params["member_a_splice_position"], 6.0)
+        self.assertEqual(left_splice.params["member_b_splice_position"], 180.0)
 
         joined_front = self._scene_node(model.scene_root, "girt_front_story2_1")
         self.assertIn("girt_splice_front_story2_1_2", joined_front.metadata["joinery"]["joint_ids"])
+
+    def test_segmented_girts_extend_for_splice_lap(self):
+        request = self._load_two_story_request(dimension=360.0)
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "girt-splice-overlap-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        components = {component["component_name"]: component for component in model.scene_components}
+
+        self._assert_bounds_almost_equal(
+            components["girt_front_story2_1"]["world_bounds"],
+            {"min": [0.0, 0.0, 100.0], "max": [186.0, 4.0, 106.0], "size": [186.0, 4.0, 6.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["girt_front_story2_2"]["world_bounds"],
+            {"min": [174.0, 0.0, 100.0], "max": [360.0, 4.0, 106.0], "size": [186.0, 4.0, 6.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["girt_left_story2_1"]["world_bounds"],
+            {"min": [-4.0, -186.0, 108.0], "max": [0.0, 0.0, 114.0], "size": [4.0, 186.0, 6.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["girt_left_story2_2"]["world_bounds"],
+            {"min": [-4.0, -360.0, 108.0], "max": [0.0, -174.0, 114.0], "size": [4.0, 186.0, 6.0]},
+        )
 
     def test_corner_posts_are_flush_to_outer_sill_corners(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")

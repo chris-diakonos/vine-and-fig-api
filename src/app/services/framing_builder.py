@@ -375,8 +375,8 @@ class FramingBuilder:
         girt_width: float,
         girt_depth: float,
     ) -> None:
-        total_quantity = 0
-        last_girt_length = 0.0
+        bom_lengths: Dict[float, int] = defaultdict(int)
+        splice_extension = self._girt_splice_extension()
         for story in range(1, self.floorplan.stories + 2):
             if story in (1, self.floorplan.stories + 1):
                 continue
@@ -384,9 +384,9 @@ class FramingBuilder:
             joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
             for face in self.faces:
                 quantity, girt_length = self._member_quantity_and_length(self.faces[face])
-                last_girt_length = girt_length
-                total_quantity += quantity
                 for segment_index in range(quantity):
+                    start_extension = splice_extension if segment_index > 0 else 0.0
+                    end_extension = splice_extension if segment_index < quantity - 1 else 0.0
                     datum = datums.girt(
                         face,
                         story,
@@ -396,10 +396,19 @@ class FramingBuilder:
                         joist_height,
                         girt_width,
                         girt_depth,
+                        start_extension=start_extension,
+                        end_extension=end_extension,
                     )
                     self._add_migrated_member(girts_node, self._offset_datum(datum, x_offset, y_offset))
-        if total_quantity:
-            self._add_girt_bom(total_quantity, last_girt_length, girt_width, girt_depth)
+                    member_length = datum.size[0] if datum.axis == "x" else datum.size[1]
+                    bom_lengths[member_length] += 1
+        for member_length, quantity in bom_lengths.items():
+            self._add_girt_bom(quantity, member_length, girt_width, girt_depth)
+
+    @staticmethod
+    def _girt_splice_extension() -> float:
+        plate_splice = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {}).get("plate_splice", {})
+        return float(plate_splice.get("lap_length", 12.0)) / 2.0
 
     def _add_migrated_member(self, parent: SceneNode, datum: FramingMemberDatum) -> None:
         parent.add_child(
@@ -658,6 +667,7 @@ class FramingBuilder:
                 else:
                     member_a_end, member_b_end = "min", "max"
                     plate_width = left.local_bounds.size[0]
+                splice_position = self._girt_splice_position(left, right, axis)
                 specs.append(
                     JointSpec(
                         id=f"girt_splice_{face}_story{story}_{left.index}_{right.index}",
@@ -668,12 +678,26 @@ class FramingBuilder:
                             "axis": axis,
                             "member_a_end": member_a_end,
                             "member_b_end": member_b_end,
+                            "member_a_splice_position": splice_position[0],
+                            "member_b_splice_position": splice_position[1],
                             "plate_width": plate_width,
                             "plate_height": left.local_bounds.size[2],
                         },
                     )
                 )
         return specs
+
+    @staticmethod
+    def _girt_splice_position(left: FramingMember, right: FramingMember, axis: str) -> Tuple[float, float]:
+        if axis == "x":
+            boundary = (left.world_bounds.max[0] + right.world_bounds.min[0]) / 2.0
+            left_position = boundary - left.world_bounds.min[0]
+            right_position = boundary - right.world_bounds.min[0]
+        else:
+            boundary = (left.world_bounds.min[1] + right.world_bounds.max[1]) / 2.0
+            left_position = boundary - left.world_bounds.min[1]
+            right_position = boundary - right.world_bounds.min[1]
+        return left_position, right_position
 
     def _declare_joist_sill_specs(self) -> List[JointSpec]:
         specs: List[JointSpec] = []

@@ -29,6 +29,8 @@ def plate_splice_handler(
     axis = raw_params.pop("axis", None)
     member_a_end = raw_params.pop("member_a_end", "max")
     member_b_end = raw_params.pop("member_b_end", "min")
+    member_a_splice_position = raw_params.pop("member_a_splice_position", None)
+    member_b_splice_position = raw_params.pop("member_b_splice_position", None)
     params = plate_splice_params(raw_params)
     for op in plate_splice_operations(spec.member_a, spec.member_b, params):
         shape = op.shape
@@ -38,16 +40,21 @@ def plate_splice_handler(
             if bounds is None:
                 continue
             splice_end = member_a_end if op.member_id == spec.member_a else member_b_end
-            shape = _orient_splice_tool(shape, bounds.size, axis, splice_end)
+            splice_position = (
+                member_a_splice_position
+                if op.member_id == spec.member_a
+                else member_b_splice_position
+            )
+            shape = _orient_splice_tool(shape, bounds.size, axis, splice_end, splice_position)
         yield GeometryOperation(op.member_id, op.operation, shape, spec.id)
 
 
-def _orient_splice_tool(shape, member_size, axis: str, splice_end: str):
+def _orient_splice_tool(shape, member_size, axis: str, splice_end: str, splice_position=None):
     if axis == "x":
-        splice_x = 0.0 if splice_end == "min" else member_size[0]
+        splice_x = splice_position if splice_position is not None else 0.0 if splice_end == "min" else member_size[0]
         return shape.translate((splice_x, member_size[1] / 2.0, 0.0))
 
-    splice_y = 0.0 if splice_end == "min" else member_size[1]
+    splice_y = splice_position if splice_position is not None else 0.0 if splice_end == "min" else member_size[1]
     return shape.rotate((0, 0, 0), (0, 0, 1), 90.0).translate((member_size[0] / 2.0, splice_y, 0.0))
 
 

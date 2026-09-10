@@ -142,15 +142,17 @@ class FramingPlacementDatums:
         joist_height: float,
         girt_width: float,
         girt_depth: float,
+        start_extension: float = 0.0,
+        end_extension: float = 0.0,
     ) -> FramingMemberDatum:
         counter = segment_index + 1
         run_min = segment_index * segment_length
         run_max = (segment_index + 1) * segment_length
-        run_length = run_max - run_min
+        run_length = run_max - run_min + start_extension + end_extension
         if face == "front":
             size = (run_length, girt_width, girt_depth)
             min_corner = (
-                run_min,
+                run_min - start_extension,
                 self.sill_width / 2.0 - girt_width,
                 floor_height - joist_height - girt_depth,
             )
@@ -158,18 +160,22 @@ class FramingPlacementDatums:
         elif face == "rear":
             size = (run_length, girt_width, girt_depth)
             min_corner = (
-                run_min,
+                run_min - start_extension,
                 -self.depth - self.sill_width / 2.0,
                 floor_height - joist_height - girt_depth,
             )
             axis = "x"
         elif face == "left":
             size = (girt_width, run_length, girt_depth)
-            min_corner = (-self.sill_width / 2.0, -run_max, floor_height - girt_depth)
+            min_corner = (-self.sill_width / 2.0, -run_max - end_extension, floor_height - girt_depth)
             axis = "y"
         else:
             size = (girt_width, run_length, girt_depth)
-            min_corner = (self.width + self.sill_width / 2.0 - girt_width, -run_max, floor_height - girt_depth)
+            min_corner = (
+                self.width + self.sill_width / 2.0 - girt_width,
+                -run_max - end_extension,
+                floor_height - girt_depth,
+            )
             axis = "y"
 
         return FramingMemberDatum(
