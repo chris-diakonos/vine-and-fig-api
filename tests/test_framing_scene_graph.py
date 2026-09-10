@@ -70,6 +70,11 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertTrue(components["sill_front_1"]["has_joined_geometry"])
         self.assertTrue(components["sill_left_1"]["has_joined_geometry"])
         self.assertTrue(components["post_front_left"]["has_joined_geometry"])
+        specs = builder._declare_joinery_specs()
+        self.assertEqual(len(specs), 4)
+        for spec in specs:
+            self.assertIn("joint_datums", spec.params)
+            self.assertEqual(spec.params["joint_datums"]["tenon_height"], 2.0)
 
         unjoined_builder = FramingBuilder(request.structure, request.structure_hash or "joinery-flag-test")
         unjoined_model, _ = unjoined_builder.build(ceiling_heights, floor_heights, compile_joinery=False)
@@ -80,6 +85,56 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self.assertLess(workplane_volume(joined_post.geometry), workplane_volume(unjoined_post.geometry))
         self.assertLess(workplane_volume(joined_sill.geometry), workplane_volume(unjoined_sill.geometry))
+
+    def test_cornerstone_sills_and_posts_match_legacy_reference_bounds(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        legacy_model = FramingBuilder(request.structure, "legacy-reference-test").build_legacy_reference(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        cornerstone_model, _ = FramingBuilder(request.structure, "cornerstone-reference-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+
+        legacy_components = {component["component_name"]: component for component in legacy_model.scene_components}
+        cornerstone_components = {component["component_name"]: component for component in cornerstone_model.scene_components}
+        migrated_names = {
+            name for name in cornerstone_components
+            if name and (name.startswith("sill_") or name.startswith("post_"))
+        }
+
+        self.assertEqual(
+            migrated_names,
+            {name for name in legacy_components if name and (name.startswith("sill_") or name.startswith("post_"))},
+        )
+        for name in migrated_names:
+            self._assert_bounds_almost_equal(
+                cornerstone_components[name]["world_bounds"],
+                legacy_components[name]["world_bounds"],
+            )
+            cornerstone_node = self._scene_node(cornerstone_model.scene_root, name)
+            legacy_node = self._scene_node(legacy_model.scene_root, name)
+            self.assertAlmostEqual(
+                workplane_volume(cornerstone_node.geometry),
+                workplane_volume(legacy_node.geometry),
+                places=5,
+            )
+            self.assertIn("framing_datums", cornerstone_node.metadata)
 
     def test_side_sills_follow_left_and_right_wall_lines(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")

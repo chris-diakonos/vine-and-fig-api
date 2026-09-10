@@ -16,11 +16,12 @@ from app.utils.materials_helper import (
     add_sales_bom_quantities
 )
 from app.services.config_loader import load_json_config
+from app.services.framing_datums import FramingMemberDatum, FramingPlacementDatums
 from app.services.framing_validation import validate_framing_scene
-from app.services.joinery.base import JointSpec
+from app.services.joinery.base import JointSpec, box_at
 from app.services.joinery.compiler import compile_joinery as run_joinery_compiler
 from app.services.joinery.framing_handlers import FRAMING_JOINERY_HANDLERS
-from app.services.scene_graph import Bounds, SceneNode, bounds_for_workplane, collect_component_metadata, project_scene_to_assembly, scene_from_assembly
+from app.services.scene_graph import Bounds, SceneNode, Transform, bounds_for_workplane, collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 
 
 @dataclass(frozen=True)
@@ -169,13 +170,45 @@ class FramingBuilder:
         x_offset = 0 #-front_dimension / 2
         y_offset = 0 #right_dimension / 2
         
-        # Build framing components in order
-        self._add_sills(assembly, x_offset, y_offset)
-        self._add_posts(assembly, x_offset, y_offset)
+        sill_post_scene = self._build_sill_post_scene(x_offset, y_offset)
+        self._populate_legacy_assembly(assembly, x_offset, y_offset, include_sills_and_posts=False)
         
-        # Build per story
-        for story in range(1, self.floorplan.stories + 2):
+        # Prepare BOM data
+        bom_data = {
+            "materials": self.materials,
+            "bom_components": self.bom_components,
+            "bom_quantities": self.bom_quantities,
+            "bom_levels": self.bom_levels
+        }
+        
+        return self._with_scene(assembly, compile_joinery=compile_joinery, migrated_scene=sill_post_scene), bom_data
 
+    def build_legacy_reference(
+        self,
+        calculated_ceiling_heights: List[float],
+        calculated_floor_heights: List[float],
+        compile_joinery: bool = False,
+    ) -> cq.Assembly:
+        """Build the pre-migration world-coordinate framing scene for parity tests."""
+        self.calculated_ceiling_heights = calculated_ceiling_heights
+        self.calculated_floor_heights = calculated_floor_heights
+        assembly = cq.Assembly()
+        self._populate_legacy_assembly(assembly, 0.0, 0.0, include_sills_and_posts=True)
+        return self._with_scene(assembly, compile_joinery=compile_joinery)
+
+    def _populate_legacy_assembly(
+        self,
+        assembly: cq.Assembly,
+        x_offset: float,
+        y_offset: float,
+        include_sills_and_posts: bool,
+    ) -> None:
+        """Populate legacy world-coordinate framing members."""
+        if include_sills_and_posts:
+            self._add_sills(assembly, x_offset, y_offset)
+            self._add_posts(assembly, x_offset, y_offset)
+
+        for story in range(1, self.floorplan.stories + 2):
             self._add_joists(assembly, story, -y_offset, x_offset)
 
             if story in range(1, self.floorplan.stories + 1):
@@ -188,26 +221,19 @@ class FramingBuilder:
 
             if story == self.floorplan.stories:
                 self._add_plates(assembly, story, x_offset, y_offset)
-        
-        # Add roof components
+
         self._add_false_plates(assembly, x_offset, y_offset)
         self._add_rafters(assembly, x_offset, y_offset)
-        
-        # Add gable end framing (for side-gable roofs)
+
         if self.roof and self.roof.roof_type == "side-gable":
             self._add_gable_framing(assembly, x_offset, y_offset)
-        
-        # Prepare BOM data
-        bom_data = {
-            "materials": self.materials,
-            "bom_components": self.bom_components,
-            "bom_quantities": self.bom_quantities,
-            "bom_levels": self.bom_levels
-        }
-        
-        return self._with_scene(assembly, compile_joinery=compile_joinery), bom_data
 
-    def _with_scene(self, assembly: cq.Assembly, compile_joinery: bool = False) -> cq.Assembly:
+    def _with_scene(
+        self,
+        assembly: cq.Assembly,
+        compile_joinery: bool = False,
+        migrated_scene: Optional[SceneNode] = None,
+    ) -> cq.Assembly:
         scene_root = scene_from_assembly(
             assembly,
             subsystem_name="framing",
@@ -216,6 +242,8 @@ class FramingBuilder:
             group_name_for_component=self._group_name_for_component,
             role_for_component=lambda name: name.split("_")[0] if name else "framing_member",
         )
+        if migrated_scene is not None:
+            self._merge_migrated_framing_scene(scene_root, migrated_scene)
         self.member_registry = self._build_member_registry(scene_root)
         scene_root.metadata["framing_member_count"] = len(self.member_registry)
         scene_root.metadata["compile_joinery"] = compile_joinery
@@ -230,6 +258,139 @@ class FramingBuilder:
         projected.scene_components = collect_component_metadata(scene_root)
         projected.validation_results = validate_framing_scene(scene_root)
         return projected
+
+    def _build_sill_post_scene(self, x_offset: float = 0.0, y_offset: float = 0.0) -> SceneNode:
+        """Build migrated sill and corner-post members as cornerstone scene nodes."""
+        sill_width = 8.0
+        sill_height = 10.0
+        post_width = 6.0
+        post_depth = 4.0
+        post_tenon_depth = 2.0
+        stories = self.floorplan.stories
+        post_height = self.calculated_ceiling_heights[stories - 1] - self.calculated_floor_heights[0]
+
+        datums = FramingPlacementDatums(
+            width=self.faces["front"],
+            depth=self.faces["right"],
+            sill_width=sill_width,
+            sill_height=sill_height,
+            post_width=post_width,
+            post_depth=post_depth,
+            post_tenon_depth=post_tenon_depth,
+        )
+
+        root = SceneNode("building", "building", "building")
+        framing_node = root.add_child(
+            SceneNode(
+                "framing",
+                "framing",
+                "framing",
+                metadata={
+                    "coordinate_system": "cornerstone_legacy_y",
+                    "migrated_member_roles": ["sill", "post"],
+                },
+            )
+        )
+        sills_node = framing_node.add_child(SceneNode("sills", "assembly", "sills"))
+        posts_node = framing_node.add_child(SceneNode("posts", "assembly", "posts"))
+
+        total_sills = 0
+        for face in self.faces:
+            quantity, sill_length = self._member_quantity_and_length(self.faces[face])
+            for segment_index in range(quantity):
+                datum = datums.sill(face, segment_index, sill_length)
+                self._add_migrated_member(sills_node, self._offset_datum(datum, x_offset, y_offset))
+                total_sills += 1
+
+        for corner in ("front_left", "rear_left", "front_right", "rear_right"):
+            datum = datums.post(corner, self.calculated_floor_heights[0], post_height)
+            self._add_migrated_member(posts_node, self._offset_datum(datum, x_offset, y_offset))
+
+        self._add_sill_bom(total_sills, sill_width, sill_height)
+        self._add_post_bom(4, post_width, post_depth, post_height)
+        return root
+
+    def _add_migrated_member(self, parent: SceneNode, datum: FramingMemberDatum) -> None:
+        parent.add_child(
+            SceneNode(
+                datum.component_name,
+                "part",
+                datum.role,
+                local_transform=Transform.translate(*datum.min_corner),
+                geometry=box_at(datum.size, (0.0, 0.0, 0.0)),
+                blank_geometry=box_at(datum.size, (0.0, 0.0, 0.0)),
+                color=cq.Color(0.55, 0.45, 0.33),
+                metadata=datum.metadata(),
+            )
+        )
+
+    @staticmethod
+    def _offset_datum(datum: FramingMemberDatum, x_offset: float, y_offset: float) -> FramingMemberDatum:
+        if x_offset == 0.0 and y_offset == 0.0:
+            return datum
+        min_corner = (
+            datum.min_corner[0] + x_offset,
+            datum.min_corner[1] + y_offset,
+            datum.min_corner[2],
+        )
+        return FramingMemberDatum(
+            component_name=datum.component_name,
+            role=datum.role,
+            size=datum.size,
+            min_corner=min_corner,
+            face=datum.face,
+            index=datum.index,
+            corner=datum.corner,
+            axis=datum.axis,
+        )
+
+    @staticmethod
+    def _merge_migrated_framing_scene(scene_root: SceneNode, migrated_scene: SceneNode) -> None:
+        target_framing = FramingBuilder._first_child_named(scene_root, "framing")
+        source_framing = FramingBuilder._first_child_named(migrated_scene, "framing")
+        if target_framing is None or source_framing is None:
+            return
+        for child in list(source_framing.children):
+            target_framing.add_child(child)
+
+    @staticmethod
+    def _first_child_named(scene: SceneNode, name: str) -> Optional[SceneNode]:
+        for child in scene.children:
+            if child.name == name:
+                return child
+        return None
+
+    def _member_quantity_and_length(self, dimension: float) -> Tuple[int, float]:
+        if dimension <= self.max_member_length:
+            return 1, dimension
+        quantity = math.ceil(dimension / self.max_member_length)
+        return quantity, dimension / quantity
+
+    def _add_sill_bom(self, quantity: int, sill_width: float, sill_height: float) -> None:
+        raw_material_id, component_id = add_framing_materials(
+            "sill", sill_height / 12, sill_width, sill_height, self.materials
+        )
+        add_production_bom_quantities(
+            component_id, raw_material_id, 1, 2,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+        add_sales_bom_quantities(
+            component_id, self.structure_hash, quantity, 3,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+
+    def _add_post_bom(self, quantity: int, post_width: float, post_depth: float, post_height: float) -> None:
+        raw_material_id, component_id = add_framing_materials(
+            "post", post_width / 12, post_depth, post_height, self.materials
+        )
+        add_production_bom_quantities(
+            component_id, raw_material_id, 1, 2,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
+        add_sales_bom_quantities(
+            component_id, self.structure_hash, quantity, 3,
+            self.bom_quantities, self.bom_levels, self.bom_components
+        )
 
     def _build_member_registry(self, scene_root: SceneNode) -> Dict[str, FramingMember]:
         registry: Dict[str, FramingMember] = {}
@@ -269,7 +430,10 @@ class FramingBuilder:
             side_sill = self.member_registry.get(side_sill_id)
             if post is None or cross_sill is None or side_sill is None:
                 continue
-            tenon_height = min(cross_sill.world_bounds.max[2], side_sill.world_bounds.max[2]) - post.world_bounds.min[2]
+            joint_datums = self._post_sill_joint_datums(corner, post, cross_sill, side_sill)
+            if joint_datums is None:
+                continue
+            tenon_height = float(joint_datums["tenon_height"])
             if tenon_height <= 0.0:
                 continue
             specs.append(
@@ -283,10 +447,35 @@ class FramingBuilder:
                         "cross_sill_end": cross_end,
                         "side_sill_end": side_end,
                         "tenon_height": tenon_height,
+                        "joint_datums": joint_datums,
                     },
                 )
             )
         return specs
+
+    @staticmethod
+    def _post_sill_joint_datums(
+        corner: str,
+        post: FramingMember,
+        cross_sill: FramingMember,
+        side_sill: FramingMember,
+    ) -> Optional[Dict[str, object]]:
+        post_datums = post.node.metadata.get("framing_datums", {})
+        cross_datums = cross_sill.node.metadata.get("framing_datums", {})
+        side_datums = side_sill.node.metadata.get("framing_datums", {})
+        post_bottom_z = post_datums.get("bottom_z")
+        cross_sill_top_z = cross_datums.get("top_z")
+        side_sill_top_z = side_datums.get("top_z")
+        if post_bottom_z is None or cross_sill_top_z is None or side_sill_top_z is None:
+            return None
+        sill_top_z = min(float(cross_sill_top_z), float(side_sill_top_z))
+        return {
+            "corner": corner,
+            "post_bottom_z": float(post_bottom_z),
+            "cross_sill_top_z": float(cross_sill_top_z),
+            "side_sill_top_z": float(side_sill_top_z),
+            "tenon_height": sill_top_z - float(post_bottom_z),
+        }
 
     def _sill_id(self, face: str, end: str) -> Optional[str]:
         sills = [
@@ -341,15 +530,7 @@ class FramingBuilder:
         for face in self.faces:
             dimension = self.faces[face]
 
-            if dimension <= self.max_member_length:
-                quantity = 1
-                sill_length = dimension
-            elif dimension >= self.max_member_length:
-                quantity = math.ceil(dimension / self.max_member_length)
-                sill_length = dimension / quantity
-            else:
-                quantity = 1
-                sill_length = self.max_member_length
+            quantity, sill_length = self._member_quantity_and_length(dimension)
             
             for q in range(quantity):
                 sill_counter = q + 1
@@ -379,18 +560,7 @@ class FramingBuilder:
                 assembly.add(sill, name=f"{member_type}_{face}_{sill_counter}", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
                 total_quantity += 1
         
-        # Add BOM tracking
-        raw_material_id, component_id = add_framing_materials(
-            member_type, sill_depth / 12, sill_height, sill_depth, self.materials
-        )
-        add_production_bom_quantities(
-            component_id, raw_material_id, 1, 2,
-            self.bom_quantities, self.bom_levels, self.bom_components
-        )
-        add_sales_bom_quantities(
-            component_id, self.structure_hash, total_quantity, 3,
-            self.bom_quantities, self.bom_levels, self.bom_components
-        )
+        self._add_sill_bom(total_quantity, sill_height, sill_depth)
     
     def _add_posts(self, assembly: cq.Assembly, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add corner posts to the assembly."""
@@ -426,18 +596,7 @@ class FramingBuilder:
         assembly.add(front_right_post, name=f"{member_type}_front_right", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
         assembly.add(rear_right_post, name=f"{member_type}_rear_right", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
         
-        # Add BOM tracking
-        raw_material_id, component_id = add_framing_materials(
-            member_type, post_width / 12, post_depth, post_height, self.materials
-        )
-        add_production_bom_quantities(
-            component_id, raw_material_id, 1, 2,
-            self.bom_quantities, self.bom_levels, self.bom_components
-        )
-        add_sales_bom_quantities(
-            component_id, self.structure_hash, quantity, 3,
-            self.bom_quantities, self.bom_levels, self.bom_components
-        )
+        self._add_post_bom(quantity, post_width, post_depth, post_height)
     
     def _add_joists(self, assembly: cq.Assembly, story: int, x_offset: float = 0, y_offset: float = 0) -> None:
         """Add joists for a story."""

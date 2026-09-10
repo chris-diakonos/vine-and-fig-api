@@ -1,0 +1,118 @@
+"""Framing placement datums in the cornerstone coordinate convention."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict, Literal, Optional, Tuple
+
+
+WallFace = Literal["front", "rear", "left", "right"]
+CornerName = Literal["front_left", "front_right", "rear_left", "rear_right"]
+AxisName = Literal["x", "y", "z"]
+Point3 = Tuple[float, float, float]
+
+
+@dataclass(frozen=True)
+class FramingMemberDatum:
+    """A member's placement expressed as a min-corner local datum."""
+
+    component_name: str
+    role: str
+    size: Point3
+    min_corner: Point3
+    face: Optional[WallFace] = None
+    index: Optional[int] = None
+    corner: Optional[CornerName] = None
+    axis: AxisName = "z"
+
+    @property
+    def max_corner(self) -> Point3:
+        return (
+            self.min_corner[0] + self.size[0],
+            self.min_corner[1] + self.size[1],
+            self.min_corner[2] + self.size[2],
+        )
+
+    @property
+    def center(self) -> Point3:
+        return (
+            self.min_corner[0] + self.size[0] / 2.0,
+            self.min_corner[1] + self.size[1] / 2.0,
+            self.min_corner[2] + self.size[2] / 2.0,
+        )
+
+    def metadata(self) -> Dict[str, object]:
+        return {
+            "component_name": self.component_name,
+            "framing_datums": {
+                "coordinate_system": "cornerstone_legacy_y",
+                "role": self.role,
+                "face": self.face,
+                "index": self.index,
+                "corner": self.corner,
+                "axis": self.axis,
+                "size": list(self.size),
+                "min_corner": list(self.min_corner),
+                "max_corner": list(self.max_corner),
+                "center": list(self.center),
+                "top_z": self.max_corner[2],
+                "bottom_z": self.min_corner[2],
+            },
+        }
+
+
+@dataclass(frozen=True)
+class FramingPlacementDatums:
+    """Cornerstone wall lines and framing member cross sections."""
+
+    width: float
+    depth: float
+    sill_width: float
+    sill_height: float
+    post_width: float
+    post_depth: float
+    post_tenon_depth: float
+
+    def sill(self, face: WallFace, segment_index: int, segment_length: float) -> FramingMemberDatum:
+        counter = segment_index + 1
+        if face == "front":
+            size = (segment_length, self.sill_width, self.sill_height)
+            min_corner = (segment_index * segment_length, -self.sill_width / 2.0, 0.0)
+            axis: AxisName = "x"
+        elif face == "rear":
+            size = (segment_length, self.sill_width, self.sill_height)
+            min_corner = (segment_index * segment_length, -self.depth - self.sill_width / 2.0, 0.0)
+            axis = "x"
+        elif face == "left":
+            size = (self.sill_width, segment_length, self.sill_height)
+            min_corner = (-self.sill_width / 2.0, -(segment_index + 1) * segment_length, 0.0)
+            axis = "y"
+        else:
+            size = (self.sill_width, segment_length, self.sill_height)
+            min_corner = (self.width - self.sill_width / 2.0, -(segment_index + 1) * segment_length, 0.0)
+            axis = "y"
+
+        return FramingMemberDatum(
+            component_name=f"sill_{face}_{counter}",
+            role="sill",
+            face=face,
+            index=counter,
+            axis=axis,
+            size=size,
+            min_corner=min_corner,
+        )
+
+    def post(self, corner: CornerName, floor_height: float, post_height: float) -> FramingMemberDatum:
+        x = self.width if corner.endswith("right") else 0.0
+        y = -self.depth if corner.startswith("rear") else 0.0
+        min_corner = (
+            x - self.post_width / 2.0,
+            y - self.post_depth / 2.0,
+            floor_height - self.post_tenon_depth,
+        )
+        return FramingMemberDatum(
+            component_name=f"post_{corner}",
+            role="post",
+            corner=corner,
+            size=(self.post_width, self.post_depth, post_height),
+            min_corner=min_corner,
+        )
