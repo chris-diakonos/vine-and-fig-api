@@ -8,6 +8,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from app.services.joinery.base import apply_operations, box_at, workplane_bounds, workplane_volume  # noqa: E402
 from app.services.joinery.half_lap import default_bearing_notch_params, joist_bearing_notch  # noqa: E402
+from app.services.joinery.joist_to_sill import joist_to_sill_operations  # noqa: E402
 from app.services.joinery.mortise_tenon import default_stub_tenon_params, stud_to_sill_fixture  # noqa: E402
 from app.services.joinery.plate_splice import plate_splice_fixture  # noqa: E402
 from app.services.joinery.post_to_sill_corner import post_to_sill_corner_fixture  # noqa: E402
@@ -56,6 +57,26 @@ class JoineryPrimitiveTest(unittest.TestCase):
 
         self.assertBoundsAlmostEqual(workplane_bounds(joined), workplane_bounds(joist))
         self.assertLess(workplane_volume(joined), workplane_volume(joist))
+
+    def test_joist_to_sill_adds_tail_and_cuts_socket(self):
+        joist = box_at((3.0, 72.0, 8.0), (0.0, 0.0, 0.0))
+        sill = box_at((48.0, 8.0, 10.0), (0.0, 0.0, 0.0))
+        operations = joist_to_sill_operations(
+            "joist",
+            "sill",
+            joist_end_y=72.0,
+            joist_top_z=8.0,
+            sill_socket_center=(24.0, 4.0),
+            sill_top_z=10.0,
+            direction=1,
+        )
+
+        joined_joist = apply_operations(joist, [op for op in operations if op.member_id == "joist"])
+        joined_sill = apply_operations(sill, [op for op in operations if op.member_id == "sill"])
+
+        self.assertGreater(workplane_volume(joined_joist), workplane_volume(joist))
+        self.assertLess(workplane_volume(joined_sill), workplane_volume(sill))
+        self.assertGreater(workplane_bounds(joined_joist)[1][1], workplane_bounds(joist)[1][1])
 
 
 if __name__ == "__main__":

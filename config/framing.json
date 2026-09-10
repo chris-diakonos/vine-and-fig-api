@@ -28,6 +28,16 @@
       "notch_depth": 2.0,
       "clearance": 0.02
     },
+    "joist_to_sill": {
+      "profile_height": 6.0,
+      "bottom_width": 1.5748031496062993,
+      "profile_angle": 4.4926,
+      "male_insertion_depth": 1.0236220472440944,
+      "female_insertion_depth": 1.1023622047244095,
+      "cutter_angle": 15.0,
+      "side_clearance": 0.02,
+      "vertical_clearance": 0.02
+    },
     "peg_bore": {
       "diameter": 0.75,
       "margin": 1.0

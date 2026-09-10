@@ -62,22 +62,32 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self.assertIsNotNone(bom_data)
         self.assertTrue(model.scene_root.metadata["compile_joinery"])
-        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 4)
-        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 28)
+        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 26)
+        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 72)
         components = {component["component_name"]: component for component in model.scene_components}
         names = set(components)
         self.assertIn("sill_front_1", names)
         self.assertTrue(components["sill_front_1"]["has_joined_geometry"])
         self.assertTrue(components["sill_left_1"]["has_joined_geometry"])
+        self.assertTrue(components["joist_story1_1"]["has_joined_geometry"])
         self.assertTrue(components["post_front_left"]["has_joined_geometry"])
         specs = builder._declare_joinery_specs()
-        self.assertEqual(len(specs), 4)
-        for spec in specs:
+        self.assertEqual(len(specs), 26)
+        post_sill_specs = [spec for spec in specs if spec.joint_type == "post_sill_corner"]
+        joist_sill_specs = [spec for spec in specs if spec.joint_type == "joist_sill"]
+        self.assertEqual(len(post_sill_specs), 4)
+        self.assertEqual(len(joist_sill_specs), 22)
+        for spec in post_sill_specs:
             self.assertIn("joint_datums", spec.params)
             self.assertEqual(spec.params["joint_datums"]["tenon_height"], 2.0)
             if spec.id == "post_sill_corner_front_left":
                 self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_x"], 3.0)
                 self.assertEqual(spec.params["joint_datums"]["side_sill_mortise_center_y"], 246.0)
+        front_joist_spec = next(spec for spec in joist_sill_specs if spec.id == "joist_sill_story1_1_front")
+        self.assertEqual(front_joist_spec.params["joint_datums"]["direction"], 1)
+        self.assertEqual(front_joist_spec.params["joint_datums"]["joist_end_y"], 240.0)
+        self.assertEqual(front_joist_spec.params["joint_datums"]["sill_socket_center_x"], 25.0)
+        self.assertEqual(front_joist_spec.params["joint_datums"]["sill_socket_center_y"], 4.0)
 
         unjoined_builder = FramingBuilder(request.structure, request.structure_hash or "joinery-flag-test")
         unjoined_model, _ = unjoined_builder.build(ceiling_heights, floor_heights, compile_joinery=False)
@@ -85,9 +95,12 @@ class FramingSceneGraphTest(unittest.TestCase):
         unjoined_post = self._scene_node(unjoined_model.scene_root, "post_front_left")
         joined_sill = self._scene_node(model.scene_root, "sill_left_1")
         unjoined_sill = self._scene_node(unjoined_model.scene_root, "sill_left_1")
+        joined_joist = self._scene_node(model.scene_root, "joist_story1_1")
+        unjoined_joist = self._scene_node(unjoined_model.scene_root, "joist_story1_1")
 
         self.assertLess(workplane_volume(joined_post.geometry), workplane_volume(unjoined_post.geometry))
         self.assertLess(workplane_volume(joined_sill.geometry), workplane_volume(unjoined_sill.geometry))
+        self.assertGreater(workplane_volume(joined_joist.geometry), workplane_volume(unjoined_joist.geometry))
 
     def test_cornerstone_sills_and_posts_match_legacy_reference_bounds(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")

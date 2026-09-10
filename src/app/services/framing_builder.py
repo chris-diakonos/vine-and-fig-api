@@ -522,7 +522,79 @@ class FramingBuilder:
                     },
                 )
             )
+        specs.extend(self._declare_joist_sill_specs())
         return specs
+
+    def _declare_joist_sill_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        joists = [
+            member
+            for member in self.member_registry.values()
+            if member.role == "joist" and self._member_datum_value(member, "story") == 1
+        ]
+        joists.sort(key=lambda member: member.index or 0)
+        for joist in joists:
+            joist_datums = joist.node.metadata.get("framing_datums", {})
+            center = joist_datums.get("center")
+            min_corner = joist_datums.get("min_corner")
+            max_corner = joist_datums.get("max_corner")
+            size = joist_datums.get("size")
+            if not all(isinstance(value, list) for value in (center, min_corner, max_corner, size)):
+                continue
+
+            joist_center_x = float(center[0])
+            for face, direction, joist_end_y, joist_end_world_y in (
+                ("front", 1, float(size[1]), float(max_corner[1])),
+                ("rear", -1, 0.0, float(min_corner[1])),
+            ):
+                sill = self._sill_for_x(face, joist_center_x)
+                if sill is None:
+                    continue
+                sill_datums = sill.node.metadata.get("framing_datums", {})
+                sill_min = sill_datums.get("min_corner")
+                sill_size = sill_datums.get("size")
+                if not isinstance(sill_min, list) or not isinstance(sill_size, list):
+                    continue
+                specs.append(
+                    JointSpec(
+                        id=f"joist_sill_story1_{joist.index}_{face}",
+                        joint_type="joist_sill",
+                        member_a=joist.id,
+                        member_b=sill.id,
+                        params={
+                            "joint_datums": {
+                                "face": face,
+                                "direction": direction,
+                                "joist_end_y": joist_end_y,
+                                "joist_top_z": float(size[2]),
+                                "sill_socket_center_x": joist_center_x - float(sill_min[0]),
+                                "sill_socket_center_y": joist_end_world_y - float(sill_min[1]),
+                                "sill_top_z": float(sill_size[2]),
+                            },
+                        },
+                    )
+                )
+        return specs
+
+    def _sill_for_x(self, face: str, x: float) -> Optional[FramingMember]:
+        for member in self.member_registry.values():
+            if member.role != "sill" or member.face != face:
+                continue
+            datums = member.node.metadata.get("framing_datums", {})
+            min_corner = datums.get("min_corner")
+            max_corner = datums.get("max_corner")
+            if not isinstance(min_corner, list) or not isinstance(max_corner, list):
+                continue
+            if float(min_corner[0]) <= x <= float(max_corner[0]):
+                return member
+        return None
+
+    @staticmethod
+    def _member_datum_value(member: FramingMember, key: str) -> Any:
+        datums = member.node.metadata.get("framing_datums", {})
+        if not isinstance(datums, dict):
+            return None
+        return datums.get(key)
 
     @staticmethod
     def _post_sill_joint_datums(
@@ -580,6 +652,11 @@ class FramingBuilder:
     def _index_for_component(component_name: str) -> Optional[int]:
         parts = component_name.split("_")
         if len(parts) >= 3 and parts[0] == "sill":
+            try:
+                return int(parts[2])
+            except ValueError:
+                return None
+        if len(parts) >= 3 and parts[0] == "joist":
             try:
                 return int(parts[2])
             except ValueError:

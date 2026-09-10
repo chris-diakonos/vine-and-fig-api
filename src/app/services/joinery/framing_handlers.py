@@ -4,6 +4,10 @@ from __future__ import annotations
 from typing import Dict, Iterable
 
 from app.services.joinery.base import GeometryOperation, JointSpec
+from app.services.joinery.joist_to_sill import (
+    default_joist_to_sill_params,
+    joist_to_sill_operations,
+)
 from app.services.joinery.plate_splice import plate_splice_operations, plate_splice_params
 from app.services.joinery.post_to_sill_corner import (
     default_post_sill_corner_params,
@@ -60,7 +64,30 @@ def post_sill_corner_handler(
         yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
 
 
+def joist_sill_handler(
+    spec: JointSpec,
+    members: Dict[str, SceneNode],
+) -> Iterable[GeometryOperation]:
+    params = default_joist_to_sill_params()
+    joint_datums = spec.params["joint_datums"]
+    for op in joist_to_sill_operations(
+        joist_id=spec.member_a,
+        sill_id=spec.member_b,
+        joist_end_y=float(joint_datums["joist_end_y"]),
+        joist_top_z=float(joint_datums["joist_top_z"]),
+        sill_socket_center=(
+            float(joint_datums["sill_socket_center_x"]),
+            float(joint_datums["sill_socket_center_y"]),
+        ),
+        sill_top_z=float(joint_datums["sill_top_z"]),
+        direction=int(joint_datums["direction"]),
+        params=params,
+    ):
+        yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
+
+
 FRAMING_JOINERY_HANDLERS = {
     "plate_splice": plate_splice_handler,
+    "joist_sill": joist_sill_handler,
     "post_sill_corner": post_sill_corner_handler,
 }
