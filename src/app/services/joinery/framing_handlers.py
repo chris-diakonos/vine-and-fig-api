@@ -5,7 +5,9 @@ from typing import Dict, Iterable
 
 from app.services.joinery.base import GeometryOperation, JointSpec, box_at
 from app.services.joinery.joist_to_sill import (
+    default_joist_to_girt_params,
     default_joist_to_sill_params,
+    joist_to_girt_operations,
     joist_to_sill_operations,
 )
 from app.services.joinery.mortise_tenon import default_stub_tenon_params
@@ -114,6 +116,29 @@ def joist_sill_handler(
             float(joint_datums["sill_socket_center_y"]),
         ),
         sill_top_z=float(joint_datums["sill_top_z"]),
+        direction=int(joint_datums["direction"]),
+        params=params,
+    ):
+        yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
+
+
+def joist_girt_handler(
+    spec: JointSpec,
+    members: Dict[str, SceneNode],
+) -> Iterable[GeometryOperation]:
+    params = default_joist_to_girt_params()
+    joint_datums = spec.params["joint_datums"]
+    for op in joist_to_girt_operations(
+        joist_id=spec.member_a,
+        girt_id=spec.member_b,
+        joist_end_y=float(joint_datums["joist_end_y"]),
+        joist_top_z=float(joint_datums["joist_top_z"]),
+        joist_tail_center_x=float(joint_datums["joist_tail_center_x"]),
+        girt_socket_center=(
+            float(joint_datums["girt_socket_center_x"]),
+            float(joint_datums["girt_socket_center_y"]),
+        ),
+        girt_top_z=float(joint_datums["girt_top_z"]),
         direction=int(joint_datums["direction"]),
         params=params,
     ):
@@ -239,6 +264,7 @@ def _stud_mortise_shape(
 FRAMING_JOINERY_HANDLERS = {
     "plate_splice": plate_splice_handler,
     "joist_sill": joist_sill_handler,
+    "joist_girt": joist_girt_handler,
     "post_girt": post_girt_handler,
     "post_sill_corner": post_sill_corner_handler,
     "stud_stub_tenon": stud_stub_tenon_handler,

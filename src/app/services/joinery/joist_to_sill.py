@@ -31,6 +31,12 @@ def default_joist_to_sill_params() -> JoistToSillParams:
     return JoistToSillParams(**joinery_defaults("joist_to_sill"))
 
 
+def default_joist_to_girt_params() -> JoistToSillParams:
+    params = joinery_defaults("joist_to_sill")
+    params.update(joinery_defaults("joist_to_girt"))
+    return JoistToSillParams(**params)
+
+
 def joist_to_sill_operations(
     joist_id: str,
     sill_id: str,
@@ -64,6 +70,31 @@ def joist_to_sill_operations(
         GeometryOperation(sill_id, "cut", socket),
         GeometryOperation(joist_id, "fuse", tail),
     ]
+
+
+def joist_to_girt_operations(
+    joist_id: str,
+    girt_id: str,
+    joist_end_y: float,
+    joist_top_z: float,
+    joist_tail_center_x: float,
+    girt_socket_center: Tuple[float, float],
+    girt_top_z: float,
+    direction: int,
+    params: Optional[JoistToSillParams] = None,
+) -> List[GeometryOperation]:
+    """Return operations for an upper-floor joist tail housed into a girt."""
+    return joist_to_sill_operations(
+        joist_id=joist_id,
+        sill_id=girt_id,
+        joist_end_y=joist_end_y,
+        joist_top_z=joist_top_z,
+        joist_tail_center_x=joist_tail_center_x,
+        sill_socket_center=girt_socket_center,
+        sill_top_z=girt_top_z,
+        direction=direction,
+        params=params or default_joist_to_girt_params(),
+    )
 
 
 def _oriented_tail(

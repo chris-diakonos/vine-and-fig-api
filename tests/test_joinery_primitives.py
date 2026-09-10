@@ -8,7 +8,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from app.services.joinery.base import apply_operations, box_at, workplane_bounds, workplane_volume  # noqa: E402
 from app.services.joinery.half_lap import default_bearing_notch_params, joist_bearing_notch  # noqa: E402
-from app.services.joinery.joist_to_sill import joist_to_sill_operations  # noqa: E402
+from app.services.joinery.joist_to_sill import (  # noqa: E402
+    default_joist_to_girt_params,
+    joist_to_girt_operations,
+    joist_to_sill_operations,
+)
 from app.services.joinery.post_to_girt import post_to_girt_operations  # noqa: E402
 from app.services.joinery.mortise_tenon import default_stub_tenon_params, stud_to_sill_fixture  # noqa: E402
 from app.services.joinery.plate_splice import plate_splice_fixture  # noqa: E402
@@ -78,6 +82,31 @@ class JoineryPrimitiveTest(unittest.TestCase):
 
         self.assertGreater(workplane_volume(joined_joist), workplane_volume(joist))
         self.assertLess(workplane_volume(joined_sill), workplane_volume(sill))
+        self.assertGreater(workplane_bounds(joined_joist)[1][1], workplane_bounds(joist)[1][1])
+
+    def test_joist_to_girt_uses_shorter_four_inch_profile(self):
+        params = default_joist_to_girt_params()
+        self.assertEqual(params.profile_height, 4.0)
+
+        joist = box_at((3.0, 240.0, 8.0), (0.0, 0.0, 0.0))
+        girt = box_at((48.0, 4.0, 6.0), (0.0, 0.0, 0.0))
+        operations = joist_to_girt_operations(
+            "joist",
+            "girt",
+            joist_end_y=240.0,
+            joist_top_z=8.0,
+            joist_tail_center_x=1.5,
+            girt_socket_center=(24.0, 0.0),
+            girt_top_z=6.0,
+            direction=1,
+            params=params,
+        )
+
+        joined_joist = apply_operations(joist, [op for op in operations if op.member_id == "joist"])
+        joined_girt = apply_operations(girt, [op for op in operations if op.member_id == "girt"])
+
+        self.assertGreater(workplane_volume(joined_joist), workplane_volume(joist))
+        self.assertLess(workplane_volume(joined_girt), workplane_volume(girt))
         self.assertGreater(workplane_bounds(joined_joist)[1][1], workplane_bounds(joist)[1][1])
 
     def test_post_to_girt_adds_through_tenon_and_cuts_post_mortise(self):

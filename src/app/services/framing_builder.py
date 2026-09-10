@@ -387,6 +387,7 @@ class FramingBuilder:
         y_offset: float,
     ) -> None:
         joist_width = float(self.framing_defaults.get("joist_width", 3.0))
+        girt_width = float(self.framing_defaults.get("girt_width", 4.0))
         joist_centerlines = self._joist_centerlines()
         for story in range(1, self.floorplan.stories + 2):
             joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
@@ -394,9 +395,14 @@ class FramingBuilder:
             if story == len(self.joist_heights):
                 joist_length = self.faces["right"] + (self.roof_overhang * 2.0)
                 y_min = -self.faces["right"] - self.roof_overhang
-            else:
+            elif story == 1:
                 joist_length = self.faces["right"] - datums.sill_width
                 y_min = -self.faces["right"] + datums.sill_width / 2.0
+            else:
+                front_girt_inner_y = datums.sill_width / 2.0 - girt_width
+                rear_girt_inner_y = -self.faces["right"] - datums.sill_width / 2.0 + girt_width
+                joist_length = front_girt_inner_y - rear_girt_inner_y
+                y_min = rear_girt_inner_y
 
             for index, center_x in enumerate(joist_centerlines, start=1):
                 datum = datums.joist(
@@ -872,6 +878,7 @@ class FramingBuilder:
                 )
             )
         specs.extend(self._declare_joist_sill_specs())
+        specs.extend(self._declare_joist_girt_specs())
         specs.extend(self._declare_post_girt_specs())
         specs.extend(self._declare_girt_splice_specs())
         specs.extend(self._declare_stud_stub_tenon_specs())
@@ -1100,6 +1107,65 @@ class FramingBuilder:
                                 "sill_socket_center_x": joist_center_x - float(sill_min[0]),
                                 "sill_socket_center_y": joist_end_world_y - float(sill_min[1]),
                                 "sill_top_z": float(sill_size[2]),
+                            },
+                        },
+                    )
+                )
+        return specs
+
+    def _declare_joist_girt_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        joists = [
+            member
+            for member in self.member_registry.values()
+            if (
+                member.role == "joist"
+                and self._member_datum_value(member, "story") not in (None, 1, len(self.joist_heights))
+            )
+        ]
+        joists.sort(key=lambda member: (self._member_datum_value(member, "story"), member.index or 0))
+        for joist in joists:
+            joist_datums = joist.node.metadata.get("framing_datums", {})
+            center = joist_datums.get("center")
+            min_corner = joist_datums.get("min_corner")
+            max_corner = joist_datums.get("max_corner")
+            size = joist_datums.get("size")
+            story = joist_datums.get("story")
+            if not all(isinstance(value, list) for value in (center, min_corner, max_corner, size)):
+                continue
+            if story is None:
+                continue
+
+            joist_center_x = float(center[0])
+            for face, direction, joist_end_y, joist_end_world_y in (
+                ("front", 1, float(size[1]), float(max_corner[1])),
+                ("rear", -1, 0.0, float(min_corner[1])),
+            ):
+                girt = self._girt_for_station(face, int(story), joist_center_x)
+                if girt is None:
+                    continue
+                girt_datums = girt.node.metadata.get("framing_datums", {})
+                girt_min = girt_datums.get("min_corner")
+                girt_size = girt_datums.get("size")
+                if not isinstance(girt_min, list) or not isinstance(girt_size, list):
+                    continue
+                specs.append(
+                    JointSpec(
+                        id=f"joist_girt_story{story}_{joist.index}_{face}",
+                        joint_type="joist_girt",
+                        member_a=joist.id,
+                        member_b=girt.id,
+                        params={
+                            "joint_datums": {
+                                "face": face,
+                                "direction": direction,
+                                "joist_end_y": joist_end_y,
+                                "joist_top_z": float(size[2]),
+                                "joist_tail_center_x": float(size[0]) / 2.0,
+                                "girt_socket_center_x": joist_center_x - float(girt_min[0]),
+                                "girt_socket_center_y": joist_end_world_y - float(girt_min[1]),
+                                "girt_top_z": float(girt_size[2]),
+                                "profile_height": 4.0,
                             },
                         },
                     )

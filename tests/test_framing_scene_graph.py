@@ -374,6 +374,51 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertIn("post_girt_front_left_girt_front_story2_1", joined_post.metadata["joinery"]["joint_ids"])
         self.assertIn("post_girt_front_left_girt_left_story2_1", joined_post.metadata["joinery"]["joint_ids"])
 
+    def test_joist_girt_joinery_compiles_for_upper_floor_joists(self):
+        request = self._load_two_story_request()
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        builder = FramingBuilder(request.structure, "joist-girt-joinery-test")
+        model, _ = builder.build(ceiling_heights, floor_heights, compile_joinery=True)
+        specs = builder._declare_joinery_specs()
+        joist_girt_specs = [spec for spec in specs if spec.joint_type == "joist_girt"]
+
+        self.assertEqual(len(joist_girt_specs), 22)
+        front_spec = next(spec for spec in joist_girt_specs if spec.id == "joist_girt_story2_1_front")
+        rear_spec = next(spec for spec in joist_girt_specs if spec.id == "joist_girt_story2_1_rear")
+        self.assertEqual(front_spec.params["joint_datums"]["profile_height"], 4.0)
+        self.assertEqual(front_spec.params["joint_datums"]["joist_end_y"], 240.0)
+        self.assertEqual(front_spec.params["joint_datums"]["girt_socket_center_y"], 0.0)
+        self.assertEqual(rear_spec.params["joint_datums"]["direction"], -1)
+        self.assertEqual(rear_spec.params["joint_datums"]["girt_socket_center_y"], 4.0)
+
+        unjoined_model, _ = FramingBuilder(request.structure, "joist-girt-placement-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        unjoined_components = {
+            component["component_name"]: component for component in unjoined_model.scene_components
+        }
+        self._assert_bounds_almost_equal(
+            unjoined_components["joist_story2_1"]["world_bounds"],
+            {"min": [19.5, -240.0, 106.0], "max": [22.5, 0.0, 114.0], "size": [3.0, 240.0, 8.0]},
+        )
+
+        components = {component["component_name"]: component for component in model.scene_components}
+        self.assertTrue(components["joist_story2_1"]["has_joined_geometry"])
+        self.assertTrue(components["girt_front_story2_1"]["has_joined_geometry"])
+
     def test_girt_splice_joinery_compiles_for_segmented_girts(self):
         request = self._load_two_story_request(dimension=360.0)
         floorplan = request.structure.floorplan

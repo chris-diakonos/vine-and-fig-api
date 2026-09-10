@@ -53,6 +53,9 @@
       "side_clearance": 0.02,
       "vertical_clearance": 0.02
     },
+    "joist_to_girt": {
+      "profile_height": 4.0
+    },
     "post_to_girt": {
       "tenon_thickness": 1.5,
       "tenon_height": 6.0,
