@@ -81,11 +81,46 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertLess(workplane_volume(joined_post.geometry), workplane_volume(unjoined_post.geometry))
         self.assertLess(workplane_volume(joined_sill.geometry), workplane_volume(unjoined_sill.geometry))
 
+    def test_side_sills_follow_left_and_right_wall_lines(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "side-sill-placement-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+
+        components = {component["component_name"]: component for component in model.scene_components}
+        self._assert_bounds_almost_equal(
+            components["sill_left_1"]["world_bounds"],
+            {"min": [-4.0, -240.0, 0.0], "max": [4.0, 0.0, 10.0], "size": [8.0, 240.0, 10.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["sill_right_1"]["world_bounds"],
+            {"min": [236.0, -240.0, 0.0], "max": [244.0, 0.0, 10.0], "size": [8.0, 240.0, 10.0]},
+        )
+
     def _scene_node(self, scene_root, component_name):
         for node in scene_root.iter_nodes():
             if node.metadata.get("component_name") == component_name:
                 return node
         self.fail(f"Missing scene node: {component_name}")
+
+    def _assert_bounds_almost_equal(self, actual, expected, places=5):
+        for key in ("min", "max", "size"):
+            for actual_value, expected_value in zip(actual[key], expected[key]):
+                self.assertAlmostEqual(actual_value, expected_value, places=places)
 
 
 if __name__ == "__main__":
