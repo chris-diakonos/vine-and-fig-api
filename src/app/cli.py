@@ -83,6 +83,7 @@ def generate_command(args: argparse.Namespace) -> int:
         output_dir=output_dir,
         structure_hash=structure_hash,
         component_visibility=component_visibility,
+        flatten_glb=args.flatten_glb,
     )
     glb_path = artifacts["glb_path"]
     bom_path = artifacts["bom_path"]
@@ -135,6 +136,8 @@ def generate_command(args: argparse.Namespace) -> int:
         "structure_hash": structure_hash,
         "commit_sha": commit_sha,
         "mesh_sha256": mesh_sha256,
+        "flatten_glb": artifacts["flatten_glb"],
+        "flatten_subsystems": artifacts["flatten_subsystems"],
         "input": str(input_path),
         "artifacts": {
             "glb": {
@@ -187,6 +190,20 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument("--region", help="S3 region; defaults to S3_REGION_NAME")
     generate.add_argument("--prefix", help="Global object-key prefix; defaults to S3_PREFIX")
     generate.add_argument("--public-base-url", help="Public base URL for artifact links; defaults to S3_PUBLIC_BASE_URL")
+    flatten_group = generate.add_mutually_exclusive_group()
+    flatten_group.add_argument(
+        "--flatten-glb",
+        dest="flatten_glb",
+        action="store_true",
+        default=None,
+        help="Flatten non-framing GLB components while preserving detailed framing meshes for debugging.",
+    )
+    flatten_group.add_argument(
+        "--no-flatten-glb",
+        dest="flatten_glb",
+        action="store_false",
+        help="Disable GLB flattening even when config/building.json enables it.",
+    )
     generate.add_argument(
         "--metadata",
         action="append",

@@ -8,5 +8,18 @@
     "window_width": 24.0,
     "window_height": 36.0,
     "tolerance": 0.01
+  },
+  "export": {
+    "flatten_glb": false,
+    "flatten_subsystems": {
+      "foundation": true,
+      "framing": false,
+      "floors": true,
+      "sheathing": true,
+      "roof": true,
+      "windows": true,
+      "doors": true,
+      "cornice": true
+    }
   }
 }

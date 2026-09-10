@@ -122,6 +122,18 @@ p {
   box-shadow: 0 16px 40px rgba(31, 39, 37, 0.13);
 }
 
+.explode-panel {
+  position: absolute;
+  top: 174px;
+  left: 18px;
+  width: min(300px, calc(100% - 36px));
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 16px 40px rgba(31, 39, 37, 0.13);
+}
+
 .camera-panel-header {
   margin-bottom: 10px;
   font-size: 13px;
@@ -160,6 +172,43 @@ p {
 
 .fit-btn {
   grid-column: span 3;
+}
+
+.explode-panel-header {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 750;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.explode-input,
+.explode-amount {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.explode-controls {
+  display: grid;
+  grid-template-columns: 72px 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.explode-btn {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.explode-status {
+  margin-top: 8px;
+  font-size: 12px;
 }
 
 .layer-panel-header,
@@ -256,6 +305,14 @@ button {
   .camera-panel {
     top: auto;
     bottom: 90px;
+    left: 12px;
+    right: 12px;
+    width: calc(100% - 24px);
+  }
+
+  .explode-panel {
+    top: auto;
+    bottom: 220px;
     left: 12px;
     right: 12px;
     width: calc(100% - 24px);

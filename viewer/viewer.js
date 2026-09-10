@@ -41,6 +41,11 @@ const errorMessage = document.getElementById("error-message");
 const statusMessage = document.getElementById("model-status");
 const layerControls = document.getElementById("layer-controls");
 const showAllButton = document.getElementById("show-all");
+const explodeTargetInput = document.getElementById("explode-target");
+const explodeAmountInput = document.getElementById("explode-amount");
+const explodeApplyButton = document.getElementById("explode-apply");
+const explodeClearButton = document.getElementById("explode-clear");
+const explodeStatus = document.getElementById("explode-status");
 
 const layerState = new Map(LAYERS.map((layer) => [layer.id, true]));
 const layerInputs = new Map();
@@ -242,6 +247,130 @@ function inferLayer(object) {
   return "other";
 }
 
+function componentName(object) {
+  let current = object;
+  while (current) {
+    if (current.name) {
+      return current.name;
+    }
+    current = current.parent;
+  }
+  return "";
+}
+
+function rememberOriginalPositions(root) {
+  root.traverse((object) => {
+    if (object.isMesh) {
+      object.userData.originalPosition = object.position.clone();
+      object.userData.componentName = componentName(object);
+    }
+  });
+}
+
+function resolveExplodeTargets(value) {
+  const rawTargets = value
+    .split(/[\s,]+/)
+    .map((target) => target.trim())
+    .filter(Boolean);
+  const resolved = [];
+
+  for (const target of rawTargets) {
+    const joistMatch = target.match(/^joist_sill_story(\d+)_(\d+)_(front|rear)$/i);
+    if (joistMatch) {
+      resolved.push(`joist_story${joistMatch[1]}_${joistMatch[2]}`, `sill_${joistMatch[3]}`);
+      continue;
+    }
+
+    const postMatch = target.match(/^post_sill_corner_(front|rear)_(left|right)$/i);
+    if (postMatch) {
+      resolved.push(`post_${postMatch[1]}_${postMatch[2]}`, `sill_${postMatch[1]}`, `sill_${postMatch[2]}`);
+      continue;
+    }
+
+    resolved.push(target);
+  }
+
+  return [...new Set(resolved.map((target) => target.toLowerCase()))];
+}
+
+function resetExplode() {
+  if (!modelRoot) {
+    return;
+  }
+  modelRoot.traverse((object) => {
+    if (object.isMesh && object.userData.originalPosition) {
+      object.position.copy(object.userData.originalPosition);
+    }
+  });
+  modelRoot.updateMatrixWorld(true);
+}
+
+function matchingExplodeMeshes(targets) {
+  const matches = [];
+  modelRoot.traverse((object) => {
+    if (!object.isMesh) {
+      return;
+    }
+    const name = `${object.userData.componentName || ""} ${lineageName(object)}`.toLowerCase();
+    if (targets.some((target) => name.includes(target))) {
+      matches.push(object);
+    }
+  });
+  return matches;
+}
+
+function applyExplode(value, amount, updateUrl = true) {
+  if (!modelRoot) {
+    return;
+  }
+  resetExplode();
+
+  const targets = resolveExplodeTargets(value);
+  if (targets.length === 0) {
+    explodeStatus.textContent = "Use joint IDs or component names.";
+    return;
+  }
+
+  const matches = matchingExplodeMeshes(targets);
+  if (matches.length === 0) {
+    explodeStatus.textContent = `No meshes matched: ${targets.join(", ")}`;
+    return;
+  }
+
+  const groupBox = new THREE.Box3();
+  for (const object of matches) {
+    groupBox.expandByObject(object);
+  }
+  const groupCenter = groupBox.getCenter(new THREE.Vector3());
+
+  for (const object of matches) {
+    const objectBox = new THREE.Box3().setFromObject(object);
+    const objectCenter = objectBox.getCenter(new THREE.Vector3());
+    const worldDirection = objectCenter.sub(groupCenter);
+    if (worldDirection.lengthSq() < 0.0001) {
+      worldDirection.set(1, 0, 0);
+    }
+    worldDirection.normalize();
+
+    if (object.parent) {
+      const parentRotation = new THREE.Quaternion();
+      object.parent.getWorldQuaternion(parentRotation);
+      worldDirection.applyQuaternion(parentRotation.invert());
+    }
+
+    object.position.copy(object.userData.originalPosition).add(worldDirection.multiplyScalar(amount));
+  }
+  modelRoot.updateMatrixWorld(true);
+  explodeStatus.textContent = `Exploded ${matches.length} mesh(es): ${targets.join(", ")}`;
+
+  if (updateUrl) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("explode", value);
+    url.searchParams.set("explodeAmount", `${amount}`);
+    window.history.replaceState({}, "", url);
+  }
+}
+
 function applyLayerVisibility() {
   if (!modelRoot) {
     return;
@@ -396,6 +525,20 @@ async function main() {
     fitCameraToVisible(camera, controls, scene);
   });
 
+  explodeApplyButton.addEventListener("click", () => {
+    applyExplode(explodeTargetInput.value, Number(explodeAmountInput.value) || 0);
+  });
+
+  explodeClearButton.addEventListener("click", () => {
+    resetExplode();
+    explodeTargetInput.value = "";
+    explodeStatus.textContent = "Use joint IDs or component names.";
+    const url = new URL(window.location.href);
+    url.searchParams.delete("explode");
+    url.searchParams.delete("explodeAmount");
+    window.history.replaceState({}, "", url);
+  });
+
   showAllButton.addEventListener("click", () => {
     for (const layer of LAYERS) {
       layerState.set(layer.id, true);
@@ -451,7 +594,7 @@ async function main() {
                    "unknown";
     const meshHashValue = manifest.mesh_sha256 || "unknown";
     
-    artifactLabel.textContent = `Artifact ${hash}`;
+    artifactLabel.textContent = `Artifact ${hash}${manifest.flatten_glb ? " (flattened)" : ""}`;
     commitInfo.textContent = commit !== "unknown" ? `Commit: ${commit.substring(0, 8)}` : "";
     structureHash.textContent = `Structure hash: ${hash}`;
     meshHash.textContent = `Mesh hash: ${meshHashValue.substring(0, 16)}...`;
@@ -466,6 +609,7 @@ async function main() {
 
     modelRoot = gltf.scene;
     const counts = new Map(LAYERS.map((layer) => [layer.id, 0]));
+    rememberOriginalPositions(modelRoot);
     modelRoot.traverse((object) => {
       if (object.isMesh) {
         object.castShadow = true;
@@ -478,6 +622,14 @@ async function main() {
     scene.add(modelRoot);
     renderLayerControls(counts);
     fitCameraToObject(camera, controls, modelRoot);
+    const urlParams = new URLSearchParams(window.location.search);
+    const explodeTarget = urlParams.get("explode");
+    if (explodeTarget) {
+      const explodeAmount = Number(urlParams.get("explodeAmount") || explodeAmountInput.value) || 18;
+      explodeTargetInput.value = explodeTarget;
+      explodeAmountInput.value = `${explodeAmount}`;
+      applyExplode(explodeTarget, explodeAmount, false);
+    }
     
     // Render validation results if present
     if (manifest.validation) {

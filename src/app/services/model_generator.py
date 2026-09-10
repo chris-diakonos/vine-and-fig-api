@@ -9,7 +9,8 @@ import json
 from app.models.structure import Structure, ComponentVisibility
 from app.models.responses import ModelResponse
 from app.services.building_builder import BuildingBuilder
-from app.services.export_service import ExportService
+from app.services.config_loader import config_value, load_json_config
+from app.services.export_service import DEFAULT_FLATTEN_LAYERS, ExportService, GlbFlattenOptions
 from app.utils.file_manager import FileManager
 from app.utils.view_projections import get_projection_settings
 from app.utils.bom_data_manager import BOMDataManager
@@ -26,7 +27,8 @@ class ModelGenerator:
         structure: Structure,
         output_dir: Path,
         structure_hash: Optional[str] = None,
-        component_visibility: Optional[ComponentVisibility] = None
+        component_visibility: Optional[ComponentVisibility] = None,
+        flatten_glb: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Generate local GLB and BOM artifacts for headless workflows.
@@ -35,6 +37,7 @@ class ModelGenerator:
         decisions to callers such as the CLI.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
+        flatten_options = ModelGenerator.default_flatten_options(flatten_glb)
         if structure_hash is None:
             structure_hash = calculate_structure_hash(structure.model_dump())
 
@@ -55,7 +58,8 @@ class ModelGenerator:
             ExportService.export_glb(
                 building_model,
                 output_dir / "model.glb",
-                upload_to_storage=False
+                upload_to_storage=False,
+                flatten_options=flatten_options,
             )
         )
         bom_path = output_dir / "bom.json"
@@ -82,6 +86,40 @@ class ModelGenerator:
             "bom_data": serialized_bom,
             "components_data": components_data,
             "validation_data": validation_data,
+            "flatten_glb": flatten_options.enabled,
+            "flatten_subsystems": ModelGenerator.flatten_subsystems(flatten_options),
+        }
+
+    @staticmethod
+    def default_flatten_glb() -> bool:
+        return ModelGenerator.default_flatten_options().enabled
+
+    @staticmethod
+    def default_flatten_options(enabled: Optional[bool] = None) -> GlbFlattenOptions:
+        config = load_json_config("building", "BUILDING_CONFIG_PATH")
+        flatten_enabled = bool(config_value(config, ("export", "flatten_glb"), False)) if enabled is None else enabled
+        configured_subsystems = config_value(config, ("export", "flatten_subsystems"), {})
+        subsystem_defaults = ModelGenerator.default_flatten_subsystems()
+        if isinstance(configured_subsystems, dict):
+            for layer, should_flatten in configured_subsystems.items():
+                subsystem_defaults[layer] = bool(should_flatten)
+        flatten_layers = tuple(layer for layer, should_flatten in subsystem_defaults.items() if should_flatten)
+        return GlbFlattenOptions(
+            enabled=flatten_enabled,
+            flatten_layers=flatten_layers,
+            preserve_layers=(),
+        )
+
+    @staticmethod
+    def default_flatten_subsystems() -> Dict[str, bool]:
+        layers = ["foundation", "framing", *DEFAULT_FLATTEN_LAYERS]
+        return {layer: layer in DEFAULT_FLATTEN_LAYERS for layer in dict.fromkeys(layers)}
+
+    @staticmethod
+    def flatten_subsystems(options: GlbFlattenOptions) -> Dict[str, bool]:
+        return {
+            layer: layer in options.flatten_layers
+            for layer in ModelGenerator.default_flatten_subsystems()
         }
     
     @staticmethod

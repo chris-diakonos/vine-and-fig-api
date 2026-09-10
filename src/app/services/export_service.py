@@ -2,8 +2,9 @@
 Export service for converting CadQuery models to various formats.
 """
 import cadquery as cq
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Dict, Literal, Optional, Tuple
 import logging
 
 # Import CadQuery exporters - note: some exporters may not be available depending on CadQuery version
@@ -17,11 +18,60 @@ from app.utils.file_manager import FileManager
 logger = logging.getLogger(__name__)
 
 
+LAYER_PATTERNS: Dict[str, Tuple[str, ...]] = {
+    "foundation": ("foundation",),
+    "framing": (
+        "sill",
+        "post",
+        "joist",
+        "brace",
+        "bay_stud",
+        "cripple_stud",
+        "stud",
+        "girt",
+        "plate",
+        "false_plate",
+        "rafter",
+    ),
+    "floors": ("floor", "plank"),
+    "sheathing": ("sheathing", "weatherboard"),
+    "roof": ("roof",),
+    "windows": ("window",),
+    "doors": ("door",),
+    "cornice": ("cornice", "crown", "bed_molding", "cavetto"),
+}
+
+DEFAULT_FLATTEN_LAYERS: Tuple[str, ...] = (
+    "foundation",
+    "floors",
+    "sheathing",
+    "roof",
+    "windows",
+    "doors",
+    "cornice",
+)
+
+
+@dataclass(frozen=True)
+class GlbFlattenOptions:
+    enabled: bool = False
+    flatten_layers: Tuple[str, ...] = DEFAULT_FLATTEN_LAYERS
+    preserve_layers: Tuple[str, ...] = ("framing",)
+    preserve_patterns: Tuple[str, ...] = ()
+    preserve_layers_as_groups: bool = True
+
+
 class ExportService:
     """Handles exporting CadQuery models to different file formats."""
     
     @staticmethod
-    def export_gltf(model, output_path: Path, upload_to_storage: bool = True, binary: bool = False) -> str:
+    def export_gltf(
+        model,
+        output_path: Path,
+        upload_to_storage: bool = True,
+        binary: bool = False,
+        flatten_options: Optional[GlbFlattenOptions] = None,
+    ) -> str:
         """
         Export model to glTF format for 3D visualization.
         Note: CadQuery only supports glTF export for Assembly objects.
@@ -46,6 +96,8 @@ class ExportService:
             else:
                 assembly = cq.Assembly()
                 assembly.add(model, name="building", color=cq.Color(0.55, 0.45, 0.33))  # Wood color
+            if flatten_options and flatten_options.enabled:
+                assembly = ExportService.flatten_assembly_for_gltf(assembly, flatten_options)
             
             # Convert from inches to meters for glTF export
             # 1 inch = 0.0254 meters
@@ -209,7 +261,12 @@ class ExportService:
             raise RuntimeError(f"Failed to export to glTF: {str(e)}")
 
     @staticmethod
-    def export_glb(model, output_path: Path, upload_to_storage: bool = True) -> str:
+    def export_glb(
+        model,
+        output_path: Path,
+        upload_to_storage: bool = True,
+        flatten_options: Optional[GlbFlattenOptions] = None,
+    ) -> str:
         """
         Export model to binary GLB format.
 
@@ -221,7 +278,90 @@ class ExportService:
         Returns:
             URL or local path to the exported file
         """
-        return ExportService.export_gltf(model, output_path, upload_to_storage=upload_to_storage, binary=True)
+        return ExportService.export_gltf(
+            model,
+            output_path,
+            upload_to_storage=upload_to_storage,
+            binary=True,
+            flatten_options=flatten_options,
+        )
+
+    @staticmethod
+    def flatten_assembly_for_gltf(
+        assembly: cq.Assembly,
+        options: Optional[GlbFlattenOptions] = None,
+    ) -> cq.Assembly:
+        options = options or GlbFlattenOptions(enabled=True)
+        flattened = cq.Assembly()
+        groups = {}
+
+        for name, obj_data in assembly.traverse():
+            if not hasattr(obj_data, "obj") or obj_data.obj is None:
+                continue
+            component_name = name if name else "component"
+            color = obj_data.color if hasattr(obj_data, "color") else cq.Color(0.55, 0.45, 0.33)
+            layer = ExportService._infer_layer(component_name)
+            if not ExportService._flatten_component(component_name, layer, options):
+                flattened.add(obj_data.obj, name=component_name, color=color)
+                continue
+
+            group_name = layer if options.preserve_layers_as_groups else "flattened"
+            key = (group_name, ExportService._color_key(color))
+            if key not in groups:
+                groups[key] = {"objects": [], "color": color}
+            groups[key]["objects"].append(obj_data.obj)
+
+        for index, ((group_name, _), group) in enumerate(sorted(groups.items()), start=1):
+            compound = ExportService._compound_workplanes(group["objects"])
+            if compound is None:
+                continue
+            flattened.add(compound, name=f"{group_name}_flattened_{index}", color=group["color"])
+
+        return flattened
+
+    @staticmethod
+    def _compound_workplanes(objects) -> Optional[cq.Workplane]:
+        shapes = []
+        for obj in objects:
+            try:
+                value = obj.val() if isinstance(obj, cq.Workplane) else obj
+            except Exception:
+                continue
+            if value is not None:
+                shapes.append(value)
+        if not shapes:
+            return None
+        if len(shapes) == 1:
+            return cq.Workplane("XY").add(shapes[0])
+        return cq.Workplane("XY").add(cq.Compound.makeCompound(shapes))
+
+    @staticmethod
+    def _preserve_component(name: str, layer: str, options: GlbFlattenOptions) -> bool:
+        normalized = name.lower()
+        if layer in options.preserve_layers:
+            return True
+        return any(pattern.lower() in normalized for pattern in options.preserve_patterns)
+
+    @staticmethod
+    def _flatten_component(name: str, layer: str, options: GlbFlattenOptions) -> bool:
+        if ExportService._preserve_component(name, layer, options):
+            return False
+        return layer in options.flatten_layers
+
+    @staticmethod
+    def _infer_layer(name: str) -> str:
+        normalized = name.lower()
+        for layer, patterns in LAYER_PATTERNS.items():
+            if any(pattern in normalized for pattern in patterns):
+                return layer
+        return "other"
+
+    @staticmethod
+    def _color_key(color) -> str:
+        try:
+            return ",".join(f"{value:.4f}" for value in color.toTuple())
+        except Exception:
+            return repr(color)
     
     @staticmethod
     def export_step(model: cq.Workplane, output_path: Path) -> Path:
