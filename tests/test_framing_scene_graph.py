@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from app.models.structure import BuildingRequest, ComponentVisibility  # noqa: E402
+from app.services.joinery.base import workplane_volume  # noqa: E402
 from app.services.building_builder import BuildingBuilder  # noqa: E402
 from app.services.framing_builder import FramingBuilder  # noqa: E402
 
@@ -61,9 +62,30 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self.assertIsNotNone(bom_data)
         self.assertTrue(model.scene_root.metadata["compile_joinery"])
-        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 0)
-        names = {component["component_name"] for component in model.scene_components}
+        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 4)
+        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 28)
+        components = {component["component_name"]: component for component in model.scene_components}
+        names = set(components)
         self.assertIn("sill_front_1", names)
+        self.assertTrue(components["sill_front_1"]["has_joined_geometry"])
+        self.assertTrue(components["sill_left_1"]["has_joined_geometry"])
+        self.assertTrue(components["post_front_left"]["has_joined_geometry"])
+
+        unjoined_builder = FramingBuilder(request.structure, request.structure_hash or "joinery-flag-test")
+        unjoined_model, _ = unjoined_builder.build(ceiling_heights, floor_heights, compile_joinery=False)
+        joined_post = self._scene_node(model.scene_root, "post_front_left")
+        unjoined_post = self._scene_node(unjoined_model.scene_root, "post_front_left")
+        joined_sill = self._scene_node(model.scene_root, "sill_left_1")
+        unjoined_sill = self._scene_node(unjoined_model.scene_root, "sill_left_1")
+
+        self.assertLess(workplane_volume(joined_post.geometry), workplane_volume(unjoined_post.geometry))
+        self.assertLess(workplane_volume(joined_sill.geometry), workplane_volume(unjoined_sill.geometry))
+
+    def _scene_node(self, scene_root, component_name):
+        for node in scene_root.iter_nodes():
+            if node.metadata.get("component_name") == component_name:
+                return node
+        self.fail(f"Missing scene node: {component_name}")
 
 
 if __name__ == "__main__":

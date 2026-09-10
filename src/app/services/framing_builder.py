@@ -4,6 +4,7 @@ Integrates framing.py functionality into the API architecture.
 """
 import cadquery as cq
 import math
+from dataclasses import dataclass
 from typing import Dict, Any, List, Tuple, Optional
 from collections import defaultdict
 
@@ -19,7 +20,18 @@ from app.services.framing_validation import validate_framing_scene
 from app.services.joinery.base import JointSpec
 from app.services.joinery.compiler import compile_joinery as run_joinery_compiler
 from app.services.joinery.framing_handlers import FRAMING_JOINERY_HANDLERS
-from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
+from app.services.scene_graph import Bounds, SceneNode, bounds_for_workplane, collect_component_metadata, project_scene_to_assembly, scene_from_assembly
+
+
+@dataclass(frozen=True)
+class FramingMember:
+    id: str
+    node: SceneNode
+    role: str
+    face: Optional[str]
+    index: Optional[int]
+    local_bounds: Bounds
+    world_bounds: Bounds
 
 
 class FramingBuilder:
@@ -80,6 +92,7 @@ class FramingBuilder:
         # Tracking for stud placement
         self.bay_studs = {}
         self.stud_centerlines = {}
+        self.member_registry: Dict[str, FramingMember] = {}
     
     def _calculate_centerlines(self) -> Dict[str, List[float]]:
         """
@@ -122,7 +135,7 @@ class FramingBuilder:
         self,
         calculated_ceiling_heights: List[float],
         calculated_floor_heights: List[float],
-        compile_joinery: bool = False,
+        compile_joinery: Optional[bool] = None,
     ) -> Tuple[cq.Assembly, Dict[str, Any]]:
         """
         Build complete framing structure.
@@ -137,6 +150,8 @@ class FramingBuilder:
         # Store calculated heights for use in internal methods
         self.calculated_ceiling_heights = calculated_ceiling_heights
         self.calculated_floor_heights = calculated_floor_heights
+        if compile_joinery is None:
+            compile_joinery = bool(load_json_config("framing", "FRAMING_CONFIG_PATH")["defaults"].get("compile_joinery", False))
         
         assembly = cq.Assembly()
         
@@ -201,11 +216,14 @@ class FramingBuilder:
             group_name_for_component=self._group_name_for_component,
             role_for_component=lambda name: name.split("_")[0] if name else "framing_member",
         )
+        self.member_registry = self._build_member_registry(scene_root)
+        scene_root.metadata["framing_member_count"] = len(self.member_registry)
         scene_root.metadata["compile_joinery"] = compile_joinery
         if compile_joinery:
-            specs = self._declare_joinery_specs(scene_root)
+            specs = self._declare_joinery_specs()
             operations = run_joinery_compiler(scene_root, specs, FRAMING_JOINERY_HANDLERS)
             scene_root.metadata["joinery_operation_count"] = len(operations)
+            scene_root.metadata["joinery_joint_count"] = len(specs)
         projected = cq.Assembly()
         project_scene_to_assembly(scene_root, projected)
         projected.scene_root = scene_root
@@ -213,16 +231,90 @@ class FramingBuilder:
         projected.validation_results = validate_framing_scene(scene_root)
         return projected
 
-    def _declare_joinery_specs(self, scene_root) -> List[JointSpec]:
-        """
-        Declare framing joints whose anchors are deterministic in member-local space.
+    def _build_member_registry(self, scene_root: SceneNode) -> Dict[str, FramingMember]:
+        registry: Dict[str, FramingMember] = {}
+        for node in scene_root.iter_nodes():
+            member_id = node.metadata.get("component_name")
+            if not member_id or node.geometry is None:
+                continue
+            local_bounds = bounds_for_workplane(node.geometry)
+            world_bounds = bounds_for_workplane(node.projected_geometry())
+            if local_bounds is None or world_bounds is None:
+                continue
+            registry[member_id] = FramingMember(
+                id=member_id,
+                node=node,
+                role=node.role,
+                face=self._face_for_component(member_id),
+                index=self._index_for_component(member_id),
+                local_bounds=local_bounds,
+                world_bounds=world_bounds,
+            )
+        return registry
 
-        The current framing builder still creates world-space solids before wrapping
-        them in scene nodes, so live building joins remain disabled until member
-        creation records explicit joint anchors.
-        """
+    def _declare_joinery_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        corners = [
+            ("front_left", "sill_front_1", "min", "sill_left_1", "max"),
+            ("front_right", self._sill_id("front", "max"), "max", "sill_right_1", "max"),
+            ("rear_left", "sill_rear_1", "min", "sill_left_1", "min"),
+            ("rear_right", self._sill_id("rear", "max"), "max", "sill_right_1", "min"),
+        ]
+        for corner, cross_sill_id, cross_end, side_sill_id, side_end in corners:
+            post_id = f"post_{corner}"
+            if not cross_sill_id:
+                continue
+            post = self.member_registry.get(post_id)
+            cross_sill = self.member_registry.get(cross_sill_id)
+            side_sill = self.member_registry.get(side_sill_id)
+            if post is None or cross_sill is None or side_sill is None:
+                continue
+            tenon_height = min(cross_sill.world_bounds.max[2], side_sill.world_bounds.max[2]) - post.world_bounds.min[2]
+            if tenon_height <= 0.0:
+                continue
+            specs.append(
+                JointSpec(
+                    id=f"post_sill_corner_{corner}",
+                    joint_type="post_sill_corner",
+                    member_a=post_id,
+                    member_b=side_sill_id,
+                    params={
+                        "cross_sill_id": cross_sill_id,
+                        "cross_sill_end": cross_end,
+                        "side_sill_end": side_end,
+                        "tenon_height": tenon_height,
+                    },
+                )
+            )
+        return specs
 
-        return []
+    def _sill_id(self, face: str, end: str) -> Optional[str]:
+        sills = [
+            member
+            for member in self.member_registry.values()
+            if member.role == "sill" and member.face == face and member.index is not None
+        ]
+        if not sills:
+            return None
+        sills.sort(key=lambda member: member.index or 0)
+        return sills[0].id if end == "min" else sills[-1].id
+
+    @staticmethod
+    def _face_for_component(component_name: str) -> Optional[str]:
+        parts = component_name.split("_")
+        if len(parts) >= 3 and parts[0] == "sill":
+            return parts[1]
+        return None
+
+    @staticmethod
+    def _index_for_component(component_name: str) -> Optional[int]:
+        parts = component_name.split("_")
+        if len(parts) >= 3 and parts[0] == "sill":
+            try:
+                return int(parts[2])
+            except ValueError:
+                return None
+        return None
 
     @staticmethod
     def _group_name_for_component(component_name: str) -> str:
