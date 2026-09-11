@@ -5,6 +5,7 @@ import cadquery as cq
 from typing import Any, Dict, List, Optional
 from app.models.openings import Door
 from app.models.floorplan import Dimensions
+from app.services.building_datums import BuildingDatumContext
 from app.services.config_loader import load_json_config
 from app.services.door_validation import validate_door_scene
 from app.services.scene_graph import SceneNode, Transform, aggregate_local_bounds, collect_component_metadata, project_scene_to_assembly
@@ -22,7 +23,12 @@ class DoorsBuilder:
         return cq.Color(*DoorsBuilder._config()["defaults"]["color"])
     
     @staticmethod
-    def build(doors: List[Door], dimensions: Dimensions, floor_heights: Optional[List[float]] = None) -> Optional[cq.Assembly]:
+    def build(
+        doors: List[Door],
+        dimensions: Dimensions,
+        floor_heights: Optional[List[float]] = None,
+        datum_context: BuildingDatumContext = None,
+    ) -> Optional[cq.Assembly]:
         """
         Build door openings and frames.
         
@@ -36,7 +42,7 @@ class DoorsBuilder:
         if not doors:
             return None
 
-        scene_root = DoorsBuilder._door_scene(doors, dimensions, floor_heights or [])
+        scene_root = DoorsBuilder._door_scene(doors, dimensions, floor_heights or [], datum_context)
         doors_assembly = cq.Assembly()
         project_scene_to_assembly(scene_root, doors_assembly)
         doors_assembly.scene_root = scene_root
@@ -45,9 +51,17 @@ class DoorsBuilder:
         return doors_assembly if doors_assembly.children else None
 
     @staticmethod
-    def _door_scene(doors: List[Door], dimensions: Dimensions, floor_heights: List[float]) -> SceneNode:
+    def _door_scene(
+        doors: List[Door],
+        dimensions: Dimensions,
+        floor_heights: List[float],
+        datum_context: BuildingDatumContext = None,
+    ) -> SceneNode:
         root = SceneNode("building", "building", "building")
-        doors_root = root.add_child(SceneNode("doors", "assembly", "doors"))
+        placement_source = "framing_datums" if datum_context else "legacy_dimensions"
+        doors_root = root.add_child(
+            SceneNode("doors", "assembly", "doors", metadata={"placement_source": placement_source})
+        )
 
         for i, door in enumerate(doors):
             if not (door.wall and door.position is not None):
@@ -64,6 +78,7 @@ class DoorsBuilder:
                 door.thickness,
                 height,
                 floor_heights,
+                datum_context,
             )
             semantic_name = f"{door.wall}_wall/story_{floor}/door_{door.position:g}"
             door_node = doors_root.add_child(
@@ -80,6 +95,7 @@ class DoorsBuilder:
                             "floor": floor,
                         },
                         "coordinate_system": "door-local",
+                        "placement_source": placement_source,
                     },
                 )
             )
@@ -220,6 +236,7 @@ class DoorsBuilder:
         thickness: float,
         door_height: float,
         floor_heights: List[float],
+        datum_context: BuildingDatumContext = None,
     ) -> Transform:
         """
         Position a door on a specific wall.
@@ -242,7 +259,9 @@ class DoorsBuilder:
             sill_z = floor_heights[floor - 1] + defaults["finished_floor_offset"]
         else:
             sill_z = (floor - 1) * defaults["story_height"] + 11.0
-        center_z = sill_z + door_height / 2
+
+        if datum_context and wall in {"front", "rear", "left", "right"}:
+            return datum_context.door_transform(wall, position, width, thickness, sill_z)
 
         if wall == "front":
             x_pos = position
@@ -260,5 +279,5 @@ class DoorsBuilder:
             x_pos = position
             y_pos = thickness / 2
 
-        return Transform.translate(x_pos - width / 2, y_pos - thickness / 2, center_z - door_height / 2)
+        return Transform.translate(x_pos - width / 2, y_pos - thickness / 2, sill_z)
 

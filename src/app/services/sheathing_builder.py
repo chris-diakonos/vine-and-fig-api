@@ -7,6 +7,7 @@ import math
 from typing import Dict, Any, List, Optional
 from app.models.building import Sheathing
 from app.models.floorplan import Dimensions, Floorplan
+from app.services.building_datums import BuildingDatumContext
 from app.services.config_loader import load_json_config
 from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 from app.services.sheathing_validation import validate_sheathing_scene
@@ -116,7 +117,8 @@ class SheathingBuilder:
         calculated_bay_heights: List[float],
         calculated_bay_widths: List[float],
         floorplan: Optional[Floorplan] = None,
-        openings: Optional[List[Dict[str, Any]]] = None
+        openings: Optional[List[Dict[str, Any]]] = None,
+        datum_context: BuildingDatumContext = None,
     ) -> cq.Assembly:
         """
         Build exterior sheathing boards positioned on the outside of studs.
@@ -161,6 +163,7 @@ class SheathingBuilder:
         
         # Stud dimensions (from framing)
         stud_depth = SheathingBuilder._config()["placement"]["stud_depth"]
+        placement_source = "framing_datums" if datum_context else "legacy_dimensions"
         
         # Create assembly to hold individual boards
         sheathing_assembly = cq.Assembly()
@@ -304,15 +307,15 @@ class SheathingBuilder:
 
                     if face == "front":
                         board_x = board_x_position
-                        board_y = 0 + stud_depth
+                        board_y = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else 0 + stud_depth
                     elif face == "rear":
                         board_x = board_x_position
-                        board_y = -dimensions.right - stud_depth
+                        board_y = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else -dimensions.right - stud_depth
                     elif face == "left":
-                        board_x = 0 - (stud_depth / 2)
+                        board_x = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else 0 - (stud_depth / 2)
                         board_y = -board_x_position
                     elif face == "right":
-                        board_x = dimensions.front + (stud_depth / 2)
+                        board_x = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else dimensions.front + (stud_depth / 2)
                         board_y = -board_x_position
                     
                     # Create 2D profile based on sheathing type
@@ -356,7 +359,7 @@ class SheathingBuilder:
                     board_name = f"sheathing_{face}_board{face_quantity}"
                     sheathing_assembly.add(board, name=board_name, color=SheathingBuilder._color())  # Light sheathing
         
-        return SheathingBuilder._with_scene(sheathing_assembly, "sheathing")
+        return SheathingBuilder._with_scene(sheathing_assembly, "sheathing", placement_source)
     
     @staticmethod
     def build_gable_sheathing(
@@ -482,10 +485,10 @@ class SheathingBuilder:
                 board_name = f"gable_sheathing_{face}_board{face_quantity}"
                 gable_assembly.add(board, name=board_name, color=SheathingBuilder._color())
         
-        return SheathingBuilder._with_scene(gable_assembly, "gable_sheathing")
+        return SheathingBuilder._with_scene(gable_assembly, "gable_sheathing", "legacy_dimensions")
 
     @staticmethod
-    def _with_scene(assembly: cq.Assembly, subsystem_name: str) -> cq.Assembly:
+    def _with_scene(assembly: cq.Assembly, subsystem_name: str, placement_source: str) -> cq.Assembly:
         scene_root = scene_from_assembly(
             assembly,
             subsystem_name=subsystem_name,
@@ -495,6 +498,9 @@ class SheathingBuilder:
             role_for_component=lambda _name: "sheathing_board",
         )
         projected = cq.Assembly()
+        subsystem = next((node for node in scene_root.iter_nodes() if node.name == subsystem_name), None)
+        if subsystem is not None:
+            subsystem.metadata["placement_source"] = placement_source
         project_scene_to_assembly(scene_root, projected)
         projected.scene_root = scene_root
         projected.scene_components = collect_component_metadata(scene_root)

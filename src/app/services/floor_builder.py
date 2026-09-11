@@ -5,6 +5,7 @@ import cadquery as cq
 from typing import Any, Dict, List
 from app.models.building import Flooring
 from app.models.floorplan import Dimensions
+from app.services.building_datums import BuildingDatumContext
 from app.services.config_loader import load_json_config
 from app.services.floor_validation import validate_floor_scene
 from app.services.scene_graph import SceneNode, Transform, collect_component_metadata, project_scene_to_assembly
@@ -37,7 +38,8 @@ class FloorBuilder:
         flooring: List[Flooring],
         dimensions: Dimensions,
         stories: int,
-        floor_heights: List[float]
+        floor_heights: List[float],
+        datum_context: BuildingDatumContext = None,
     ) -> cq.Assembly:
         """
         Build floor structures for all stories using individual tongue-and-groove planks.
@@ -52,7 +54,7 @@ class FloorBuilder:
             CadQuery Assembly with individual planks as separate components
         """
         
-        scene_root = FloorBuilder._floor_scene(flooring, dimensions, stories, floor_heights)
+        scene_root = FloorBuilder._floor_scene(flooring, dimensions, stories, floor_heights, datum_context)
         floor_assembly = cq.Assembly()
         project_scene_to_assembly(scene_root, floor_assembly)
         floor_assembly.scene_root = scene_root
@@ -66,6 +68,7 @@ class FloorBuilder:
         dimensions: Dimensions,
         stories: int,
         floor_heights: List[float],
+        datum_context: BuildingDatumContext = None,
     ) -> SceneNode:
         root = SceneNode("building", "building", "building")
         floors_node = root.add_child(SceneNode("floors", "assembly", "floors"))
@@ -73,8 +76,14 @@ class FloorBuilder:
 
         for floor_index in range(stories + 1):
             flooring_config = flooring[floor_index] if floor_index < len(flooring) else default_flooring
-            floor_height = floor_heights[floor_index]
             floor_thickness = flooring_config.flooring_thickness
+            fallback_height = floor_heights[floor_index]
+            floor_surface = (
+                datum_context.floor_surface(floor_index, fallback_height)
+                if datum_context
+                else None
+            )
+            floor_height = floor_surface.top_z if floor_surface else fallback_height
             floor_node = floors_node.add_child(
                 SceneNode(
                     f"floor_{floor_index}",
@@ -83,15 +92,16 @@ class FloorBuilder:
                     local_transform=Transform.translate(0.0, 0.0, floor_height + floor_thickness / 2),
                     metadata={
                         "metrics": {
-                            "floor_length": dimensions.front,
-                            "plank_length": dimensions.left,
+                            "floor_length": floor_surface.length_x if floor_surface else dimensions.front,
+                            "plank_length": floor_surface.length_y if floor_surface else dimensions.left,
                             "floor_thickness": floor_thickness,
                         },
                         "coordinate_system": "cornerstone",
+                        "placement_source": floor_surface.source if floor_surface else "legacy_dimensions",
                     },
                 )
             )
-            FloorBuilder._add_floor_planks(floor_node, flooring_config, dimensions, floor_index)
+            FloorBuilder._add_floor_planks(floor_node, flooring_config, dimensions, floor_index, floor_surface)
         return root
 
     @staticmethod
@@ -100,11 +110,12 @@ class FloorBuilder:
         flooring_config: Flooring,
         dimensions: Dimensions,
         floor_index: int,
+        floor_surface=None,
     ) -> None:
         flooring_width = flooring_config.flooring_width
         flooring_exposure = flooring_config.flooring_exposure
         floor_thickness = flooring_config.flooring_thickness
-        plank_length = dimensions.left
+        plank_length = floor_surface.length_y if floor_surface else dimensions.left
         defaults = FloorBuilder._config()["defaults"]
         plank_gap = defaults["plank_gap"]
         overlap = flooring_width - flooring_exposure
@@ -112,11 +123,16 @@ class FloorBuilder:
         groove_width = overlap / 2
 
         floor_length = dimensions.front
+        if floor_surface:
+            floor_length = floor_surface.length_x
         spacing = flooring_exposure + plank_gap
         num_planks = int(floor_length / spacing) + 2
 
         for i in range(num_planks):
             plank_x = (flooring_width / 2) + (i * spacing)
+            if floor_surface:
+                plank_x += floor_surface.x_min
+            plank_y = floor_surface.y_min + plank_length / 2.0 if floor_surface else -plank_length / 2.0
             plank = FloorBuilder._create_tongue_groove_plank(
                 flooring_width,
                 plank_length,
@@ -130,10 +146,13 @@ class FloorBuilder:
                     f"plank_{i}",
                     "part",
                     "floor_plank",
-                    local_transform=Transform.translate(plank_x, -plank_length / 2, 0.0),
+                    local_transform=Transform.translate(plank_x, plank_y, 0.0),
                     geometry=plank,
                     color=FloorBuilder._color(),
-                    metadata={"component_name": plank_name},
+                    metadata={
+                        "component_name": plank_name,
+                        "placement_source": floor_surface.source if floor_surface else "legacy_dimensions",
+                    },
                 )
             )
     

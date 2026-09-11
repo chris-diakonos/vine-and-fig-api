@@ -6,6 +6,7 @@ import math
 from typing import Dict, Any, List, Optional
 from app.models.openings import Window
 from app.models.floorplan import Dimensions, Floorplan
+from app.services.building_datums import BuildingDatumContext
 from app.services.coordinate_system import window_placement_for_wall
 from app.services.scene_graph import (
     SceneNode,
@@ -962,7 +963,8 @@ class WindowsBuilder:
         floor_heights: List[float],
         calculated_chair_rail_heights: List[float],
         floorplan: Optional[Floorplan] = None,
-        door_openings: Optional[List[Dict[str, Any]]] = None
+        door_openings: Optional[List[Dict[str, Any]]] = None,
+        datum_context: BuildingDatumContext = None,
     ) -> Optional[cq.Assembly]:
         """
         Build window frames at specified locations or at bays, skipping door openings.
@@ -984,7 +986,10 @@ class WindowsBuilder:
         
         windows_assembly = cq.Assembly()
         scene_root = SceneNode("building", "building", "building")
-        windows_root = scene_root.add_child(SceneNode("windows", "assembly", "windows"))
+        placement_source = "framing_datums" if datum_context else "legacy_dimensions"
+        windows_root = scene_root.add_child(
+            SceneNode("windows", "assembly", "windows", metadata={"placement_source": placement_source})
+        )
         
         # Build set of door locations for quick lookup (wall, position, floor)
         door_locations = set()
@@ -1014,22 +1019,25 @@ class WindowsBuilder:
                     continue
 
                 metrics = WindowsBuilder._window_metrics(window)
-                wall_placement = window_placement_for_wall(
+                wall_placement = WindowsBuilder._wall_placement(
                     window.wall,
                     window.position,
                     chair_rail_height_z,
                     metrics["opening_width"],
                     dimensions,
+                    datum_context,
                 )
                 semantic_name = f"{window.wall}_wall/story_{window.floor}/window_{window.position:g}"
                 component_prefix = f"window_{window.wall}_story{story_idx}_pos{window.position}"
+                placement_metadata = wall_placement.as_dict()
+                placement_metadata["source"] = placement_source
                 windows_root.add_child(
                     WindowsBuilder._window_scene(
                         window,
                         semantic_name,
                         component_prefix,
                         wall_placement.legacy_transform,
-                        wall_placement.as_dict(),
+                        placement_metadata,
                     )
                 )
         else:
@@ -1054,22 +1062,25 @@ class WindowsBuilder:
                             # Place one window at each bay in the attic
                             for bay_idx, bay_position in enumerate(bays):
                                 metrics = WindowsBuilder._window_metrics(window)
-                                wall_placement = window_placement_for_wall(
+                                wall_placement = WindowsBuilder._wall_placement(
                                     face,
                                     bay_position,
                                     attic_window_z,
                                     metrics["opening_width"],
                                     dimensions,
+                                    datum_context,
                                 )
                                 semantic_name = f"{face}_wall/attic/window_{bay_position:g}"
                                 component_prefix = f"window_{face}_attic_bay{bay_position}"
+                                placement_metadata = wall_placement.as_dict()
+                                placement_metadata["source"] = placement_source
                                 windows_root.add_child(
                                     WindowsBuilder._window_scene(
                                         window,
                                         semantic_name,
                                         component_prefix,
                                         wall_placement.legacy_transform,
-                                        wall_placement.as_dict(),
+                                        placement_metadata,
                                     )
                                 )
                     break  # Done with windows after attic
@@ -1093,22 +1104,25 @@ class WindowsBuilder:
                             continue  # Skip this bay - it has a door
                         
                         metrics = WindowsBuilder._window_metrics(window)
-                        wall_placement = window_placement_for_wall(
+                        wall_placement = WindowsBuilder._wall_placement(
                             face,
                             bay_position,
                             chair_rail_height_z,
                             metrics["opening_width"],
                             dimensions,
+                            datum_context,
                         )
                         semantic_name = f"{face}_wall/story_{floor_number}/window_{bay_position:g}"
                         component_prefix = f"window_{face}_story{story_idx}_bay{bay_position}"
+                        placement_metadata = wall_placement.as_dict()
+                        placement_metadata["source"] = placement_source
                         windows_root.add_child(
                             WindowsBuilder._window_scene(
                                 window,
                                 semantic_name,
                                 component_prefix,
                                 wall_placement.legacy_transform,
-                                wall_placement.as_dict(),
+                                placement_metadata,
                             )
                         )
 
@@ -1121,3 +1135,16 @@ class WindowsBuilder:
         windows_assembly.validation_results = validate_window_scene(scene_root)
 
         return windows_assembly if windows_assembly.children else None
+
+    @staticmethod
+    def _wall_placement(
+        wall: str,
+        position: float,
+        sill_z: float,
+        opening_width: float,
+        dimensions: Dimensions,
+        datum_context: BuildingDatumContext = None,
+    ):
+        if datum_context:
+            return datum_context.window_placement_for_wall(wall, position, sill_z, opening_width)
+        return window_placement_for_wall(wall, position, sill_z, opening_width, dimensions)

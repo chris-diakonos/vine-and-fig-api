@@ -12,6 +12,7 @@ from app.services.windows_builder import WindowsBuilder
 from app.services.doors_builder import DoorsBuilder
 from app.services.framing_builder import FramingBuilder
 from app.services.cornice_builder import CorniceBuilder
+from app.services.building_datums import BuildingDatumContext
 from app.services.building_layout import BuildingLayout, calculate_ceiling_heights, calculate_floor_heights
 from app.services.config_loader import load_json_config
 
@@ -98,6 +99,7 @@ class BuildingBuilder:
         building_assembly = cq.Assembly()
         scene_components: List[Dict[str, Any]] = []
         validation_results: List[Dict[str, Any]] = []
+        datum_context: Optional[BuildingDatumContext] = None
         
         # Build foundation first
         # Foundation top is at z=0, foundation extends downward
@@ -128,6 +130,11 @@ class BuildingBuilder:
                 )
                 if hasattr(framing_assembly, "scene_components"):
                     scene_components.extend(framing_assembly.scene_components)
+                    datum_context = BuildingDatumContext.from_framing_components(
+                        framing_assembly.scene_components,
+                        dimensions,
+                        calculated_floor_heights,
+                    )
                 if hasattr(framing_assembly, "validation_results"):
                     validation_results.append(framing_assembly.validation_results)
                 
@@ -153,7 +160,8 @@ class BuildingBuilder:
                 structure.flooring,
                 dimensions,
                 stories,
-                calculated_floor_heights
+                calculated_floor_heights,
+                datum_context=datum_context,
             )
             if hasattr(floor_assembly, "scene_components"):
                 scene_components.extend(floor_assembly.scene_components)
@@ -180,7 +188,8 @@ class BuildingBuilder:
                 calculated_bay_heights,
                 calculated_bay_widths,
                 floorplan,
-                openings=openings
+                openings=openings,
+                datum_context=datum_context,
             )
             if hasattr(sheathing_assembly, "scene_components"):
                 scene_components.extend(sheathing_assembly.scene_components)
@@ -259,7 +268,8 @@ class BuildingBuilder:
                 calculated_floor_heights,
                 calculated_chair_rail_heights,
                 floorplan,
-                door_openings=door_openings
+                door_openings=door_openings,
+                datum_context=datum_context,
             )
             if windows_assembly is not None:
                 if hasattr(windows_assembly, "scene_components"):
@@ -274,7 +284,12 @@ class BuildingBuilder:
         
         # Add doors if specified
         if component_visibility.doors and structure.doors:
-            doors_assembly = DoorsBuilder.build(structure.doors, dimensions, calculated_floor_heights)
+            doors_assembly = DoorsBuilder.build(
+                structure.doors,
+                dimensions,
+                calculated_floor_heights,
+                datum_context=datum_context,
+            )
             if doors_assembly is not None:
                 if hasattr(doors_assembly, "scene_components"):
                     scene_components.extend(doors_assembly.scene_components)
@@ -287,7 +302,12 @@ class BuildingBuilder:
                         building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.5, 0.3, 0.2))
         
         # Build cornice at the top of the building
-        cornice_assembly = CorniceBuilder.build(dimensions, dimensions.building_height, structure.roof.roof_type)
+        cornice_assembly = CorniceBuilder.build(
+            dimensions,
+            dimensions.building_height,
+            structure.roof.roof_type,
+            datum_context=datum_context,
+        )
         if cornice_assembly is not None:
             if hasattr(cornice_assembly, "scene_components"):
                 scene_components.extend(cornice_assembly.scene_components)

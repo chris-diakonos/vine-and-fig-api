@@ -6,6 +6,7 @@ import math
 import cadquery as cq
 from typing import Any, Dict, Optional
 from app.models.floorplan import Dimensions
+from app.services.building_datums import BuildingDatumContext
 from app.services.config_loader import load_json_config
 from app.services.cornice_validation import validate_cornice_scene
 from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
@@ -338,7 +339,8 @@ class CorniceBuilder:
     def build(
         dimensions: Dimensions,
         building_height: float,
-        roof_type: str
+        roof_type: str,
+        datum_context: BuildingDatumContext = None,
     ) -> Optional[cq.Assembly]:
         """
         Build Georgian cornice around the perimeter of the building.
@@ -356,6 +358,7 @@ class CorniceBuilder:
         
         # Create the cornice assembly
         cornice = cq.Assembly()
+        placement_source = "framing_datums" if datum_context else "legacy_dimensions"
         
         # Determine which faces get cornice based on roof type
         if roof_type == "side-gable" or roof_type == "side-gable-with-shed":
@@ -401,15 +404,10 @@ class CorniceBuilder:
         # Front/rear faces need it along X (rotate 90° around Z)
         # Left/right faces need it along Y (no rotation needed)
         # Added 10 inches to the front and rear faces to account for the stud depth
-        face_map = {
-            "front": (dimensions.front, 90, dimensions.front / 2, placement_config["front_rear_offset"], 0),
-            "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - placement_config["front_rear_offset"], 0),
-            "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0),
-            "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0)
-        }
+        face_map = CorniceBuilder._face_map(dimensions, placement_config, stud_depth, datum_context)
         
         for face in faces_to_build:
-            length, rotation, trans_x, trans_y, trans_z = face_map[face]
+            length, rotation, trans_x, trans_y, trans_z, cavetto_flush_plane = face_map[face]
             if length > 0:
                 CorniceBuilder._build_face_cornice(
                     cornice,
@@ -426,10 +424,42 @@ class CorniceBuilder:
                     bed_molding_height,
                     rotation,
                     trans_x,
-                    trans_y
+                    trans_y,
+                    cavetto_flush_plane,
                 )
         
-        return CorniceBuilder._with_scene(cornice)
+        return CorniceBuilder._with_scene(cornice, placement_source)
+
+    @staticmethod
+    def _face_map(
+        dimensions: Dimensions,
+        placement_config: Dict[str, float],
+        stud_depth: float,
+        datum_context: BuildingDatumContext = None,
+    ) -> Dict[str, tuple]:
+        if not datum_context:
+            return {
+                "front": (dimensions.front, 90, dimensions.front / 2, placement_config["front_rear_offset"], 0, None),
+                "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - placement_config["front_rear_offset"], 0, None),
+                "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0, None),
+                "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0, None),
+            }
+
+        ceiling_bounds = datum_context.ceiling_joist_bounds
+        x_min = ceiling_bounds["min"][0] if ceiling_bounds else 0.0
+        x_max = ceiling_bounds["max"][0] if ceiling_bounds else dimensions.front
+        y_min = ceiling_bounds["min"][1] if ceiling_bounds else -dimensions.right
+        y_max = ceiling_bounds["max"][1] if ceiling_bounds else 0.0
+        x_length = x_max - x_min
+        y_length = y_max - y_min
+        x_center = (x_min + x_max) / 2.0
+        y_center = (y_min + y_max) / 2.0
+        return {
+            "front": (x_length, 90, x_center, datum_context.ceiling_joist_end_plane("front", stud_depth), 0, datum_context.ceiling_joist_end_plane("front", stud_depth)),
+            "rear": (x_length, 270, x_center, datum_context.ceiling_joist_end_plane("rear", stud_depth), 0, datum_context.ceiling_joist_end_plane("rear", stud_depth)),
+            "left": (y_length, 0, datum_context.ceiling_joist_end_plane("left", stud_depth), y_center, 0, datum_context.ceiling_joist_end_plane("left", stud_depth)),
+            "right": (y_length, 180, datum_context.ceiling_joist_end_plane("right", stud_depth), y_center, 0, datum_context.ceiling_joist_end_plane("right", stud_depth)),
+        }
 
     @staticmethod
     def _build_face_cornice(
@@ -447,7 +477,8 @@ class CorniceBuilder:
         bed_molding_height: float,
         rotation: float,
         trans_x: float,
-        trans_y: float
+        trans_y: float,
+        cavetto_flush_plane: Optional[float] = None,
     ) -> None:
         """
         Build cornice components for a single face and add them to the assembly.
@@ -509,6 +540,8 @@ class CorniceBuilder:
         # Corona - Cavetto (note: original code had rotateAboutCenter(180) which is part of the cavetto positioning)
         cavetto = CorniceBuilder._cavetto_board().extrude(length).translate((8, 0, 0)).rotateAboutCenter((0, 0, 1), 180)
         cavetto = transform_component(cavetto, corona_z_position)
+        if cavetto_flush_plane is not None:
+            cavetto = CorniceBuilder._flush_to_ceiling_joist_plane(cavetto, face, cavetto_flush_plane)
         assembly.add(cavetto, name=f"{face}_cavetto", color=CorniceBuilder._color())
         
         # Corona - Fascia
@@ -539,7 +572,20 @@ class CorniceBuilder:
         assembly.add(bed, name=f"{face}_bed_molding", color=CorniceBuilder._color())
 
     @staticmethod
-    def _with_scene(assembly: cq.Assembly) -> cq.Assembly:
+    def _flush_to_ceiling_joist_plane(component: cq.Workplane, face: str, plane: float) -> cq.Workplane:
+        bbox = component.val().BoundingBox()
+        if face == "front":
+            return component.translate((0.0, plane - bbox.ymin, 0.0))
+        if face == "rear":
+            return component.translate((0.0, plane - bbox.ymax, 0.0))
+        if face == "left":
+            return component.translate((plane - bbox.xmax, 0.0, 0.0))
+        if face == "right":
+            return component.translate((plane - bbox.xmin, 0.0, 0.0))
+        return component
+
+    @staticmethod
+    def _with_scene(assembly: cq.Assembly, placement_source: str = "legacy_dimensions") -> cq.Assembly:
         scene_root = scene_from_assembly(
             assembly,
             subsystem_name="cornice",
@@ -549,6 +595,9 @@ class CorniceBuilder:
             role_for_component=lambda name: name.split("_", 1)[1] if "_" in name else "cornice_part",
         )
         projected = cq.Assembly()
+        cornice_node = next((node for node in scene_root.iter_nodes() if node.name == "cornice"), None)
+        if cornice_node is not None:
+            cornice_node.metadata["placement_source"] = placement_source
         project_scene_to_assembly(scene_root, projected)
         projected.scene_root = scene_root
         projected.scene_components = collect_component_metadata(scene_root)
