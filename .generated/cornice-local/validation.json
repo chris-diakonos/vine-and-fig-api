@@ -1,0 +1,89 @@
+{
+  "status": "passed",
+  "results": [
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [],
+      "results": []
+    },
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [],
+      "results": []
+    },
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [],
+      "results": []
+    },
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [],
+      "results": []
+    },
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [],
+      "results": []
+    },
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [
+        {
+          "code": "GABLE_OVERHANG_RIGHT_SHORT",
+          "severity": "warning",
+          "target": "building/roof",
+          "message": "Right gable overhang short: roof at x=262.75, expected ~495.00 (12\" past post face at x=483)",
+          "expected": {
+            "x_max": 495.0
+          },
+          "measured": {
+            "x_max": 262.75
+          },
+          "tolerance": 2.0
+        }
+      ],
+      "results": [
+        {
+          "code": "GABLE_OVERHANG_RIGHT_SHORT",
+          "severity": "warning",
+          "target": "building/roof",
+          "message": "Right gable overhang short: roof at x=262.75, expected ~495.00 (12\" past post face at x=483)",
+          "expected": {
+            "x_max": 495.0
+          },
+          "measured": {
+            "x_max": 262.75
+          },
+          "tolerance": 2.0
+        }
+      ]
+    },
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [],
+      "results": []
+    },
+    {
+      "status": "passed",
+      "tolerance": 0.01,
+      "errors": [],
+      "warnings": [],
+      "results": []
+    }
+  ]
+}

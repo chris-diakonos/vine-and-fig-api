@@ -146,8 +146,12 @@ class NonFramingDatumContextTest(unittest.TestCase):
             if component["component_name"] and component["component_name"].startswith("joist_story2_")
         )
         cavetto = by_name["front_cavetto"]
+        crown = by_name["front_crown"]
+        fascia = by_name["front_fascia"]
         self.assertEqual(components["building/cornice"]["metadata"]["placement_source"], "framing_datums")
         self.assertAlmostEqual(cavetto["world_bounds"]["min"][1], ceiling_joist_front_plane)
+        self.assertAlmostEqual(crown["world_bounds"]["max"][2], cavetto["world_bounds"]["max"][2], places=5)
+        self.assertLessEqual(abs(fascia["world_bounds"]["max"][1] - cavetto["world_bounds"]["min"][1]), 0.25)
 
 
 if __name__ == "__main__":

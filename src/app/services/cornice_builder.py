@@ -393,11 +393,9 @@ class CorniceBuilder:
         # Bed molding parameters
         bed_molding_height = profile_config["bed_molding_height"]
 
-        # Z positions
-        crown_z_position = building_height # Position at top of building
-        corona_z_position = building_height - placement_config["corona_z_drop"]
-        fascia_z_position = building_height - placement_config["fascia_z_drop"]
-        modillion_z_position = building_height - placement_config["modillion_z_drop"]
+        # The notebook defines the cornice as a related local assembly whose
+        # crown/cavetto top datum is at z=crown_height.
+        cornice_top_z_position = building_height
         
         # Build cornice for each face
         # Cornice is extruded along Y by default (from XZ plane profile)
@@ -415,10 +413,7 @@ class CorniceBuilder:
                     length,
                     crown_width,
                     crown_height,
-                    crown_z_position + trans_z,
-                    corona_z_position + trans_z,
-                    fascia_z_position + trans_z,
-                    modillion_z_position + trans_z,
+                    cornice_top_z_position + trans_z,
                     fascia_height,
                     modillion_spacing,
                     bed_molding_height,
@@ -468,10 +463,7 @@ class CorniceBuilder:
         length: float,
         crown_width: float,
         crown_height: float,
-        crown_z_position: float,
-        corona_z_position: float,
-        fascia_z_position: float,
-        modillion_z_position: float,
+        cornice_top_z_position: float,
         fascia_height: float,
         modillion_spacing: float,
         bed_molding_height: float,
@@ -489,10 +481,7 @@ class CorniceBuilder:
             length: Length of the face
             crown_width: Width of crown molding
             crown_height: Height of crown molding
-            crown_z_position: Z position for crown molding
-            corona_z_position: Z position for corona
-            fascia_z_position: Z position for fascia
-            modillion_z_position: Z position for modillions
+            cornice_top_z_position: Z position for the crown/cavetto top datum
             fascia_height: Height of fascia
             modillion_spacing: Spacing between modillions
             bed_molding_height: Height of bed molding
@@ -500,13 +489,15 @@ class CorniceBuilder:
             trans_x: X translation
             trans_y: Y translation
         """
+        cornice_origin_z = cornice_top_z_position - crown_height
+
         # Helper to apply rotation, flip, centering, and translation to a component
         # Components are built along Y axis (extrusion), need to:
         # 1. Center them by shifting -length/2 in the extrusion direction (Y before rotation)
         # 2. Rotate around Z to align with face
         # 3. Flip 180° around appropriate axis to face outward
         # 4. Translate to face position (preserving Z coordinate)
-        def transform_component(component, z_pos):
+        def transform_component(component):
             """Apply centering, rotation, flip, and translation to face position."""
             # Center the component (shift by -length/2 in Y since extrusion starts at origin)
             component = component.translate((0, length / 2, 0))
@@ -530,59 +521,60 @@ class CorniceBuilder:
                 component = component.rotate((0, 0, 0), (0, 1, 0), 180)
             
             # Translate to face position (preserve Z coordinate from original component)
-            return component.translate((trans_x, trans_y, z_pos))
+            return component.translate((trans_x, trans_y, cornice_origin_z))
         
+        transformed_components = []
+
         # Crown - built along Y axis (extrusion), then transformed
-        crown = CorniceBuilder._crown_molding(crown_width, crown_height).extrude(length).translate((4.25, 0, 0))
-        crown = transform_component(crown, crown_z_position)
-        assembly.add(crown, name=f"{face}_crown", color=CorniceBuilder._color())
+        crown = CorniceBuilder._crown_molding(crown_width, crown_height).extrude(length).translate((4.25, 0, crown_height))
+        transformed_components.append((f"{face}_crown", transform_component(crown)))
         
-        # Corona - Cavetto (note: original code had rotateAboutCenter(180) which is part of the cavetto positioning)
-        cavetto = CorniceBuilder._cavetto_board().extrude(length).translate((8, 0, 0)).rotateAboutCenter((0, 0, 1), 180)
-        cavetto = transform_component(cavetto, corona_z_position)
+        # Corona - Cavetto (note: original notebook had rotateAboutCenter(180) as part of the cavetto positioning)
+        cavetto = CorniceBuilder._cavetto_board().extrude(length).translate((8, 0, crown_height)).rotateAboutCenter((0, 0, 1), 180)
+        cavetto = transform_component(cavetto)
         if cavetto_flush_plane is not None:
-            cavetto = CorniceBuilder._flush_to_ceiling_joist_plane(cavetto, face, cavetto_flush_plane)
-        assembly.add(cavetto, name=f"{face}_cavetto", color=CorniceBuilder._color())
+            alignment = CorniceBuilder._ceiling_joist_alignment(cavetto, face, cavetto_flush_plane)
+        else:
+            alignment = (0.0, 0.0, 0.0)
+        transformed_components.append((f"{face}_cavetto", cavetto))
         
         # Corona - Fascia
         fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, -0.8))
-        fascia = transform_component(fascia, fascia_z_position)
-        assembly.add(fascia, name=f"{face}_fascia", color=CorniceBuilder._color())
+        transformed_components.append((f"{face}_fascia", transform_component(fascia)))
         
         # Modillion backing
-        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((22, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
-        modillion_backing = transform_component(modillion_backing, modillion_z_position)
-        assembly.add(modillion_backing, name=f"{face}_modillion_backing", color=CorniceBuilder._color())
+        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
+        transformed_components.append((f"{face}_modillion_backing", transform_component(modillion_backing)))
         
         # Modillions
         modillion_count = math.floor(length / modillion_spacing)
         for modillion_idx in range(0, modillion_count):
             modillion_x = length - (modillion_idx * modillion_spacing)
-            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((22, -modillion_x + modillion_spacing, -4))
-            modillion = transform_component(modillion, modillion_z_position)
-            assembly.add(modillion, name=f"{face}_modillion_{modillion_idx}", color=CorniceBuilder._color())
+            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25, -modillion_x + modillion_spacing, -4))
+            transformed_components.append((f"{face}_modillion_{modillion_idx}", transform_component(modillion)))
             
-            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((22, -modillion_x + modillion_spacing, -1.5))
-            modillion_band = transform_component(modillion_band, modillion_z_position)
-            assembly.add(modillion_band, name=f"{face}_modillion_band_{modillion_idx}", color=CorniceBuilder._color())
+            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12, -modillion_x + modillion_spacing, -1.5))
+            transformed_components.append((f"{face}_modillion_band_{modillion_idx}", transform_component(modillion_band)))
         
         # Bedmold
         bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18, 0, -bed_molding_height))
-        bed = transform_component(bed, crown_z_position)
-        assembly.add(bed, name=f"{face}_bed_molding", color=CorniceBuilder._color())
+        transformed_components.append((f"{face}_bed_molding", transform_component(bed)))
+
+        for name, component in transformed_components:
+            assembly.add(component.translate(alignment), name=name, color=CorniceBuilder._color())
 
     @staticmethod
-    def _flush_to_ceiling_joist_plane(component: cq.Workplane, face: str, plane: float) -> cq.Workplane:
+    def _ceiling_joist_alignment(component: cq.Workplane, face: str, plane: float) -> tuple:
         bbox = component.val().BoundingBox()
         if face == "front":
-            return component.translate((0.0, plane - bbox.ymin, 0.0))
+            return (0.0, plane - bbox.ymin, 0.0)
         if face == "rear":
-            return component.translate((0.0, plane - bbox.ymax, 0.0))
+            return (0.0, plane - bbox.ymax, 0.0)
         if face == "left":
-            return component.translate((plane - bbox.xmax, 0.0, 0.0))
+            return (plane - bbox.xmax, 0.0, 0.0)
         if face == "right":
-            return component.translate((plane - bbox.xmin, 0.0, 0.0))
-        return component
+            return (plane - bbox.xmin, 0.0, 0.0)
+        return (0.0, 0.0, 0.0)
 
     @staticmethod
     def _with_scene(assembly: cq.Assembly, placement_source: str = "legacy_dimensions") -> cq.Assembly:
