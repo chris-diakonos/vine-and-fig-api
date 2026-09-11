@@ -16,12 +16,13 @@ from app.utils.materials_helper import (
     add_sales_bom_quantities
 )
 from app.services.config_loader import load_json_config
-from app.services.framing_datums import FramingBraceDatum, FramingMemberDatum, FramingPlacementDatums
+from app.services.framing_datums import FramingBraceDatum, FramingMemberDatum, FramingPlacementDatums, FramingTrussDatum
 from app.services.framing_validation import validate_framing_scene
 from app.services.joinery.base import JointSpec, box_at
 from app.services.joinery.brace_to_post_sill import angled_brace_body
 from app.services.joinery.compiler import compile_joinery as run_joinery_compiler
 from app.services.joinery.framing_handlers import FRAMING_JOINERY_HANDLERS
+from app.services.joinery.rafter_truss import RafterTrussParams, rafter_truss_geometry
 from app.services.scene_graph import Bounds, SceneNode, Transform, bounds_for_workplane, collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 
 
@@ -192,6 +193,7 @@ class FramingBuilder:
             include_braces=False,
             include_plates=False,
             include_false_plates=False,
+            include_rafters=False,
         )
         
         # Prepare BOM data
@@ -225,6 +227,7 @@ class FramingBuilder:
             include_braces=True,
             include_plates=True,
             include_false_plates=True,
+            include_rafters=True,
         )
         return self._with_scene(assembly, compile_joinery=compile_joinery)
 
@@ -240,6 +243,7 @@ class FramingBuilder:
         include_braces: bool,
         include_plates: bool,
         include_false_plates: bool,
+        include_rafters: bool,
     ) -> None:
         """Populate legacy world-coordinate framing members."""
         if include_sills_and_posts:
@@ -265,7 +269,8 @@ class FramingBuilder:
 
         if include_false_plates:
             self._add_false_plates(assembly, x_offset, y_offset)
-        self._add_rafters(assembly, x_offset, y_offset)
+        if include_rafters:
+            self._add_rafters(assembly, x_offset, y_offset)
 
         if self.roof and self.roof.roof_type == "side-gable":
             self._add_gable_framing(assembly, x_offset, y_offset)
@@ -354,6 +359,9 @@ class FramingBuilder:
                         "cripple_stud",
                         "stud",
                         "brace",
+                        "truss",
+                        "rafter",
+                        "collar",
                     ],
                 },
             )
@@ -368,6 +376,7 @@ class FramingBuilder:
         cripple_studs_node = framing_node.add_child(SceneNode("cripple_studs", "assembly", "cripple_studs"))
         studs_node = framing_node.add_child(SceneNode("studs", "assembly", "studs"))
         braces_node = framing_node.add_child(SceneNode("braces", "assembly", "braces"))
+        trusses_node = framing_node.add_child(SceneNode("trusses", "assembly", "trusses"))
 
         total_sills = 0
         for face in self.faces:
@@ -426,7 +435,125 @@ class FramingBuilder:
             girt_depth,
         )
         self._add_migrated_braces(braces_node, datums, x_offset, y_offset)
+        self._add_migrated_trusses(
+            trusses_node,
+            datums,
+            x_offset,
+            y_offset,
+            false_plate_width,
+            false_plate_depth,
+            false_plate_end_offset,
+            ceiling_joist_top_z,
+        )
         return root
+
+    def _add_migrated_trusses(
+        self,
+        trusses_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+        false_plate_width: float,
+        false_plate_depth: float,
+        false_plate_end_offset: float,
+        false_plate_bottom_z: float,
+    ) -> None:
+        rafter_width = float(self.framing_defaults.get("rafter_width", 3.0))
+        rafter_depth = float(self.framing_defaults.get("rafter_depth", 6.0))
+        params = RafterTrussParams(
+            rafter_thickness=rafter_width,
+            rafter_depth=rafter_depth,
+            roof_angle_degrees=self.roof_pitch_degrees,
+            bearing_span=self._false_plate_bearing_span(false_plate_width, false_plate_end_offset),
+            collar_height=float(self.framing_defaults.get("collar_height", 6.0)),
+            collar_drop_from_ridge=float(self.framing_defaults.get("collar_drop_from_ridge", 36.0)),
+            seat_depth=float(self.framing_defaults.get("rafter_seat_depth", 0.5)),
+            cut_margin=float(self.framing_defaults.get("rafter_cut_margin", 2.0)),
+            y_overlap=float(self.framing_defaults.get("rafter_half_lap_clearance", 0.02)),
+        )
+        geometry = rafter_truss_geometry(params)
+        front_bearing_y = self.roof_overhang - false_plate_end_offset - false_plate_width / 2.0 + y_offset
+        rear_bearing_y = -self.faces["right"] - self.roof_overhang + false_plate_end_offset + false_plate_width / 2.0 + y_offset
+        false_plate_top_z = false_plate_bottom_z + false_plate_depth
+        stations = self._rafter_stations()
+        for index, station_x in enumerate(stations, start=1):
+            datum = datums.truss(
+                index,
+                station_x + x_offset,
+                rear_bearing_y,
+                front_bearing_y,
+                false_plate_top_z,
+                self.roof_pitch_degrees,
+                geometry.metadata["rafter_rise"],
+            )
+            truss_node = trusses_node.add_child(
+                SceneNode(
+                    datum.component_name,
+                    "assembly",
+                    "truss",
+                    local_transform=datum.local_transform,
+                    metadata=datum.metadata(),
+                )
+            )
+            self._add_truss_member_node(truss_node, datum, "front", geometry.front_rafter, geometry.metadata)
+            self._add_truss_member_node(truss_node, datum, "rear", geometry.rear_rafter, geometry.metadata)
+            self._add_truss_member_node(truss_node, datum, "collar", geometry.collar, geometry.metadata)
+
+        self._add_vertical_member_bom("rafter", len(stations) * 2, geometry.metadata["rafter_length"], rafter_width, rafter_depth)
+        collar_bounds = bounds_for_workplane(geometry.collar)
+        if collar_bounds is not None:
+            self._add_vertical_member_bom(
+                "collar",
+                len(stations),
+                collar_bounds.size[1],
+                rafter_width,
+                params.collar_height,
+            )
+
+    def _false_plate_bearing_span(self, false_plate_width: float, false_plate_end_offset: float) -> float:
+        front_bearing_y = self.roof_overhang - false_plate_end_offset - false_plate_width / 2.0
+        rear_bearing_y = -self.faces["right"] - self.roof_overhang + false_plate_end_offset + false_plate_width / 2.0
+        return front_bearing_y - rear_bearing_y
+
+    def _rafter_stations(self) -> List[float]:
+        quantity = math.ceil(self.faces["front"] / self.rafter_spacing) + 1
+        return [index * self.rafter_spacing for index in range(quantity)]
+
+    def _add_truss_member_node(
+        self,
+        truss_node: SceneNode,
+        datum: FramingTrussDatum,
+        position: str,
+        geometry: cq.Workplane,
+        geometry_metadata: Dict[str, float],
+    ) -> None:
+        if position == "collar":
+            role = "collar"
+            component_name = f"collar_{datum.index}"
+        else:
+            role = "rafter"
+            component_name = f"rafter_{position}_{datum.index}"
+        metadata = {
+            "component_name": component_name,
+            "framing_datums": {
+                **datum.metadata()["framing_datums"],
+                "role": role,
+                "truss_index": datum.index,
+                "truss_id": datum.component_name,
+                "position": position,
+                **geometry_metadata,
+            },
+        }
+        truss_node.add_child(
+            SceneNode(
+                component_name,
+                "component",
+                role,
+                geometry=geometry,
+                blank_geometry=geometry,
+                metadata=metadata,
+            )
+        )
 
     def _add_migrated_joists(
         self,

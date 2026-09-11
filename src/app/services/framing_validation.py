@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from app.services.scene_graph import SceneNode, aggregate_local_bounds
+from app.services.scene_graph import SceneNode, aggregate_local_bounds, bounds_for_workplane
 from app.services.validation import DEFAULT_TOLERANCE_INCHES, ValidationResult, validation_summary
 
 
@@ -37,49 +37,43 @@ def validate_framing_scene(scene: SceneNode, tolerance: float = DEFAULT_TOLERANC
                     )
                 )
         
-        # Validate rafter eave overhang (should match AG panel eave positions)
-        if node.role == "rafter" and "front" in node.name:
-            bounds = aggregate_local_bounds(node)
-            if bounds:
-                # Front rafters should extend to same eave as AG panels: weatherboard + 12"
-                # weatherboard outer Y = 2.674, so eave at 2.674 + 12 = 14.674
-                expected_front_eave_y = 14.674
-                measured_y_max = bounds.max[1]
-                eave_tolerance = 1.0  # Tighter tolerance for eave alignment
-                
-                if abs(measured_y_max - expected_front_eave_y) > eave_tolerance:
-                    results.append(
-                        ValidationResult(
-                            code="RAFTER_FRONT_EAVE_MISMATCH",
-                            severity="warning",
-                            target=node.semantic_path,
-                            message=f"Front rafter eave at y={measured_y_max:.2f}, expected {expected_front_eave_y:.2f} (12\" past WB at y=2.674)",
-                            expected={"eave_y": expected_front_eave_y},
-                            measured={"eave_y": measured_y_max},
-                            tolerance=eave_tolerance,
-                        )
+        if node.role == "rafter":
+            datums = node.metadata.get("framing_datums", {})
+            if "false_plate_top_z" not in datums:
+                continue
+            bounds = bounds_for_workplane(node.projected_geometry())
+            if bounds is None:
+                continue
+            expected_top_z = float(datums["false_plate_top_z"])
+            if abs(bounds.min[2] - expected_top_z) > tolerance:
+                results.append(
+                    ValidationResult(
+                        code="RAFTER_FALSE_PLATE_BEARING_Z_MISMATCH",
+                        severity="warning",
+                        target=node.semantic_path,
+                        message=f"Rafter tail bottom at z={bounds.min[2]:.2f}, expected false-plate top z={expected_top_z:.2f}",
+                        expected={"false_plate_top_z": expected_top_z},
+                        measured={"rafter_bottom_z": bounds.min[2]},
+                        tolerance=tolerance,
                     )
-        
-        if node.role == "rafter" and "rear" in node.name:
-            bounds = aggregate_local_bounds(node)
-            if bounds:
-                # Rear rafters should extend to same eave as AG panels: weatherboard - 12"
-                # weatherboard outer Y = -250.528, so eave at -250.528 - 12 = -262.528
-                expected_rear_eave_y = -262.528
-                measured_y_min = bounds.min[1]
-                eave_tolerance = 1.0  # Tighter tolerance for eave alignment
-                
-                if abs(measured_y_min - expected_rear_eave_y) > eave_tolerance:
-                    results.append(
-                        ValidationResult(
-                            code="RAFTER_REAR_EAVE_MISMATCH",
-                            severity="warning",
-                            target=node.semantic_path,
-                            message=f"Rear rafter eave at y={measured_y_min:.2f}, expected {expected_rear_eave_y:.2f} (12\" past WB at y=-250.528)",
-                            expected={"eave_y": expected_rear_eave_y},
-                            measured={"eave_y": measured_y_min},
-                            tolerance=eave_tolerance,
-                        )
+                )
+
+            position = datums.get("position")
+            bearing_key = "front_bearing_y" if position == "front" else "rear_bearing_y" if position == "rear" else None
+            if bearing_key is None:
+                continue
+            expected_bearing_y = float(datums[bearing_key])
+            if not (bounds.min[1] - tolerance <= expected_bearing_y <= bounds.max[1] + tolerance):
+                results.append(
+                    ValidationResult(
+                        code="RAFTER_FALSE_PLATE_BEARING_Y_MISMATCH",
+                        severity="warning",
+                        target=node.semantic_path,
+                        message=f"Rafter {position} span does not include false-plate bearing y={expected_bearing_y:.2f}",
+                        expected={bearing_key: expected_bearing_y},
+                        measured={"rafter_y_min": bounds.min[1], "rafter_y_max": bounds.max[1]},
+                        tolerance=tolerance,
                     )
+                )
     
     return validation_summary(results, tolerance)

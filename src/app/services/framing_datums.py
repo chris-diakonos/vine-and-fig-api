@@ -116,6 +116,40 @@ class FramingBraceDatum:
 
 
 @dataclass(frozen=True)
+class FramingTrussDatum:
+    """A rafter truss assembly anchored to false-plate bearing lines."""
+
+    component_name: str
+    role: str
+    index: int
+    station_x: float
+    rear_bearing_y: float
+    front_bearing_y: float
+    false_plate_top_z: float
+    bearing_span: float
+    roof_angle_degrees: float
+    ridge_z: float
+    local_transform: Transform
+
+    def metadata(self) -> Dict[str, object]:
+        return {
+            "component_name": self.component_name,
+            "framing_datums": {
+                "coordinate_system": "cornerstone_legacy_y",
+                "role": self.role,
+                "index": self.index,
+                "station_x": self.station_x,
+                "rear_bearing_y": self.rear_bearing_y,
+                "front_bearing_y": self.front_bearing_y,
+                "false_plate_top_z": self.false_plate_top_z,
+                "bearing_span": self.bearing_span,
+                "roof_angle_degrees": self.roof_angle_degrees,
+                "ridge_z": self.ridge_z,
+            },
+        }
+
+
+@dataclass(frozen=True)
 class FramingPlacementDatums:
     """Cornerstone wall lines and framing member cross sections."""
 
@@ -126,6 +160,32 @@ class FramingPlacementDatums:
     post_width: float
     post_depth: float
     post_tenon_depth: float
+
+    def truss(
+        self,
+        index: int,
+        station_x: float,
+        rear_bearing_y: float,
+        front_bearing_y: float,
+        false_plate_top_z: float,
+        roof_angle_degrees: float,
+        ridge_z: float,
+    ) -> FramingTrussDatum:
+        bearing_span = front_bearing_y - rear_bearing_y
+        center_y = (front_bearing_y + rear_bearing_y) / 2.0
+        return FramingTrussDatum(
+            component_name=f"truss_{index}",
+            role="truss",
+            index=index,
+            station_x=station_x,
+            rear_bearing_y=rear_bearing_y,
+            front_bearing_y=front_bearing_y,
+            false_plate_top_z=false_plate_top_z,
+            bearing_span=bearing_span,
+            roof_angle_degrees=roof_angle_degrees,
+            ridge_z=false_plate_top_z + ridge_z,
+            local_transform=Transform.translate(station_x, center_y, false_plate_top_z),
+        )
 
     def sill(self, face: WallFace, segment_index: int, segment_length: float) -> FramingMemberDatum:
         counter = segment_index + 1

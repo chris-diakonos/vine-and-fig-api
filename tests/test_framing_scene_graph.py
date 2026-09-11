@@ -825,6 +825,56 @@ class FramingSceneGraphTest(unittest.TestCase):
             self.assertAlmostEqual(overlap_x, 8.0)
             self.assertAlmostEqual(overlap_y, 8.0)
 
+    def test_rafter_trusses_use_false_plate_scene_datums(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "rafter-truss-scene-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+
+        components = {component["component_name"]: component for component in model.scene_components}
+        framing_node = next(node for node in model.scene_root.iter_nodes() if node.name == "framing")
+        framing_children = {child.name for child in framing_node.children}
+        self.assertIn("truss", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("rafter", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("collar", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("trusses", framing_children)
+
+        front_false_plate = components["false_plate_front_1"]["world_bounds"]
+        rear_false_plate = components["false_plate_rear_1"]["world_bounds"]
+        false_plate_top_z = front_false_plate["max"][2]
+        front_bearing_y = (front_false_plate["min"][1] + front_false_plate["max"][1]) / 2.0
+        rear_bearing_y = (rear_false_plate["min"][1] + rear_false_plate["max"][1]) / 2.0
+
+        front_rafter = components["rafter_front_1"]
+        rear_rafter = components["rafter_rear_1"]
+        collar = components["collar_1"]
+        self.assertTrue(front_rafter["semantic_path"].startswith("building/framing/trusses/truss_1/"))
+        self.assertEqual(front_rafter["metadata"]["framing_datums"]["false_plate_top_z"], false_plate_top_z)
+        self.assertEqual(front_rafter["metadata"]["framing_datums"]["front_bearing_y"], front_bearing_y)
+        self.assertEqual(rear_rafter["metadata"]["framing_datums"]["rear_bearing_y"], rear_bearing_y)
+        self.assertAlmostEqual(front_rafter["world_bounds"]["min"][2], false_plate_top_z)
+        self.assertAlmostEqual(rear_rafter["world_bounds"]["min"][2], false_plate_top_z)
+        self.assertLessEqual(front_rafter["world_bounds"]["min"][1], front_bearing_y)
+        self.assertGreaterEqual(front_rafter["world_bounds"]["max"][1], front_bearing_y)
+        self.assertLessEqual(rear_rafter["world_bounds"]["min"][1], rear_bearing_y)
+        self.assertGreaterEqual(rear_rafter["world_bounds"]["max"][1], rear_bearing_y)
+        self.assertEqual(collar["role"], "collar")
+        self.assertEqual(collar["metadata"]["framing_datums"]["truss_id"], "truss_1")
+
     def _scene_node(self, scene_root, component_name):
         for node in scene_root.iter_nodes():
             if node.metadata.get("component_name") == component_name:
