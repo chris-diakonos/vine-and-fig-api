@@ -710,6 +710,8 @@ class FramingBuilder:
         brace_depth = float(self.framing_defaults.get("brace_depth", 4.0))
         preferred_run = float(self.framing_defaults.get("brace_preferred_run", 64.0))
         end_clearance = float(self.framing_defaults.get("brace_end_clearance", 0.5))
+        front_rear_crossed_studs = int(self.framing_defaults.get("brace_front_rear_crossed_studs", 1))
+        side_crossed_studs = int(self.framing_defaults.get("brace_side_crossed_studs", 2))
         low_rise = float(self.framing_defaults.get("brace_post_tier_low_rise", 56.0))
         high_rise = float(self.framing_defaults.get("brace_post_tier_high_rise", 64.0))
         corner_faces = {
@@ -731,10 +733,11 @@ class FramingBuilder:
                         corner,
                         preferred_run,
                         end_clearance,
+                        front_rear_crossed_studs if face in ("front", "rear") else side_crossed_studs,
                     )
                     lower_z = self._brace_lower_z(face, story)
                     upper_z = lower_z + tier_rise
-                    corner_station = self._face_corner_station(face, corner)
+                    corner_station = self._brace_post_shoulder_station(face, corner)
                     lower_anchor = self._brace_wall_point(face, lower_station, lower_z, brace_depth)
                     upper_anchor = self._brace_wall_point(face, corner_station, upper_z, brace_depth)
                     lower_receiver_role, lower_receiver_id = self._brace_lower_receiver(face, story, lower_station)
@@ -767,19 +770,19 @@ class FramingBuilder:
         corner: str,
         preferred_run: float,
         end_clearance: float,
+        crossed_stud_target: int,
     ) -> Tuple[float, List[str]]:
-        corner_station = self._face_corner_station(face, corner)
-        direction = 1.0 if corner_station == 0.0 else -1.0
+        corner_station = self._brace_post_shoulder_station(face, corner)
+        direction = 1.0 if corner_station < self.faces[face] / 2.0 else -1.0
         stations = [
             station
             for station in self.migrated_stud_stations.get((face, story), [])
             if station.role in ("stud", "bay_stud")
         ]
-        candidates = [
-            station for station in stations if abs(station.station - corner_station) >= preferred_run
-        ]
-        if candidates:
-            terminal = min(candidates, key=lambda station: abs(station.station - corner_station))
+        stations.sort(key=lambda station: abs(station.station - corner_station))
+        terminal_index = max(crossed_stud_target, 0)
+        if len(stations) > terminal_index:
+            terminal = stations[terminal_index]
             lower_station = terminal.station - direction * (terminal.width / 2.0 + end_clearance)
         else:
             lower_station = corner_station + direction * preferred_run
@@ -807,6 +810,13 @@ class FramingBuilder:
         if face in ("front", "rear"):
             return 0.0 if corner.endswith("left") else self.faces[face]
         return 0.0 if corner.startswith("front") else self.faces[face]
+
+    def _brace_post_shoulder_station(self, face: str, corner: str) -> float:
+        if face in ("front", "rear"):
+            if corner.endswith("left"):
+                return -self.framing_defaults.get("sill_width", 8.0) / 2.0 + self.framing_defaults.get("post_width", 6.0)
+            return self.faces[face] + self.framing_defaults.get("sill_width", 8.0) / 2.0 - self.framing_defaults.get("post_width", 6.0)
+        return self._face_corner_station(face, corner)
 
     def _brace_wall_point(self, face: str, station: float, z: float, brace_depth: float) -> Tuple[float, float, float]:
         if face == "front":

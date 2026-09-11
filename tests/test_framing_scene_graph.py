@@ -465,10 +465,12 @@ class FramingSceneGraphTest(unittest.TestCase):
         left_datums = left_high.metadata["framing_datums"]
         self.assertEqual(front_datums["post_mortise_tier"], "low")
         self.assertEqual(left_datums["post_mortise_tier"], "high")
+        self.assertEqual(front_datums["upper_anchor"][0], 2.0)
         self.assertEqual(front_datums["upper_anchor"][2], 66.0)
-        self.assertEqual(left_datums["upper_anchor"][2], 74.0)
-        self.assertAlmostEqual(front_datums["lower_anchor"][0], 71.875)
-        self.assertTrue(front_datums["crossed_studs"])
+        self.assertEqual(left_datums["upper_anchor"][2], 82.0)
+        self.assertAlmostEqual(front_datums["lower_anchor"][0], 49.25)
+        self.assertEqual(len(front_datums["crossed_studs"]), 1)
+        self.assertEqual(len(left_datums["crossed_studs"]), 2)
 
     def test_girt_splice_joinery_compiles_for_segmented_girts(self):
         request = self._load_two_story_request(dimension=360.0)

@@ -24,8 +24,10 @@
     "brace_depth": 4.0,
     "brace_preferred_run": 64.0,
     "brace_end_clearance": 0.5,
+    "brace_front_rear_crossed_studs": 1,
+    "brace_side_crossed_studs": 2,
     "brace_post_tier_low_rise": 56.0,
-    "brace_post_tier_high_rise": 64.0,
+    "brace_post_tier_high_rise": 72.0,
     "compile_joinery": true,
     "color": [0.55, 0.45, 0.33, 1.0]
   },
