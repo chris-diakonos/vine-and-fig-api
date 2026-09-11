@@ -190,6 +190,8 @@ class FramingBuilder:
             include_girts=False,
             include_studs=False,
             include_braces=False,
+            include_plates=False,
+            include_false_plates=False,
         )
         
         # Prepare BOM data
@@ -221,6 +223,8 @@ class FramingBuilder:
             include_girts=True,
             include_studs=True,
             include_braces=True,
+            include_plates=True,
+            include_false_plates=True,
         )
         return self._with_scene(assembly, compile_joinery=compile_joinery)
 
@@ -234,6 +238,8 @@ class FramingBuilder:
         include_girts: bool,
         include_studs: bool,
         include_braces: bool,
+        include_plates: bool,
+        include_false_plates: bool,
     ) -> None:
         """Populate legacy world-coordinate framing members."""
         if include_sills_and_posts:
@@ -254,10 +260,11 @@ class FramingBuilder:
             if include_girts and story not in (1, self.floorplan.stories + 1):
                 self._add_girts(assembly, story, x_offset, y_offset)
 
-            if story == self.floorplan.stories:
+            if include_plates and story == self.floorplan.stories:
                 self._add_plates(assembly, story, x_offset, y_offset)
 
-        self._add_false_plates(assembly, x_offset, y_offset)
+        if include_false_plates:
+            self._add_false_plates(assembly, x_offset, y_offset)
         self._add_rafters(assembly, x_offset, y_offset)
 
         if self.roof and self.roof.roof_type == "side-gable":
@@ -301,6 +308,11 @@ class FramingBuilder:
         post_width = float(self.framing_defaults.get("post_width", 6.0))
         post_depth = float(self.framing_defaults.get("post_depth", 4.0))
         post_tenon_depth = float(self.framing_defaults.get("post_tenon_depth", 2.0))
+        plate_width = float(self.framing_defaults.get("plate_width", 4.0))
+        plate_depth = float(self.framing_defaults.get("plate_depth", 6.0))
+        false_plate_width = float(self.framing_defaults.get("false_plate_width", 10.0))
+        false_plate_depth = float(self.framing_defaults.get("false_plate_depth", 2.0))
+        false_plate_end_offset = float(self.framing_defaults.get("false_plate_end_offset", 2.0))
         girt_width = float(self.framing_defaults.get("girt_width", 4.0))
         girt_depth = float(self.framing_defaults.get("girt_depth", 6.0))
         bay_stud_width = float(self.framing_defaults.get("bay_stud_width", 5.0))
@@ -335,6 +347,8 @@ class FramingBuilder:
                         "sill",
                         "post",
                         "joist",
+                        "plate",
+                        "false_plate",
                         "girt",
                         "bay_stud",
                         "cripple_stud",
@@ -347,6 +361,8 @@ class FramingBuilder:
         sills_node = framing_node.add_child(SceneNode("sills", "assembly", "sills"))
         posts_node = framing_node.add_child(SceneNode("posts", "assembly", "posts"))
         joists_node = framing_node.add_child(SceneNode("joists", "assembly", "joists"))
+        plates_node = framing_node.add_child(SceneNode("plates", "assembly", "plates"))
+        false_plates_node = framing_node.add_child(SceneNode("false_plates", "assembly", "false_plates"))
         girts_node = framing_node.add_child(SceneNode("girts", "assembly", "girts"))
         bay_studs_node = framing_node.add_child(SceneNode("bay_studs", "assembly", "bay_studs"))
         cripple_studs_node = framing_node.add_child(SceneNode("cripple_studs", "assembly", "cripple_studs"))
@@ -367,7 +383,31 @@ class FramingBuilder:
 
         self._add_sill_bom(total_sills, sill_width, sill_height)
         self._add_post_bom(4, post_width, post_depth, post_height)
-        self._add_migrated_joists(joists_node, datums, x_offset, y_offset)
+        ceiling_joist_top_z = self.calculated_floor_heights[stories]
+        ceiling_joist_height = self.joist_heights[stories] if stories < len(self.joist_heights) else self.joist_heights[-1]
+        ceiling_joist_bottom_z = ceiling_joist_top_z - ceiling_joist_height
+        top_plate_notch_depth = self._top_plate_notch_depth()
+        self._add_migrated_joists(joists_node, datums, x_offset, y_offset, top_plate_notch_depth)
+        self._add_migrated_plates(
+            plates_node,
+            datums,
+            x_offset,
+            y_offset,
+            plate_width,
+            plate_depth,
+            ceiling_joist_bottom_z,
+            top_plate_notch_depth,
+        )
+        self._add_migrated_false_plates(
+            false_plates_node,
+            datums,
+            x_offset,
+            y_offset,
+            false_plate_width,
+            false_plate_depth,
+            false_plate_end_offset,
+            ceiling_joist_top_z,
+        )
         self._add_migrated_girts(girts_node, datums, x_offset, y_offset, girt_width, girt_depth)
         self._add_migrated_studs(
             bay_studs_node,
@@ -394,6 +434,7 @@ class FramingBuilder:
         datums: FramingPlacementDatums,
         x_offset: float,
         y_offset: float,
+        top_plate_notch_depth: float = 0.0,
     ) -> None:
         joist_width = float(self.framing_defaults.get("joist_width", 3.0))
         girt_width = float(self.framing_defaults.get("girt_width", 4.0))
@@ -403,18 +444,25 @@ class FramingBuilder:
             joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
             floor_height = self.calculated_floor_heights[story - 1]
             joist_top_z = floor_height
-            if story == len(self.joist_heights):
+            if story == self.floorplan.stories + 1:
                 joist_length = self.faces["right"] + (self.roof_overhang * 2.0)
                 y_min = -self.faces["right"] - self.roof_overhang
+                metadata_extra = {
+                    "joist_kind": "ceiling",
+                    "top_plate_notch_depth": top_plate_notch_depth,
+                    "supports_false_plate": True,
+                }
             elif story == 1:
                 joist_length = self.faces["right"] - datums.sill_width
                 y_min = -self.faces["right"] + datums.sill_width / 2.0
+                metadata_extra = {"joist_kind": "floor"}
             else:
                 front_girt_inner_y = datums.sill_width / 2.0 - girt_width
                 rear_girt_inner_y = -self.faces["right"] - datums.sill_width / 2.0 + girt_width
                 joist_length = front_girt_inner_y - rear_girt_inner_y
                 y_min = rear_girt_inner_y
                 joist_top_z = floor_height - joist_girt_profile_height
+                metadata_extra = {"joist_kind": "floor"}
 
             for index, center_x in enumerate(joist_centerlines, start=1):
                 datum = datums.joist(
@@ -426,9 +474,73 @@ class FramingBuilder:
                     joist_width,
                     joist_height,
                     joist_top_z,
+                    metadata_extra=metadata_extra,
                 )
                 self._add_migrated_member(joists_node, self._offset_datum(datum, x_offset, y_offset))
             self._add_joist_bom(len(joist_centerlines), joist_length, joist_width, joist_height)
+
+    def _add_migrated_plates(
+        self,
+        plates_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+        plate_width: float,
+        plate_depth: float,
+        ceiling_joist_bottom_z: float,
+        top_plate_notch_depth: float,
+    ) -> None:
+        bom_lengths: Dict[float, int] = defaultdict(int)
+        story = self.floorplan.stories
+        for face in self.faces:
+            quantity, plate_length = self._member_quantity_and_length(self.faces[face])
+            for segment_index in range(quantity):
+                datum = datums.plate(
+                    face,
+                    story,
+                    segment_index,
+                    plate_length,
+                    ceiling_joist_bottom_z,
+                    top_plate_notch_depth,
+                    plate_width,
+                    plate_depth,
+                )
+                self._add_migrated_member(plates_node, self._offset_datum(datum, x_offset, y_offset))
+                member_length = datum.size[0] if datum.axis == "x" else datum.size[1]
+                bom_lengths[member_length] += 1
+        for member_length, quantity in bom_lengths.items():
+            self._add_vertical_member_bom("plate", quantity, member_length, plate_width, plate_depth)
+
+    def _add_migrated_false_plates(
+        self,
+        false_plates_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+        false_plate_width: float,
+        false_plate_depth: float,
+        false_plate_end_offset: float,
+        ceiling_joist_top_z: float,
+    ) -> None:
+        bom_lengths: Dict[float, int] = defaultdict(int)
+        for face in ("front", "rear"):
+            quantity, false_plate_length = self._member_quantity_and_length(self.faces[face])
+            for segment_index in range(quantity):
+                datum = datums.false_plate(
+                    face,
+                    segment_index,
+                    false_plate_length,
+                    ceiling_joist_top_z,
+                    self.roof_overhang,
+                    false_plate_end_offset,
+                    false_plate_width,
+                    false_plate_depth,
+                )
+                self._add_migrated_member(false_plates_node, self._offset_datum(datum, x_offset, y_offset))
+                member_length = datum.size[0] if datum.axis == "x" else datum.size[1]
+                bom_lengths[member_length] += 1
+        for member_length, quantity in bom_lengths.items():
+            self._add_vertical_member_bom("false_plate", quantity, member_length, false_plate_width, false_plate_depth)
 
     def _add_migrated_girts(
         self,
@@ -478,6 +590,11 @@ class FramingBuilder:
     def _joist_girt_profile_height() -> float:
         joinery = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {})
         return float(joinery.get("joist_to_girt", {}).get("profile_height", 4.0))
+
+    @staticmethod
+    def _top_plate_notch_depth() -> float:
+        joinery = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {})
+        return float(joinery.get("bearing_notch", {}).get("notch_depth", 2.0))
 
     def _add_migrated_studs(
         self,
@@ -1546,8 +1663,10 @@ class FramingBuilder:
     @staticmethod
     def _face_for_component(component_name: str) -> Optional[str]:
         parts = component_name.split("_")
-        if len(parts) >= 3 and parts[0] in ("sill", "girt"):
+        if len(parts) >= 3 and parts[0] in ("sill", "girt", "plate"):
             return parts[1]
+        if len(parts) >= 4 and parts[0] == "false" and parts[1] == "plate":
+            return parts[2]
         if len(parts) >= 4 and parts[0] == "bay" and parts[1] == "stud":
             return parts[2]
         if len(parts) >= 4 and parts[0] == "cripple" and parts[1] == "stud":
@@ -1572,6 +1691,16 @@ class FramingBuilder:
             except ValueError:
                 return None
         if len(parts) >= 4 and parts[0] == "girt":
+            try:
+                return int(parts[3])
+            except ValueError:
+                return None
+        if len(parts) >= 4 and parts[0] == "plate":
+            try:
+                return int(parts[3])
+            except ValueError:
+                return None
+        if len(parts) >= 4 and parts[0] == "false" and parts[1] == "plate":
             try:
                 return int(parts[3])
             except ValueError:

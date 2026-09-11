@@ -302,6 +302,63 @@ class FramingSceneGraphTest(unittest.TestCase):
                     os.environ["FRAMING_CONFIG_PATH"] = previous_path
                 load_json_config.cache_clear()
 
+    def test_top_plate_false_plate_and_ceiling_joist_use_scene_datums(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        model, _ = FramingBuilder(request.structure, "plate-scene-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+
+        components = {component["component_name"]: component for component in model.scene_components}
+        framing_node = next(node for node in model.scene_root.iter_nodes() if node.name == "framing")
+        framing_children = {child.name for child in framing_node.children}
+
+        self.assertIn("plate", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("false_plate", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("plates", framing_children)
+        self.assertIn("false_plates", framing_children)
+        self.assertNotIn("falses", framing_children)
+
+        self._assert_bounds_almost_equal(
+            components["joist_story2_1"]["world_bounds"],
+            {"min": [19.5, -252.0, 106.0], "max": [22.5, 12.0, 114.0], "size": [3.0, 264.0, 8.0]},
+        )
+        ceiling_datums = components["joist_story2_1"]["metadata"]["framing_datums"]
+        self.assertEqual(ceiling_datums["joist_kind"], "ceiling")
+        self.assertEqual(ceiling_datums["top_plate_notch_depth"], 2.0)
+        self.assertTrue(ceiling_datums["supports_false_plate"])
+
+        self._assert_bounds_almost_equal(
+            components["plate_front_story1_1"]["world_bounds"],
+            {"min": [0.0, 0.0, 102.0], "max": [240.0, 4.0, 108.0], "size": [240.0, 4.0, 6.0]},
+        )
+        self.assertEqual(components["plate_front_story1_1"]["role"], "plate")
+        self.assertEqual(components["plate_front_story1_1"]["metadata"]["framing_datums"]["top_plate_notch_depth"], 2.0)
+
+        self._assert_bounds_almost_equal(
+            components["false_plate_front_1"]["world_bounds"],
+            {"min": [0.0, 0.0, 114.0], "max": [240.0, 10.0, 116.0], "size": [240.0, 10.0, 2.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["false_plate_rear_1"]["world_bounds"],
+            {"min": [0.0, -250.0, 114.0], "max": [240.0, -240.0, 116.0], "size": [240.0, 10.0, 2.0]},
+        )
+        self.assertEqual(components["false_plate_front_1"]["role"], "false_plate")
+        self.assertEqual(components["false_plate_front_1"]["metadata"]["framing_datums"]["false_plate_end_offset"], 2.0)
+
     def test_cornerstone_girts_use_drop_girt_story_datums(self):
         request = self._load_two_story_request()
         floorplan = request.structure.floorplan

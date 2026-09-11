@@ -174,6 +174,7 @@ class FramingPlacementDatums:
         joist_width: float,
         joist_height: float,
         floor_height: float,
+        metadata_extra: Optional[Dict[str, object]] = None,
     ) -> FramingMemberDatum:
         return FramingMemberDatum(
             component_name=f"joist_story{story}_{index}",
@@ -183,6 +184,102 @@ class FramingPlacementDatums:
             axis="y",
             size=(joist_width, joist_length, joist_height),
             min_corner=(center_x - joist_width / 2.0, y_min, floor_height - joist_height),
+            metadata_extra=metadata_extra or {},
+        )
+
+    def plate(
+        self,
+        face: WallFace,
+        story: int,
+        segment_index: int,
+        segment_length: float,
+        ceiling_joist_bottom_z: float,
+        joist_notch_depth: float,
+        plate_width: float,
+        plate_depth: float,
+    ) -> FramingMemberDatum:
+        counter = segment_index + 1
+        run_min = segment_index * segment_length
+        run_max = (segment_index + 1) * segment_length
+        plate_top_z = ceiling_joist_bottom_z + joist_notch_depth
+        min_z = plate_top_z - plate_depth
+
+        if face == "front":
+            size = (segment_length, plate_width, plate_depth)
+            min_corner = (run_min, self.sill_width / 2.0 - plate_width, min_z)
+            axis: AxisName = "x"
+        elif face == "rear":
+            size = (segment_length, plate_width, plate_depth)
+            min_corner = (run_min, -self.depth - self.sill_width / 2.0, min_z)
+            axis = "x"
+        elif face == "left":
+            size = (plate_width, segment_length, plate_depth)
+            min_corner = (-self.sill_width / 2.0, -run_max, min_z)
+            axis = "y"
+        else:
+            size = (plate_width, segment_length, plate_depth)
+            min_corner = (self.width + self.sill_width / 2.0 - plate_width, -run_max, min_z)
+            axis = "y"
+
+        return FramingMemberDatum(
+            component_name=f"plate_{face}_story{story}_{counter}",
+            role="plate",
+            face=face,
+            index=counter,
+            story=story,
+            axis=axis,
+            size=size,
+            min_corner=min_corner,
+            metadata_extra={
+                "ceiling_joist_bottom_z": ceiling_joist_bottom_z,
+                "top_plate_notch_depth": joist_notch_depth,
+            },
+        )
+
+    def false_plate(
+        self,
+        face: WallFace,
+        segment_index: int,
+        segment_length: float,
+        ceiling_joist_top_z: float,
+        roof_overhang: float,
+        false_plate_end_offset: float,
+        false_plate_width: float,
+        false_plate_depth: float,
+    ) -> FramingMemberDatum:
+        counter = segment_index + 1
+        run_min = segment_index * segment_length
+        if face == "front":
+            size = (segment_length, false_plate_width, false_plate_depth)
+            min_corner = (
+                run_min,
+                roof_overhang - false_plate_end_offset - false_plate_width,
+                ceiling_joist_top_z,
+            )
+            axis: AxisName = "x"
+        elif face == "rear":
+            size = (segment_length, false_plate_width, false_plate_depth)
+            min_corner = (
+                run_min,
+                -self.depth - roof_overhang + false_plate_end_offset,
+                ceiling_joist_top_z,
+            )
+            axis = "x"
+        else:
+            raise ValueError(f"False plates are only defined on front/rear faces: {face}")
+
+        return FramingMemberDatum(
+            component_name=f"false_plate_{face}_{counter}",
+            role="false_plate",
+            face=face,
+            index=counter,
+            axis=axis,
+            size=size,
+            min_corner=min_corner,
+            metadata_extra={
+                "ceiling_joist_top_z": ceiling_joist_top_z,
+                "false_plate_end_offset": false_plate_end_offset,
+            },
         )
 
     def girt(
