@@ -103,6 +103,47 @@ def post_sill_corner_handler(
         yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
 
 
+def post_plate_handler(
+    spec: JointSpec,
+    members: Dict[str, SceneNode],
+) -> Iterable[GeometryOperation]:
+    post = members[spec.member_a]
+    plate = members[spec.member_b]
+    post_datums = post.metadata.get("framing_datums", {})
+    plate_datums = plate.metadata.get("framing_datums", {})
+    post_min = post_datums.get("min_corner")
+    plate_min = plate_datums.get("min_corner")
+    joint_datums = spec.params.get("joint_datums", {})
+    if not isinstance(post_min, list) or not isinstance(plate_min, list):
+        return []
+
+    tenon_origin = joint_datums.get("tenon_origin_world")
+    tenon_size = joint_datums.get("tenon_size")
+    mortise_origin = joint_datums.get("mortise_origin_world")
+    mortise_size = joint_datums.get("mortise_size")
+    if not all(isinstance(value, list) for value in (tenon_origin, tenon_size, mortise_origin, mortise_size)):
+        return []
+
+    post_tenon = box_at(
+        (float(tenon_size[0]), float(tenon_size[1]), float(tenon_size[2])),
+        (
+            float(tenon_origin[0]) - float(post_min[0]),
+            float(tenon_origin[1]) - float(post_min[1]),
+            float(tenon_origin[2]) - float(post_min[2]),
+        ),
+    )
+    plate_mortise = box_at(
+        (float(mortise_size[0]), float(mortise_size[1]), float(mortise_size[2])),
+        (
+            float(mortise_origin[0]) - float(plate_min[0]),
+            float(mortise_origin[1]) - float(plate_min[1]),
+            float(mortise_origin[2]) - float(plate_min[2]),
+        ),
+    )
+    yield GeometryOperation(spec.member_a, "fuse", post_tenon, spec.id)
+    yield GeometryOperation(spec.member_b, "cut", plate_mortise, spec.id)
+
+
 def joist_sill_handler(
     spec: JointSpec,
     members: Dict[str, SceneNode],
@@ -320,6 +361,7 @@ def _transform_shape_between_nodes(shape, source: SceneNode, target: SceneNode):
 FRAMING_JOINERY_HANDLERS = {
     "brace_post_receiver": brace_post_receiver_handler,
     "plate_splice": plate_splice_handler,
+    "post_plate": post_plate_handler,
     "joist_sill": joist_sill_handler,
     "joist_girt": joist_girt_handler,
     "post_girt": post_girt_handler,

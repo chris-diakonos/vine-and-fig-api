@@ -77,8 +77,8 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self.assertIsNotNone(bom_data)
         self.assertTrue(model.scene_root.metadata["compile_joinery"])
-        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 77)
-        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 190)
+        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 85)
+        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 206)
         components = {component["component_name"]: component for component in model.scene_components}
         names = set(components)
         self.assertIn("sill_front_1", names)
@@ -86,14 +86,17 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertTrue(components["sill_left_1"]["has_joined_geometry"])
         self.assertTrue(components["joist_story1_1"]["has_joined_geometry"])
         self.assertTrue(components["post_front_left"]["has_joined_geometry"])
+        self.assertTrue(components["plate_front_story1_1"]["has_joined_geometry"])
         specs = builder._declare_joinery_specs()
-        self.assertEqual(len(specs), 77)
+        self.assertEqual(len(specs), 85)
         post_sill_specs = [spec for spec in specs if spec.joint_type == "post_sill_corner"]
         joist_sill_specs = [spec for spec in specs if spec.joint_type == "joist_sill"]
         brace_specs = [spec for spec in specs if spec.joint_type == "brace_post_receiver"]
+        post_plate_specs = [spec for spec in specs if spec.joint_type == "post_plate"]
         self.assertEqual(len(post_sill_specs), 4)
         self.assertEqual(len(joist_sill_specs), 22)
         self.assertEqual(len(brace_specs), 8)
+        self.assertEqual(len(post_plate_specs), 8)
         for spec in post_sill_specs:
             self.assertIn("joint_datums", spec.params)
             self.assertEqual(spec.params["joint_datums"]["tenon_height"], 2.0)
@@ -240,7 +243,7 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertIn("joist_story1_12", legacy_names)
         self.assertNotIn("joist_story1_12", joist_names)
         self.assertNotIn("joist_story2_12", joist_names)
-        self.assertEqual(len(joist_names), 22)
+        self.assertEqual(len(joist_names), 26)
         self._assert_bounds_almost_equal(
             components["joist_story1_1"]["world_bounds"],
             {"min": [19.5, -236.0, 0.0], "max": [22.5, -4.0, 10.0], "size": [3.0, 232.0, 10.0]},
@@ -342,8 +345,20 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertTrue(ceiling_datums["supports_false_plate"])
 
         self._assert_bounds_almost_equal(
+            components["joist_story2_corner_left_outer"]["world_bounds"],
+            {"min": [-4.0, -252.0, 106.0], "max": [-1.0, 12.0, 114.0], "size": [3.0, 264.0, 8.0]},
+        )
+        self._assert_bounds_almost_equal(
+            components["joist_story2_corner_left_inner"]["world_bounds"],
+            {"min": [-1.0, -252.0, 106.0], "max": [2.0, 12.0, 114.0], "size": [3.0, 264.0, 8.0]},
+        )
+        self.assertTrue(
+            components["joist_story2_corner_left_outer"]["metadata"]["framing_datums"]["corner_joist"]
+        )
+
+        self._assert_bounds_almost_equal(
             components["plate_front_story1_1"]["world_bounds"],
-            {"min": [0.0, 0.0, 102.0], "max": [240.0, 4.0, 108.0], "size": [240.0, 4.0, 6.0]},
+            {"min": [-4.0, 0.0, 102.0], "max": [244.0, 4.0, 108.0], "size": [248.0, 4.0, 6.0]},
         )
         self.assertEqual(components["plate_front_story1_1"]["role"], "plate")
         self.assertEqual(components["plate_front_story1_1"]["metadata"]["framing_datums"]["top_plate_notch_depth"], 2.0)

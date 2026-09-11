@@ -477,7 +477,38 @@ class FramingBuilder:
                     metadata_extra=metadata_extra,
                 )
                 self._add_migrated_member(joists_node, self._offset_datum(datum, x_offset, y_offset))
-            self._add_joist_bom(len(joist_centerlines), joist_length, joist_width, joist_height)
+            joist_quantity = len(joist_centerlines)
+            if story == self.floorplan.stories + 1:
+                for suffix, center_x in self._ceiling_corner_joist_centerlines(joist_width):
+                    datum = datums.joist(
+                        story,
+                        0,
+                        center_x,
+                        y_min,
+                        joist_length,
+                        joist_width,
+                        joist_height,
+                        joist_top_z,
+                        metadata_extra={**metadata_extra, "corner_joist": True, "corner_joist_position": suffix},
+                        component_name=f"joist_story{story}_corner_{suffix}",
+                    )
+                    self._add_migrated_member(joists_node, self._offset_datum(datum, x_offset, y_offset))
+                    joist_quantity += 1
+            self._add_joist_bom(joist_quantity, joist_length, joist_width, joist_height)
+
+    def _ceiling_corner_joist_centerlines(self, joist_width: float) -> List[Tuple[str, float]]:
+        post_width = float(self.framing_defaults.get("post_width", 6.0))
+        sill_width = float(self.framing_defaults.get("sill_width", 8.0))
+        left_post_min = -sill_width / 2.0
+        left_post_max = left_post_min + post_width
+        right_post_max = self.faces["front"] + sill_width / 2.0
+        right_post_min = right_post_max - post_width
+        return [
+            ("left_outer", left_post_min + joist_width / 2.0),
+            ("left_inner", left_post_max - joist_width / 2.0),
+            ("right_inner", right_post_min + joist_width / 2.0),
+            ("right_outer", right_post_max - joist_width / 2.0),
+        ]
 
     def _add_migrated_plates(
         self,
@@ -1228,11 +1259,112 @@ class FramingBuilder:
             )
         specs.extend(self._declare_joist_sill_specs())
         specs.extend(self._declare_joist_girt_specs())
+        specs.extend(self._declare_post_plate_specs())
         specs.extend(self._declare_post_girt_specs())
         specs.extend(self._declare_girt_splice_specs())
         specs.extend(self._declare_stud_stub_tenon_specs())
         specs.extend(self._declare_brace_post_receiver_specs())
         return specs
+
+    def _declare_post_plate_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        story = self.floorplan.stories
+        corners = [
+            ("front_left", ("front", "min"), ("left", "max")),
+            ("front_right", ("front", "max"), ("right", "max")),
+            ("rear_left", ("rear", "min"), ("left", "min")),
+            ("rear_right", ("rear", "max"), ("right", "min")),
+        ]
+        for corner, primary_plate, perpendicular_plate in corners:
+            post = self.member_registry.get(f"post_{corner}")
+            if post is None:
+                continue
+            for face, end in (primary_plate, perpendicular_plate):
+                plate_id = self._plate_id(face, story, end)
+                if plate_id is None:
+                    continue
+                plate = self.member_registry.get(plate_id)
+                if plate is None:
+                    continue
+                joint_datums = self._post_plate_joint_datums(post, plate)
+                if joint_datums is None:
+                    continue
+                specs.append(
+                    JointSpec(
+                        id=f"post_plate_{corner}_{plate.id}",
+                        joint_type="post_plate",
+                        member_a=post.id,
+                        member_b=plate.id,
+                        params={"joint_datums": joint_datums},
+                    )
+                )
+        return specs
+
+    def _post_plate_joint_datums(self, post: FramingMember, plate: FramingMember) -> Optional[Dict[str, object]]:
+        post_tenon = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {}).get("post_tenon", {})
+        tenon_width = float(post_tenon.get("width", 3.0))
+        tenon_depth = float(post_tenon.get("depth", 2.0))
+        tenon_length = float(post_tenon.get("length", 2.0))
+        mortise_clearance = float(post_tenon.get("mortise_clearance", 0.02))
+        mortise_extra_depth = float(post_tenon.get("mortise_extra_depth", 0.25))
+        axis = self._member_datum_value(plate, "axis")
+        if axis not in ("x", "y"):
+            return None
+
+        overlap_x = (
+            max(post.world_bounds.min[0], plate.world_bounds.min[0]),
+            min(post.world_bounds.max[0], plate.world_bounds.max[0]),
+        )
+        overlap_y = (
+            max(post.world_bounds.min[1], plate.world_bounds.min[1]),
+            min(post.world_bounds.max[1], plate.world_bounds.max[1]),
+        )
+        if overlap_x[1] <= overlap_x[0] or overlap_y[1] <= overlap_y[0]:
+            return None
+
+        if axis == "x":
+            tenon_size_x = min(tenon_depth, overlap_x[1] - overlap_x[0])
+            tenon_size_y = min(tenon_width, overlap_y[1] - overlap_y[0])
+        else:
+            tenon_size_x = min(tenon_width, overlap_x[1] - overlap_x[0])
+            tenon_size_y = min(tenon_depth, overlap_y[1] - overlap_y[0])
+        tenon_center_x = (overlap_x[0] + overlap_x[1]) / 2.0
+        tenon_center_y = (overlap_y[0] + overlap_y[1]) / 2.0
+        tenon_origin = (
+            tenon_center_x - tenon_size_x / 2.0,
+            tenon_center_y - tenon_size_y / 2.0,
+            post.world_bounds.max[2],
+        )
+        post_overlap_depth = max(0.0, post.world_bounds.max[2] - plate.world_bounds.min[2])
+        mortise_size = (
+            tenon_size_x + mortise_clearance,
+            tenon_size_y + mortise_clearance,
+            post_overlap_depth + tenon_length + mortise_extra_depth,
+        )
+        mortise_origin = (
+            tenon_origin[0] - mortise_clearance / 2.0,
+            tenon_origin[1] - mortise_clearance / 2.0,
+            plate.world_bounds.min[2],
+        )
+        return {
+            "axis": axis,
+            "tenon_origin_world": list(tenon_origin),
+            "tenon_size": [tenon_size_x, tenon_size_y, tenon_length],
+            "mortise_origin_world": list(mortise_origin),
+            "mortise_size": list(mortise_size),
+            "post_overlap_depth": post_overlap_depth,
+        }
+
+    def _plate_id(self, face: str, story: int, end: str) -> Optional[str]:
+        plates = [
+            member
+            for member in self.member_registry.values()
+            if member.role == "plate" and member.face == face and self._member_datum_value(member, "story") == story
+        ]
+        if not plates:
+            return None
+        plates.sort(key=lambda member: member.index or 0)
+        return plates[0].id if end == "min" else plates[-1].id
 
     def _declare_post_girt_specs(self) -> List[JointSpec]:
         specs: List[JointSpec] = []
@@ -1500,7 +1632,7 @@ class FramingBuilder:
             for member in self.member_registry.values()
             if (
                 member.role == "joist"
-                and self._member_datum_value(member, "story") not in (None, 1, len(self.joist_heights))
+                and self._member_datum_value(member, "story") not in (None, 1, self.floorplan.stories + 1)
             )
         ]
         joists.sort(key=lambda member: (self._member_datum_value(member, "story"), member.index or 0))

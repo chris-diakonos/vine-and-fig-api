@@ -175,9 +175,10 @@ class FramingPlacementDatums:
         joist_height: float,
         floor_height: float,
         metadata_extra: Optional[Dict[str, object]] = None,
+        component_name: Optional[str] = None,
     ) -> FramingMemberDatum:
         return FramingMemberDatum(
-            component_name=f"joist_story{story}_{index}",
+            component_name=component_name or f"joist_story{story}_{index}",
             role="joist",
             index=index,
             story=story,
@@ -201,23 +202,28 @@ class FramingPlacementDatums:
         counter = segment_index + 1
         run_min = segment_index * segment_length
         run_max = (segment_index + 1) * segment_length
+        if segment_index == 0:
+            run_min -= self.sill_width / 2.0
+        if run_max >= self._wall_length(face):
+            run_max += self.sill_width / 2.0
+        run_length = run_max - run_min
         plate_top_z = ceiling_joist_bottom_z + joist_notch_depth
         min_z = plate_top_z - plate_depth
 
         if face == "front":
-            size = (segment_length, plate_width, plate_depth)
+            size = (run_length, plate_width, plate_depth)
             min_corner = (run_min, self.sill_width / 2.0 - plate_width, min_z)
             axis: AxisName = "x"
         elif face == "rear":
-            size = (segment_length, plate_width, plate_depth)
+            size = (run_length, plate_width, plate_depth)
             min_corner = (run_min, -self.depth - self.sill_width / 2.0, min_z)
             axis = "x"
         elif face == "left":
-            size = (plate_width, segment_length, plate_depth)
+            size = (plate_width, run_length, plate_depth)
             min_corner = (-self.sill_width / 2.0, -run_max, min_z)
             axis = "y"
         else:
-            size = (plate_width, segment_length, plate_depth)
+            size = (plate_width, run_length, plate_depth)
             min_corner = (self.width + self.sill_width / 2.0 - plate_width, -run_max, min_z)
             axis = "y"
 
