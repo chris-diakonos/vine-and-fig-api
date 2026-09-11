@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Dict, Literal, Optional, Tuple
+
+from app.services.scene_graph import Rotation, Transform
 
 
 WallFace = Literal["front", "rear", "left", "right"]
@@ -62,6 +65,53 @@ class FramingMemberDatum:
         return {
             "component_name": self.component_name,
             "framing_datums": framing_datums,
+        }
+
+
+@dataclass(frozen=True)
+class FramingBraceDatum:
+    """A diagonal brace expressed as a local X-axis member plus transform."""
+
+    component_name: str
+    role: str
+    size: Point3
+    local_transform: Transform
+    face: WallFace
+    story: int
+    corner: CornerName
+    hand: str
+    lower_anchor: Point3
+    upper_anchor: Point3
+    angle_degrees: float
+    length: float
+    post_mortise_tier: str
+    lower_receiver_role: str
+    lower_receiver_id: str
+    post_id: str
+    crossed_studs: Tuple[str, ...] = ()
+
+    def metadata(self) -> Dict[str, object]:
+        return {
+            "component_name": self.component_name,
+            "framing_datums": {
+                "coordinate_system": "cornerstone_legacy_y",
+                "role": self.role,
+                "face": self.face,
+                "story": self.story,
+                "corner": self.corner,
+                "hand": self.hand,
+                "axis": "diagonal",
+                "size": list(self.size),
+                "lower_anchor": list(self.lower_anchor),
+                "upper_anchor": list(self.upper_anchor),
+                "angle_degrees": self.angle_degrees,
+                "length": self.length,
+                "post_mortise_tier": self.post_mortise_tier,
+                "lower_receiver_role": self.lower_receiver_role,
+                "lower_receiver_id": self.lower_receiver_id,
+                "post_id": self.post_id,
+                "crossed_studs": list(self.crossed_studs),
+            },
         }
 
 
@@ -314,6 +364,56 @@ class FramingPlacementDatums:
             size=size,
             min_corner=min_corner,
             metadata_extra=metadata_extra,
+        )
+
+    def brace(
+        self,
+        face: WallFace,
+        story: int,
+        corner: CornerName,
+        hand: str,
+        lower_anchor: Point3,
+        upper_anchor: Point3,
+        brace_width: float,
+        brace_depth: float,
+        post_mortise_tier: str,
+        lower_receiver_role: str,
+        lower_receiver_id: str,
+        post_id: str,
+        crossed_studs: Tuple[str, ...] = (),
+    ) -> FramingBraceDatum:
+        dx = upper_anchor[0] - lower_anchor[0]
+        dy = upper_anchor[1] - lower_anchor[1]
+        dz = upper_anchor[2] - lower_anchor[2]
+        horizontal_run = math.hypot(dx, dy)
+        length = math.sqrt(dx * dx + dy * dy + dz * dz)
+        pitch = math.degrees(math.atan2(dz, horizontal_run))
+        yaw = math.degrees(math.atan2(dy, dx))
+        local_transform = Transform(
+            translation=lower_anchor,
+            rotations=(
+                Rotation((0.0, 1.0, 0.0), -pitch),
+                Rotation((0.0, 0.0, 1.0), yaw),
+            ),
+        )
+        return FramingBraceDatum(
+            component_name=f"brace_{corner}_{face}_story{story}_{post_mortise_tier}",
+            role="brace",
+            face=face,
+            story=story,
+            corner=corner,
+            hand=hand,
+            size=(length, brace_depth, brace_width),
+            local_transform=local_transform,
+            lower_anchor=lower_anchor,
+            upper_anchor=upper_anchor,
+            angle_degrees=pitch,
+            length=length,
+            post_mortise_tier=post_mortise_tier,
+            lower_receiver_role=lower_receiver_role,
+            lower_receiver_id=lower_receiver_id,
+            post_id=post_id,
+            crossed_studs=crossed_studs,
         )
 
     def _wall_length(self, face: WallFace) -> float:

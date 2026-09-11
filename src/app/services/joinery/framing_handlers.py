@@ -4,6 +4,10 @@ from __future__ import annotations
 from typing import Dict, Iterable
 
 from app.services.joinery.base import GeometryOperation, JointSpec, box_at
+from app.services.joinery.brace_to_post_sill import (
+    brace_to_post_sill_local_operations,
+    default_brace_to_post_sill_params,
+)
 from app.services.joinery.joist_to_sill import (
     default_joist_to_girt_params,
     default_joist_to_sill_params,
@@ -261,7 +265,55 @@ def _stud_mortise_shape(
     return box_at(size, origin)
 
 
+def brace_post_receiver_handler(
+    spec: JointSpec,
+    members: Dict[str, SceneNode],
+) -> Iterable[GeometryOperation]:
+    brace = members[spec.member_a]
+    post = members[spec.params["post_id"]]
+    lower_receiver = members[spec.member_b]
+    brace_bounds = bounds_for_workplane(brace.geometry)
+    if brace_bounds is None:
+        return []
+
+    params = default_brace_to_post_sill_params()
+    local_operations = brace_to_post_sill_local_operations(
+        brace_id=spec.member_a,
+        post_id=post.metadata["component_name"],
+        lower_receiver_id=spec.member_b,
+        brace_length=brace_bounds.size[0],
+        brace_width=brace_bounds.size[2],
+        params=params,
+    )
+    for op in local_operations["brace"]:
+        yield GeometryOperation(op.member_id, op.operation, op.shape, spec.id)
+    for op in local_operations["post"]:
+        yield GeometryOperation(
+            op.member_id,
+            op.operation,
+            _transform_shape_between_nodes(op.shape, brace, post),
+            spec.id,
+        )
+    for op in local_operations["lower_receiver"]:
+        yield GeometryOperation(
+            op.member_id,
+            op.operation,
+            _transform_shape_between_nodes(op.shape, brace, lower_receiver),
+            spec.id,
+        )
+
+
+def _transform_shape_between_nodes(shape, source: SceneNode, target: SceneNode):
+    result = shape
+    for transform in source.transform_chain_to_root():
+        result = transform.apply_to_workplane(result)
+    for transform in reversed(target.transform_chain_to_root()):
+        result = transform.inverse().apply_to_workplane(result)
+    return result
+
+
 FRAMING_JOINERY_HANDLERS = {
+    "brace_post_receiver": brace_post_receiver_handler,
     "plate_splice": plate_splice_handler,
     "joist_sill": joist_sill_handler,
     "joist_girt": joist_girt_handler,

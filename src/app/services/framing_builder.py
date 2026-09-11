@@ -16,7 +16,7 @@ from app.utils.materials_helper import (
     add_sales_bom_quantities
 )
 from app.services.config_loader import load_json_config
-from app.services.framing_datums import FramingMemberDatum, FramingPlacementDatums
+from app.services.framing_datums import FramingBraceDatum, FramingMemberDatum, FramingPlacementDatums
 from app.services.framing_validation import validate_framing_scene
 from app.services.joinery.base import JointSpec, box_at
 from app.services.joinery.compiler import compile_joinery as run_joinery_compiler
@@ -101,6 +101,7 @@ class FramingBuilder:
         # Tracking for stud placement
         self.bay_studs = {}
         self.stud_centerlines = {}
+        self.migrated_stud_stations: Dict[Tuple[str, int], List[StudStation]] = {}
         self.member_registry: Dict[str, FramingMember] = {}
     
     def _calculate_centerlines(self) -> Dict[str, List[float]]:
@@ -187,6 +188,7 @@ class FramingBuilder:
             include_joists=False,
             include_girts=False,
             include_studs=False,
+            include_braces=False,
         )
         
         # Prepare BOM data
@@ -217,6 +219,7 @@ class FramingBuilder:
             include_joists=True,
             include_girts=True,
             include_studs=True,
+            include_braces=True,
         )
         return self._with_scene(assembly, compile_joinery=compile_joinery)
 
@@ -229,6 +232,7 @@ class FramingBuilder:
         include_joists: bool,
         include_girts: bool,
         include_studs: bool,
+        include_braces: bool,
     ) -> None:
         """Populate legacy world-coordinate framing members."""
         if include_sills_and_posts:
@@ -240,7 +244,8 @@ class FramingBuilder:
                 self._add_joists(assembly, story, -y_offset, x_offset)
 
             if story in range(1, self.floorplan.stories + 1):
-                self._add_braces(assembly, story, x_offset, y_offset)
+                if include_braces:
+                    self._add_braces(assembly, story, x_offset, y_offset)
                 if include_studs:
                     self._add_bays(assembly, story, x_offset, y_offset)
                     self._add_studs(assembly, story, x_offset, y_offset)
@@ -333,6 +338,7 @@ class FramingBuilder:
                         "bay_stud",
                         "cripple_stud",
                         "stud",
+                        "brace",
                     ],
                 },
             )
@@ -344,6 +350,7 @@ class FramingBuilder:
         bay_studs_node = framing_node.add_child(SceneNode("bay_studs", "assembly", "bay_studs"))
         cripple_studs_node = framing_node.add_child(SceneNode("cripple_studs", "assembly", "cripple_studs"))
         studs_node = framing_node.add_child(SceneNode("studs", "assembly", "studs"))
+        braces_node = framing_node.add_child(SceneNode("braces", "assembly", "braces"))
 
         total_sills = 0
         for face in self.faces:
@@ -377,6 +384,7 @@ class FramingBuilder:
             stud_tenon_depth,
             girt_depth,
         )
+        self._add_migrated_braces(braces_node, datums, x_offset, y_offset)
         return root
 
     def _add_migrated_joists(
@@ -557,6 +565,7 @@ class FramingBuilder:
         )
         for (member_type, length, width, depth), quantity in bom_counts.items():
             self._add_vertical_member_bom(member_type, quantity, length, width, depth)
+        self.migrated_stud_stations = station_records
 
     def _add_migrated_regular_studs(
         self,
@@ -601,6 +610,9 @@ class FramingBuilder:
                             stud_depth,
                         )
                         self._add_migrated_member(studs_node, self._offset_datum(datum, x_offset, y_offset))
+                        station_records[(face, story)].append(
+                            StudStation(station, stud_width, "stud", datum.component_name)
+                        )
                         bom_counts[("stud", stud_length, stud_width, stud_depth)] += 1
 
     def _stud_story_verticals(self, story: int, face: str, girt_depth: float) -> Tuple[float, float]:
@@ -686,6 +698,194 @@ class FramingBuilder:
         if wall_length % (2.0 * self.stud_spacing) >= 22.0:
             return math.ceil(wall_length / (2.0 * self.stud_spacing))
         return math.floor(wall_length / (2.0 * self.stud_spacing))
+
+    def _add_migrated_braces(
+        self,
+        braces_node: SceneNode,
+        datums: FramingPlacementDatums,
+        x_offset: float,
+        y_offset: float,
+    ) -> None:
+        brace_width = float(self.framing_defaults.get("brace_width", 6.0))
+        brace_depth = float(self.framing_defaults.get("brace_depth", 4.0))
+        preferred_run = float(self.framing_defaults.get("brace_preferred_run", 64.0))
+        end_clearance = float(self.framing_defaults.get("brace_end_clearance", 0.5))
+        low_rise = float(self.framing_defaults.get("brace_post_tier_low_rise", 56.0))
+        high_rise = float(self.framing_defaults.get("brace_post_tier_high_rise", 64.0))
+        corner_faces = {
+            "front_left": ("front", "left"),
+            "front_right": ("front", "right"),
+            "rear_left": ("rear", "left"),
+            "rear_right": ("rear", "right"),
+        }
+        total_quantity = 0
+        bom_lengths: Dict[float, int] = defaultdict(int)
+        for story in range(1, self.floorplan.stories + 1):
+            for corner, faces in corner_faces.items():
+                for face_index, face in enumerate(faces):
+                    tier = "low" if face_index == 0 else "high"
+                    tier_rise = low_rise if tier == "low" else high_rise
+                    lower_station, crossed_studs = self._brace_lower_station(
+                        face,
+                        story,
+                        corner,
+                        preferred_run,
+                        end_clearance,
+                    )
+                    lower_z = self._brace_lower_z(face, story)
+                    upper_z = lower_z + tier_rise
+                    corner_station = self._face_corner_station(face, corner)
+                    lower_anchor = self._brace_wall_point(face, lower_station, lower_z, brace_depth)
+                    upper_anchor = self._brace_wall_point(face, corner_station, upper_z, brace_depth)
+                    lower_receiver_role, lower_receiver_id = self._brace_lower_receiver(face, story, lower_station)
+                    datum = datums.brace(
+                        face=face,
+                        story=story,
+                        corner=corner,
+                        hand="primary" if face_index == 0 else "perpendicular",
+                        lower_anchor=lower_anchor,
+                        upper_anchor=upper_anchor,
+                        brace_width=brace_width,
+                        brace_depth=brace_depth,
+                        post_mortise_tier=tier,
+                        lower_receiver_role=lower_receiver_role,
+                        lower_receiver_id=lower_receiver_id,
+                        post_id=f"post_{corner}",
+                        crossed_studs=tuple(crossed_studs),
+                    )
+                    datum = self._offset_brace_datum(datum, x_offset, y_offset)
+                    self._add_migrated_brace(braces_node, datum)
+                    total_quantity += 1
+                    bom_lengths[round(datum.length, 5)] += 1
+        for brace_length, quantity in bom_lengths.items():
+            self._add_vertical_member_bom("brace", quantity, brace_length, brace_width, brace_depth)
+
+    def _brace_lower_station(
+        self,
+        face: str,
+        story: int,
+        corner: str,
+        preferred_run: float,
+        end_clearance: float,
+    ) -> Tuple[float, List[str]]:
+        corner_station = self._face_corner_station(face, corner)
+        direction = 1.0 if corner_station == 0.0 else -1.0
+        stations = [
+            station
+            for station in self.migrated_stud_stations.get((face, story), [])
+            if station.role in ("stud", "bay_stud")
+        ]
+        candidates = [
+            station for station in stations if abs(station.station - corner_station) >= preferred_run
+        ]
+        if candidates:
+            terminal = min(candidates, key=lambda station: abs(station.station - corner_station))
+            lower_station = terminal.station - direction * (terminal.width / 2.0 + end_clearance)
+        else:
+            lower_station = corner_station + direction * preferred_run
+        wall_length = self.faces[face]
+        lower_station = max(0.0, min(wall_length, lower_station))
+        crossed = [
+            station.component_name
+            for station in stations
+            if self._station_between_corner_and_brace_end(station.station, corner_station, lower_station, direction)
+        ]
+        return lower_station, crossed
+
+    @staticmethod
+    def _station_between_corner_and_brace_end(
+        station: float,
+        corner_station: float,
+        lower_station: float,
+        direction: float,
+    ) -> bool:
+        if direction > 0:
+            return corner_station < station < lower_station
+        return lower_station < station < corner_station
+
+    def _face_corner_station(self, face: str, corner: str) -> float:
+        if face in ("front", "rear"):
+            return 0.0 if corner.endswith("left") else self.faces[face]
+        return 0.0 if corner.startswith("front") else self.faces[face]
+
+    def _brace_wall_point(self, face: str, station: float, z: float, brace_depth: float) -> Tuple[float, float, float]:
+        if face == "front":
+            return (station, self.framing_defaults.get("sill_width", 8.0) / 2.0 - brace_depth / 2.0, z)
+        if face == "rear":
+            return (station, -self.faces["right"] - self.framing_defaults.get("sill_width", 8.0) / 2.0 + brace_depth / 2.0, z)
+        if face == "left":
+            return (-self.framing_defaults.get("sill_width", 8.0) / 2.0 + brace_depth / 2.0, -station, z)
+        return (self.faces["front"] + self.framing_defaults.get("sill_width", 8.0) / 2.0 - brace_depth / 2.0, -station, z)
+
+    def _brace_lower_z(self, face: str, story: int) -> float:
+        floor_height = self.calculated_floor_heights[story - 1]
+        if story == 1:
+            return floor_height
+        if face in ("front", "rear"):
+            joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
+            return floor_height - joist_height
+        return floor_height
+
+    def _brace_lower_receiver(self, face: str, story: int, station: float) -> Tuple[str, str]:
+        if story == 1:
+            return "sill", self._segmented_member_id("sill", face, station)
+        return "girt", self._segmented_member_id("girt", face, station, story)
+
+    def _segmented_member_id(self, role: str, face: str, station: float, story: Optional[int] = None) -> str:
+        quantity, segment_length = self._member_quantity_and_length(self.faces[face])
+        index = min(max(int(station // segment_length), 0), quantity - 1) + 1
+        if role == "girt":
+            return f"girt_{face}_story{story}_{index}"
+        return f"sill_{face}_{index}"
+
+    def _add_migrated_brace(self, parent: SceneNode, datum: FramingBraceDatum) -> None:
+        geometry = box_at(datum.size, (0.0, -datum.size[1] / 2.0, -datum.size[2] / 2.0))
+        parent.add_child(
+            SceneNode(
+                datum.component_name,
+                "part",
+                datum.role,
+                local_transform=datum.local_transform,
+                geometry=geometry,
+                blank_geometry=geometry,
+                color=cq.Color(0.55, 0.45, 0.33),
+                metadata=datum.metadata(),
+            )
+        )
+
+    @staticmethod
+    def _offset_brace_datum(datum: FramingBraceDatum, x_offset: float, y_offset: float) -> FramingBraceDatum:
+        if x_offset == 0.0 and y_offset == 0.0:
+            return datum
+        lower_anchor = (datum.lower_anchor[0] + x_offset, datum.lower_anchor[1] + y_offset, datum.lower_anchor[2])
+        upper_anchor = (datum.upper_anchor[0] + x_offset, datum.upper_anchor[1] + y_offset, datum.upper_anchor[2])
+        local_transform = Transform(
+            translation=(
+                datum.local_transform.translation[0] + x_offset,
+                datum.local_transform.translation[1] + y_offset,
+                datum.local_transform.translation[2],
+            ),
+            rotations=datum.local_transform.rotations,
+        )
+        return FramingBraceDatum(
+            component_name=datum.component_name,
+            role=datum.role,
+            size=datum.size,
+            local_transform=local_transform,
+            face=datum.face,
+            story=datum.story,
+            corner=datum.corner,
+            hand=datum.hand,
+            lower_anchor=lower_anchor,
+            upper_anchor=upper_anchor,
+            angle_degrees=datum.angle_degrees,
+            length=datum.length,
+            post_mortise_tier=datum.post_mortise_tier,
+            lower_receiver_role=datum.lower_receiver_role,
+            lower_receiver_id=datum.lower_receiver_id,
+            post_id=datum.post_id,
+            crossed_studs=datum.crossed_studs,
+        )
 
     def _add_migrated_member(self, parent: SceneNode, datum: FramingMemberDatum) -> None:
         parent.add_child(
@@ -890,6 +1090,7 @@ class FramingBuilder:
         specs.extend(self._declare_post_girt_specs())
         specs.extend(self._declare_girt_splice_specs())
         specs.extend(self._declare_stud_stub_tenon_specs())
+        specs.extend(self._declare_brace_post_receiver_specs())
         return specs
 
     def _declare_post_girt_specs(self) -> List[JointSpec]:
@@ -1023,6 +1224,35 @@ class FramingBuilder:
                         params=self._stud_stub_tenon_params(stud, top_receiver, "top", "bottom", axis),
                     )
                 )
+        return specs
+
+    def _declare_brace_post_receiver_specs(self) -> List[JointSpec]:
+        specs: List[JointSpec] = []
+        for brace in self.member_registry.values():
+            if brace.role != "brace":
+                continue
+            datums = brace.node.metadata.get("framing_datums", {})
+            if not isinstance(datums, dict):
+                continue
+            post_id = datums.get("post_id")
+            lower_receiver_id = datums.get("lower_receiver_id")
+            if not isinstance(post_id, str) or not isinstance(lower_receiver_id, str):
+                continue
+            if post_id not in self.member_registry or lower_receiver_id not in self.member_registry:
+                continue
+            specs.append(
+                JointSpec(
+                    id=f"brace_post_receiver_{brace.id}",
+                    joint_type="brace_post_receiver",
+                    member_a=brace.id,
+                    member_b=lower_receiver_id,
+                    params={
+                        "post_id": post_id,
+                        "post_mortise_tier": datums.get("post_mortise_tier"),
+                        "lower_receiver_role": datums.get("lower_receiver_role"),
+                    },
+                )
+            )
         return specs
 
     def _stud_bottom_receiver(self, face: str, story: int, station: float) -> Optional[FramingMember]:
@@ -1300,6 +1530,8 @@ class FramingBuilder:
             return parts[2]
         if len(parts) >= 3 and parts[0] == "stud":
             return parts[1]
+        if len(parts) >= 6 and parts[0] == "brace":
+            return parts[3]
         return None
 
     @staticmethod

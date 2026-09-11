@@ -7,6 +7,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from app.services.joinery.base import apply_operations, box_at, workplane_bounds, workplane_volume  # noqa: E402
+from app.services.joinery.brace_to_post_sill import (  # noqa: E402
+    brace_to_post_sill_local_operations,
+    default_brace_to_post_sill_params,
+)
 from app.services.joinery.half_lap import default_bearing_notch_params, joist_bearing_notch  # noqa: E402
 from app.services.joinery.joist_to_sill import (  # noqa: E402
     default_joist_to_girt_params,
@@ -39,6 +43,27 @@ class JoineryPrimitiveTest(unittest.TestCase):
         self.assertBoundsAlmostEqual(workplane_bounds(right), ((-10.0, -2.0, 0.0), (72.0, 2.0, 6.0)))
         self.assertLess(workplane_volume(left), 82.0 * 4.0 * 6.0)
         self.assertLess(workplane_volume(right), 82.0 * 4.0 * 6.0)
+
+    def test_brace_to_post_sill_local_tenons_extend_reference_brace(self):
+        params = default_brace_to_post_sill_params()
+        brace_length = 72.0
+        brace = box_at((brace_length, 4.0, 6.0), (0.0, -2.0, -3.0))
+        operations = brace_to_post_sill_local_operations(
+            "brace",
+            "post",
+            "sill",
+            brace_length=brace_length,
+            brace_width=6.0,
+            params=params,
+        )
+
+        joined_brace = apply_operations(brace, operations["brace"])
+
+        self.assertEqual(len(operations["brace"]), 2)
+        self.assertEqual(len(operations["post"]), 1)
+        self.assertEqual(len(operations["lower_receiver"]), 1)
+        self.assertBoundsAlmostEqual(workplane_bounds(joined_brace), ((-3.0, -2.0, -3.0), (75.0, 2.0, 3.0)))
+        self.assertGreater(workplane_volume(joined_brace), workplane_volume(brace))
 
     def test_post_to_sill_corner_preserves_reference_extents(self):
         sill_x, sill_y, post = post_to_sill_corner_fixture()

@@ -20,6 +20,12 @@
     "cripple_stud_width": 3.0,
     "cripple_stud_depth": 4.0,
     "stud_tenon_depth": 2.0,
+    "brace_width": 6.0,
+    "brace_depth": 4.0,
+    "brace_preferred_run": 64.0,
+    "brace_end_clearance": 0.5,
+    "brace_post_tier_low_rise": 56.0,
+    "brace_post_tier_high_rise": 64.0,
     "compile_joinery": true,
     "color": [0.55, 0.45, 0.33, 1.0]
   },
@@ -62,6 +68,14 @@
       "mortise_clearance": 0.02,
       "through_clearance": 0.2,
       "tenon_reveal": 0.125
+    },
+    "brace_to_post_sill": {
+      "tenon_length": 3.0,
+      "tenon_thickness": 1.5,
+      "tenon_overlap": 0.1,
+      "mortise_clearance": 0.02,
+      "mortise_extra_depth": 0.25,
+      "mortise_overlap": 0.05
     },
     "peg_bore": {
       "diameter": 0.75,

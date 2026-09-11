@@ -77,8 +77,8 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self.assertIsNotNone(bom_data)
         self.assertTrue(model.scene_root.metadata["compile_joinery"])
-        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 69)
-        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 158)
+        self.assertEqual(model.scene_root.metadata["joinery_joint_count"], 77)
+        self.assertEqual(model.scene_root.metadata["joinery_operation_count"], 190)
         components = {component["component_name"]: component for component in model.scene_components}
         names = set(components)
         self.assertIn("sill_front_1", names)
@@ -87,11 +87,13 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertTrue(components["joist_story1_1"]["has_joined_geometry"])
         self.assertTrue(components["post_front_left"]["has_joined_geometry"])
         specs = builder._declare_joinery_specs()
-        self.assertEqual(len(specs), 69)
+        self.assertEqual(len(specs), 77)
         post_sill_specs = [spec for spec in specs if spec.joint_type == "post_sill_corner"]
         joist_sill_specs = [spec for spec in specs if spec.joint_type == "joist_sill"]
+        brace_specs = [spec for spec in specs if spec.joint_type == "brace_post_receiver"]
         self.assertEqual(len(post_sill_specs), 4)
         self.assertEqual(len(joist_sill_specs), 22)
+        self.assertEqual(len(brace_specs), 8)
         for spec in post_sill_specs:
             self.assertIn("joint_datums", spec.params)
             self.assertEqual(spec.params["joint_datums"]["tenon_height"], 2.0)
@@ -123,6 +125,9 @@ class FramingSceneGraphTest(unittest.TestCase):
         self.assertLess(workplane_volume(joined_post.geometry), workplane_volume(unjoined_post.geometry))
         self.assertLess(workplane_volume(joined_sill.geometry), workplane_volume(unjoined_sill.geometry))
         self.assertGreater(workplane_volume(joined_joist.geometry), workplane_volume(unjoined_joist.geometry))
+        joined_brace = self._scene_node(model.scene_root, "brace_front_left_front_story1_low")
+        unjoined_brace = self._scene_node(unjoined_model.scene_root, "brace_front_left_front_story1_low")
+        self.assertGreater(workplane_volume(joined_brace.geometry), workplane_volume(unjoined_brace.geometry))
 
     def test_cornerstone_sills_and_posts_match_legacy_reference_bounds(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
@@ -419,6 +424,51 @@ class FramingSceneGraphTest(unittest.TestCase):
         components = {component["component_name"]: component for component in model.scene_components}
         self.assertTrue(components["joist_story2_1"]["has_joined_geometry"])
         self.assertTrue(components["girt_front_story2_1"]["has_joined_geometry"])
+
+    def test_cornerstone_braces_use_staggered_post_tiers_and_stud_stations(self):
+        request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
+        floorplan = request.structure.floorplan
+        ceiling_heights = BuildingBuilder.calculate_ceiling_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+        floor_heights = BuildingBuilder.calculate_floor_heights(
+            floorplan.stories,
+            floorplan.joist_heights or [10, 9, 8],
+            floorplan.ceiling_heights or [120, 108],
+        )
+
+        legacy_model = FramingBuilder(request.structure, "legacy-brace-reference-test").build_legacy_reference(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        model, _ = FramingBuilder(request.structure, "cornerstone-brace-test").build(
+            ceiling_heights,
+            floor_heights,
+            compile_joinery=False,
+        )
+        components = {component["component_name"]: component for component in model.scene_components}
+        legacy_names = {component["component_name"] for component in legacy_model.scene_components}
+        brace_names = {name for name in components if name and name.startswith("brace_")}
+        framing_node = next(node for node in model.scene_root.iter_nodes() if node.name == "framing")
+
+        self.assertEqual(len(brace_names), 8)
+        self.assertIn("brace", framing_node.metadata["migrated_member_roles"])
+        self.assertIn("brace_front_story1_primary", legacy_names)
+        self.assertNotIn("brace_front_story1_primary", brace_names)
+
+        front_low = self._scene_node(model.scene_root, "brace_front_left_front_story1_low")
+        left_high = self._scene_node(model.scene_root, "brace_front_left_left_story1_high")
+        front_datums = front_low.metadata["framing_datums"]
+        left_datums = left_high.metadata["framing_datums"]
+        self.assertEqual(front_datums["post_mortise_tier"], "low")
+        self.assertEqual(left_datums["post_mortise_tier"], "high")
+        self.assertEqual(front_datums["upper_anchor"][2], 66.0)
+        self.assertEqual(left_datums["upper_anchor"][2], 74.0)
+        self.assertAlmostEqual(front_datums["lower_anchor"][0], 71.875)
+        self.assertTrue(front_datums["crossed_studs"])
 
     def test_girt_splice_joinery_compiles_for_segmented_girts(self):
         request = self._load_two_story_request(dimension=360.0)
