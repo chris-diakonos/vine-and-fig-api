@@ -405,7 +405,7 @@ class CorniceBuilder:
         face_map = CorniceBuilder._face_map(dimensions, placement_config, stud_depth, datum_context)
         
         for face in faces_to_build:
-            length, rotation, trans_x, trans_y, trans_z, cavetto_flush_plane = face_map[face]
+            length, rotation, trans_x, trans_y, trans_z, cavetto_flush_plane, wall_plane = face_map[face]
             if length > 0:
                 CorniceBuilder._build_face_cornice(
                     cornice,
@@ -421,6 +421,7 @@ class CorniceBuilder:
                     trans_x,
                     trans_y,
                     cavetto_flush_plane,
+                    wall_plane,
                 )
         
         return CorniceBuilder._with_scene(cornice, placement_source)
@@ -434,10 +435,10 @@ class CorniceBuilder:
     ) -> Dict[str, tuple]:
         if not datum_context:
             return {
-                "front": (dimensions.front, 90, dimensions.front / 2, placement_config["front_rear_offset"], 0, None),
-                "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - placement_config["front_rear_offset"], 0, None),
-                "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0, None),
-                "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0, None),
+                "front": (dimensions.front, 90, dimensions.front / 2, placement_config["front_rear_offset"], 0, None, None),
+                "rear": (dimensions.rear, 270, dimensions.front / 2, -dimensions.right - placement_config["front_rear_offset"], 0, None, None),
+                "left": (dimensions.left, 0, stud_depth / 2, dimensions.left / 2, 0, None, None),
+                "right": (dimensions.right, 180, dimensions.front - stud_depth / 2, dimensions.right / 2, 0, None, None),
             }
 
         ceiling_bounds = datum_context.ceiling_joist_bounds
@@ -449,11 +450,15 @@ class CorniceBuilder:
         y_length = y_max - y_min
         x_center = (x_min + x_max) / 2.0
         y_center = (y_min + y_max) / 2.0
+        front_joist_plane = datum_context.ceiling_joist_end_plane("front", stud_depth)
+        rear_joist_plane = datum_context.ceiling_joist_end_plane("rear", stud_depth)
+        left_joist_plane = datum_context.ceiling_joist_end_plane("left", stud_depth)
+        right_joist_plane = datum_context.ceiling_joist_end_plane("right", stud_depth)
         return {
-            "front": (x_length, 90, x_center, datum_context.ceiling_joist_end_plane("front", stud_depth), 0, datum_context.ceiling_joist_end_plane("front", stud_depth)),
-            "rear": (x_length, 270, x_center, datum_context.ceiling_joist_end_plane("rear", stud_depth), 0, datum_context.ceiling_joist_end_plane("rear", stud_depth)),
-            "left": (y_length, 0, datum_context.ceiling_joist_end_plane("left", stud_depth), y_center, 0, datum_context.ceiling_joist_end_plane("left", stud_depth)),
-            "right": (y_length, 180, datum_context.ceiling_joist_end_plane("right", stud_depth), y_center, 0, datum_context.ceiling_joist_end_plane("right", stud_depth)),
+            "front": (x_length, 90, x_center, front_joist_plane, 0, front_joist_plane, datum_context.wall_exterior_plane("front", stud_depth)),
+            "rear": (x_length, 270, x_center, rear_joist_plane, 0, rear_joist_plane, datum_context.wall_exterior_plane("rear", stud_depth)),
+            "left": (y_length, 0, left_joist_plane, y_center, 0, left_joist_plane, datum_context.wall_exterior_plane("left", stud_depth)),
+            "right": (y_length, 180, right_joist_plane, y_center, 0, right_joist_plane, datum_context.wall_exterior_plane("right", stud_depth)),
         }
 
     @staticmethod
@@ -471,6 +476,7 @@ class CorniceBuilder:
         trans_x: float,
         trans_y: float,
         cavetto_flush_plane: Optional[float] = None,
+        wall_plane: Optional[float] = None,
     ) -> None:
         """
         Build cornice components for a single face and add them to the assembly.
@@ -490,6 +496,10 @@ class CorniceBuilder:
             trans_y: Y translation
         """
         cornice_origin_z = cornice_top_z_position - crown_height
+        notebook_fascia_width = 10.0
+        projection_depth = CorniceBuilder._projection_depth(cavetto_flush_plane, wall_plane, notebook_fascia_width)
+        projection_adjustment = notebook_fascia_width - projection_depth
+        inboard_projection_shift = -projection_adjustment
 
         # Helper to apply rotation, flip, centering, and translation to a component
         # Components are built along Y axis (extrusion), need to:
@@ -539,29 +549,37 @@ class CorniceBuilder:
         transformed_components.append((f"{face}_cavetto", cavetto))
         
         # Corona - Fascia
-        fascia = cq.Workplane("XZ").rect(10, fascia_height).extrude(length).translate((14, 0, -0.8))
+        fascia_center_x = 9.0 + projection_depth / 2.0
+        fascia = cq.Workplane("XZ").rect(projection_depth, fascia_height).extrude(length).translate((fascia_center_x, 0, -0.8))
         transformed_components.append((f"{face}_fascia", transform_component(fascia)))
         
         # Modillion backing
-        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
+        modillion_backing = cq.Workplane("XZ").rect(4.5, 0.75).extrude(length).translate((19 + inboard_projection_shift, 0, -3.5)).rotateAboutCenter((0, 1, 0), 90)
         transformed_components.append((f"{face}_modillion_backing", transform_component(modillion_backing)))
         
         # Modillions
         modillion_count = math.floor(length / modillion_spacing)
         for modillion_idx in range(0, modillion_count):
             modillion_x = length - (modillion_idx * modillion_spacing)
-            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25, -modillion_x + modillion_spacing, -4))
+            modillion = cq.Workplane("XZ").rect(5.5, 3.0).extrude(3).translate((16.25 + inboard_projection_shift, -modillion_x + modillion_spacing, -4))
             transformed_components.append((f"{face}_modillion_{modillion_idx}", transform_component(modillion)))
             
-            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12, -modillion_x + modillion_spacing, -1.5))
+            modillion_band = CorniceBuilder._cyma_reversa_band(7, 1).extrude(3).translate((12 + inboard_projection_shift, -modillion_x + modillion_spacing, -1.5))
             transformed_components.append((f"{face}_modillion_band_{modillion_idx}", transform_component(modillion_band)))
         
         # Bedmold
-        bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18, 0, -bed_molding_height))
+        bed = CorniceBuilder._bed_molding(0.75, bed_molding_height).extrude(length).translate((18 + inboard_projection_shift, 0, -bed_molding_height))
         transformed_components.append((f"{face}_bed_molding", transform_component(bed)))
 
         for name, component in transformed_components:
             assembly.add(component.translate(alignment), name=name, color=CorniceBuilder._color())
+
+    @staticmethod
+    def _projection_depth(cavetto_flush_plane: Optional[float], wall_plane: Optional[float], fallback: float) -> float:
+        if cavetto_flush_plane is None or wall_plane is None:
+            return fallback
+        depth = abs(cavetto_flush_plane - wall_plane)
+        return depth if depth > 0 else fallback
 
     @staticmethod
     def _ceiling_joist_alignment(component: cq.Workplane, face: str, plane: float) -> tuple:

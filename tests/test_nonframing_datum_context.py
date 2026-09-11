@@ -135,7 +135,7 @@ class NonFramingDatumContextTest(unittest.TestCase):
         model, _ = BuildingBuilder.build(
             request.structure,
             "cornice-datum-context-test",
-            self._visibility(),
+            self._visibility(sheathing=True),
         )
 
         components = {component["semantic_path"]: component for component in model.scene_components}
@@ -148,10 +148,23 @@ class NonFramingDatumContextTest(unittest.TestCase):
         cavetto = by_name["front_cavetto"]
         crown = by_name["front_crown"]
         fascia = by_name["front_fascia"]
+        bed_molding = by_name["front_bed_molding"]
+        front_post_top = by_name["post_front_left"]["world_bounds"]["max"][2]
+        top_siding_on_post = max(
+            (
+                component
+                for component in by_name.values()
+                if component["component_name"]
+                and component["component_name"].startswith("sheathing_front_board")
+                and component["world_bounds"]["max"][2] <= front_post_top + 0.25
+            ),
+            key=lambda component: component["world_bounds"]["max"][2],
+        )
         self.assertEqual(components["building/cornice"]["metadata"]["placement_source"], "framing_datums")
         self.assertAlmostEqual(cavetto["world_bounds"]["min"][1], ceiling_joist_front_plane)
         self.assertAlmostEqual(crown["world_bounds"]["max"][2], cavetto["world_bounds"]["max"][2], places=5)
         self.assertLessEqual(abs(fascia["world_bounds"]["max"][1] - cavetto["world_bounds"]["min"][1]), 0.25)
+        self.assertLessEqual(abs(bed_molding["world_bounds"]["max"][1] - top_siding_on_post["world_bounds"]["max"][1]), 0.25)
 
 
 if __name__ == "__main__":
