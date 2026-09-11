@@ -272,8 +272,11 @@ def brace_post_receiver_handler(
     brace = members[spec.member_a]
     post = members[spec.params["post_id"]]
     lower_receiver = members[spec.member_b]
-    brace_bounds = bounds_for_workplane(brace.geometry)
-    if brace_bounds is None:
+    brace_datums = brace.metadata.get("framing_datums", {})
+    brace_size = brace_datums.get("size")
+    brace_length = brace_datums.get("length")
+    brace_angle = brace_datums.get("angle_degrees")
+    if not isinstance(brace_size, list) or brace_length is None or brace_angle is None:
         return []
 
     params = default_brace_to_post_sill_params()
@@ -281,8 +284,10 @@ def brace_post_receiver_handler(
         brace_id=spec.member_a,
         post_id=post.metadata["component_name"],
         lower_receiver_id=spec.member_b,
-        brace_length=brace_bounds.size[0],
-        brace_width=brace_bounds.size[2],
+        brace_length=float(brace_length),
+        brace_thickness=float(brace_size[1]),
+        brace_depth=float(brace_size[2]),
+        brace_angle_degrees=float(brace_angle),
         params=params,
     )
     for op in local_operations["brace"]:

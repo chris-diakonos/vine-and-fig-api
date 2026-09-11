@@ -1,3 +1,4 @@
+import math
 import sys
 import unittest
 from pathlib import Path
@@ -8,6 +9,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from app.services.joinery.base import apply_operations, box_at, workplane_bounds, workplane_volume  # noqa: E402
 from app.services.joinery.brace_to_post_sill import (  # noqa: E402
+    angled_brace_body,
     brace_to_post_sill_local_operations,
     default_brace_to_post_sill_params,
 )
@@ -46,14 +48,19 @@ class JoineryPrimitiveTest(unittest.TestCase):
 
     def test_brace_to_post_sill_local_tenons_extend_reference_brace(self):
         params = default_brace_to_post_sill_params()
-        brace_length = 72.0
-        brace = box_at((brace_length, 4.0, 6.0), (0.0, -2.0, -3.0))
+        brace_run = 40.0
+        brace_rise = 60.0
+        brace_length = math.hypot(brace_run, brace_rise)
+        brace_angle = math.degrees(math.atan2(brace_rise, brace_run))
+        brace = angled_brace_body(brace_length, 4.0, 6.0, brace_angle)
         operations = brace_to_post_sill_local_operations(
             "brace",
             "post",
             "sill",
             brace_length=brace_length,
-            brace_width=6.0,
+            brace_thickness=4.0,
+            brace_depth=6.0,
+            brace_angle_degrees=brace_angle,
             params=params,
         )
 
@@ -62,7 +69,11 @@ class JoineryPrimitiveTest(unittest.TestCase):
         self.assertEqual(len(operations["brace"]), 2)
         self.assertEqual(len(operations["post"]), 1)
         self.assertEqual(len(operations["lower_receiver"]), 1)
-        self.assertBoundsAlmostEqual(workplane_bounds(joined_brace), ((-3.0, -2.0, -3.0), (75.0, 2.0, 3.0)))
+        self.assertBoundsAlmostEqual(
+            workplane_bounds(brace),
+            ((-2.0, -2.0, -3.0), (brace_length + 4.5, 2.0, 3.0)),
+        )
+        self.assertBoundsAlmostEqual(workplane_bounds(joined_brace), workplane_bounds(brace))
         self.assertGreater(workplane_volume(joined_brace), workplane_volume(brace))
 
     def test_post_to_sill_corner_preserves_reference_extents(self):

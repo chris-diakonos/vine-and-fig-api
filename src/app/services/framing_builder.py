@@ -19,6 +19,7 @@ from app.services.config_loader import load_json_config
 from app.services.framing_datums import FramingBraceDatum, FramingMemberDatum, FramingPlacementDatums
 from app.services.framing_validation import validate_framing_scene
 from app.services.joinery.base import JointSpec, box_at
+from app.services.joinery.brace_to_post_sill import angled_brace_body
 from app.services.joinery.compiler import compile_joinery as run_joinery_compiler
 from app.services.joinery.framing_handlers import FRAMING_JOINERY_HANDLERS
 from app.services.scene_graph import Bounds, SceneNode, Transform, bounds_for_workplane, collect_component_metadata, project_scene_to_assembly, scene_from_assembly
@@ -784,6 +785,8 @@ class FramingBuilder:
         if len(stations) > terminal_index:
             terminal = stations[terminal_index]
             lower_station = terminal.station - direction * (terminal.width / 2.0 + end_clearance)
+            if not self._station_is_beyond_corner(lower_station, corner_station, direction):
+                lower_station = corner_station + direction * preferred_run
         else:
             lower_station = corner_station + direction * preferred_run
         wall_length = self.faces[face]
@@ -794,6 +797,12 @@ class FramingBuilder:
             if self._station_between_corner_and_brace_end(station.station, corner_station, lower_station, direction)
         ]
         return lower_station, crossed
+
+    @staticmethod
+    def _station_is_beyond_corner(station: float, corner_station: float, direction: float) -> bool:
+        if direction > 0:
+            return station > corner_station
+        return station < corner_station
 
     @staticmethod
     def _station_between_corner_and_brace_end(
@@ -849,7 +858,12 @@ class FramingBuilder:
         return f"sill_{face}_{index}"
 
     def _add_migrated_brace(self, parent: SceneNode, datum: FramingBraceDatum) -> None:
-        geometry = box_at(datum.size, (0.0, -datum.size[1] / 2.0, -datum.size[2] / 2.0))
+        geometry = angled_brace_body(
+            datum.length,
+            datum.size[1],
+            datum.size[2],
+            datum.angle_degrees,
+        )
         parent.add_child(
             SceneNode(
                 datum.component_name,
