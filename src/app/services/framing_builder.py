@@ -388,10 +388,12 @@ class FramingBuilder:
     ) -> None:
         joist_width = float(self.framing_defaults.get("joist_width", 3.0))
         girt_width = float(self.framing_defaults.get("girt_width", 4.0))
+        joist_girt_profile_height = self._joist_girt_profile_height()
         joist_centerlines = self._joist_centerlines()
         for story in range(1, self.floorplan.stories + 2):
             joist_height = self.joist_heights[story - 1] if story <= len(self.joist_heights) else self.joist_heights[-1]
             floor_height = self.calculated_floor_heights[story - 1]
+            joist_top_z = floor_height
             if story == len(self.joist_heights):
                 joist_length = self.faces["right"] + (self.roof_overhang * 2.0)
                 y_min = -self.faces["right"] - self.roof_overhang
@@ -403,6 +405,7 @@ class FramingBuilder:
                 rear_girt_inner_y = -self.faces["right"] - datums.sill_width / 2.0 + girt_width
                 joist_length = front_girt_inner_y - rear_girt_inner_y
                 y_min = rear_girt_inner_y
+                joist_top_z = floor_height - joist_girt_profile_height
 
             for index, center_x in enumerate(joist_centerlines, start=1):
                 datum = datums.joist(
@@ -413,7 +416,7 @@ class FramingBuilder:
                     joist_length,
                     joist_width,
                     joist_height,
-                    floor_height,
+                    joist_top_z,
                 )
                 self._add_migrated_member(joists_node, self._offset_datum(datum, x_offset, y_offset))
             self._add_joist_bom(len(joist_centerlines), joist_length, joist_width, joist_height)
@@ -461,6 +464,11 @@ class FramingBuilder:
     def _girt_splice_extension() -> float:
         plate_splice = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {}).get("plate_splice", {})
         return float(plate_splice.get("lap_length", 12.0)) / 2.0
+
+    @staticmethod
+    def _joist_girt_profile_height() -> float:
+        joinery = load_json_config("framing", "FRAMING_CONFIG_PATH").get("joinery", {})
+        return float(joinery.get("joist_to_girt", {}).get("profile_height", 4.0))
 
     def _add_migrated_studs(
         self,
@@ -1115,6 +1123,7 @@ class FramingBuilder:
 
     def _declare_joist_girt_specs(self) -> List[JointSpec]:
         specs: List[JointSpec] = []
+        profile_height = self._joist_girt_profile_height()
         joists = [
             member
             for member in self.member_registry.values()
@@ -1160,12 +1169,12 @@ class FramingBuilder:
                                 "face": face,
                                 "direction": direction,
                                 "joist_end_y": joist_end_y,
-                                "joist_top_z": float(size[2]),
+                                "joist_top_z": profile_height,
                                 "joist_tail_center_x": float(size[0]) / 2.0,
                                 "girt_socket_center_x": joist_center_x - float(girt_min[0]),
                                 "girt_socket_center_y": joist_end_world_y - float(girt_min[1]),
                                 "girt_top_z": float(girt_size[2]),
-                                "profile_height": 4.0,
+                                "profile_height": profile_height,
                             },
                         },
                     )

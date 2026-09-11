@@ -397,6 +397,7 @@ class FramingSceneGraphTest(unittest.TestCase):
         front_spec = next(spec for spec in joist_girt_specs if spec.id == "joist_girt_story2_1_front")
         rear_spec = next(spec for spec in joist_girt_specs if spec.id == "joist_girt_story2_1_rear")
         self.assertEqual(front_spec.params["joint_datums"]["profile_height"], 4.0)
+        self.assertEqual(front_spec.params["joint_datums"]["joist_top_z"], 4.0)
         self.assertEqual(front_spec.params["joint_datums"]["joist_end_y"], 240.0)
         self.assertEqual(front_spec.params["joint_datums"]["girt_socket_center_y"], 0.0)
         self.assertEqual(rear_spec.params["joint_datums"]["direction"], -1)
@@ -412,7 +413,7 @@ class FramingSceneGraphTest(unittest.TestCase):
         }
         self._assert_bounds_almost_equal(
             unjoined_components["joist_story2_1"]["world_bounds"],
-            {"min": [19.5, -240.0, 106.0], "max": [22.5, 0.0, 114.0], "size": [3.0, 240.0, 8.0]},
+            {"min": [19.5, -240.0, 102.0], "max": [22.5, 0.0, 110.0], "size": [3.0, 240.0, 8.0]},
         )
 
         components = {component["component_name"]: component for component in model.scene_components}
