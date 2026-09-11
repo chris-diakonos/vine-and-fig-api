@@ -82,9 +82,36 @@ class NonFramingDatumContextTest(unittest.TestCase):
         components = {component["semantic_path"]: component for component in model.scene_components}
         by_name = {component["component_name"]: component for component in model.scene_components}
         window = components["building/windows/front_wall/story_1/window_120"]
+        sill = components["building/windows/front_wall/story_1/window_120/frame/bottom_frame_sill"]
         front_plane = by_name["post_front_left"]["world_bounds"]["max"][1]
         self.assertEqual(window["metadata"]["placement"]["source"], "framing_datums")
-        self.assertAlmostEqual(window["local_transform"]["translation"][1], front_plane, places=5)
+        self.assertAlmostEqual(sill["world_bounds"]["min"][1], front_plane, places=5)
+
+    def test_second_story_window_uses_cripple_sill_and_centered_sashes(self):
+        request = self._load_request(ROOT / "example_request.json")
+
+        model, _ = BuildingBuilder.build(
+            request.structure,
+            "window-cripple-sill-test",
+            self._visibility(windows=True),
+        )
+
+        components = {component["semantic_path"]: component for component in model.scene_components}
+        by_name = {component["component_name"]: component for component in model.scene_components}
+        path = "building/windows/front_wall/story_2/window_80"
+        front_plane = by_name["post_front_left"]["world_bounds"]["max"][1]
+        cripple_top = by_name["cripple_stud_front_story2_bay1"]["world_bounds"]["max"][2]
+        sill = components[f"{path}/frame/bottom_frame_sill"]
+        lower_left = components[f"{path}/lower_sash/left_stile"]
+        lower_right = components[f"{path}/lower_sash/right_stile"]
+        upper_left = components[f"{path}/upper_sash/left_stile"]
+
+        lower_sash_center = (lower_left["world_bounds"]["min"][0] + lower_right["world_bounds"]["max"][0]) / 2.0
+        sash_gap = upper_left["world_bounds"]["min"][2] - lower_left["world_bounds"]["max"][2]
+        self.assertAlmostEqual(sill["world_bounds"]["min"][2], cripple_top, places=5)
+        self.assertAlmostEqual(sill["world_bounds"]["min"][1], front_plane, places=5)
+        self.assertAlmostEqual(lower_sash_center, 80.0, places=5)
+        self.assertLessEqual(sash_gap, 0.25 + 1e-5)
 
     def test_doors_use_framing_wall_plane(self):
         request = self._load_request(ROOT / "example_request.json")

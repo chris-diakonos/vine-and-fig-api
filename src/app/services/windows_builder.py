@@ -9,6 +9,7 @@ from app.models.floorplan import Dimensions, Floorplan
 from app.services.building_datums import BuildingDatumContext
 from app.services.coordinate_system import window_placement_for_wall
 from app.services.scene_graph import (
+    Bounds,
     SceneNode,
     Transform,
     aggregate_local_bounds,
@@ -917,13 +918,133 @@ class WindowsBuilder:
                 )
             )
 
+        WindowsBuilder._align_sash_stack(window_node)
         local_bounds = aggregate_local_bounds(window_node)
         if local_bounds is not None:
             metrics["opening_width"] = local_bounds.size[0]
             metrics["opening_height"] = local_bounds.size[2]
             window_node.metadata["local_bounds_datum"] = local_bounds.as_dict()
 
+        WindowsBuilder._align_to_framing_targets(window_node)
         return window_node
+
+    @staticmethod
+    def _align_sash_stack(window_node: SceneNode) -> None:
+        lower_sash = next((child for child in window_node.children if child.name == "lower_sash"), None)
+        upper_sash = next((child for child in window_node.children if child.name == "upper_sash"), None)
+        if lower_sash is None or upper_sash is None:
+            return
+        lower_bounds = (
+            WindowsBuilder._sash_stile_bounds_to_ancestor(lower_sash, window_node)
+            or WindowsBuilder._aggregate_bounds_to_ancestor(lower_sash, window_node)
+        )
+        upper_bounds = (
+            WindowsBuilder._sash_stile_bounds_to_ancestor(upper_sash, window_node)
+            or WindowsBuilder._aggregate_bounds_to_ancestor(upper_sash, window_node)
+        )
+        if lower_bounds is None or upper_bounds is None:
+            return
+        target_gap = float(WindowsBuilder._window_config()["defaults"].get("glazing_rabbet", 0.25))
+        current_gap = upper_bounds.min[2] - lower_bounds.max[2]
+        if current_gap <= target_gap:
+            return
+        tx, ty, tz = upper_sash.local_transform.translation
+        upper_sash.local_transform = Transform(
+            translation=(tx, ty, tz - (current_gap - target_gap)),
+            rotations=upper_sash.local_transform.rotations,
+        )
+
+    @staticmethod
+    def _aggregate_bounds_to_ancestor(node: SceneNode, ancestor: SceneNode) -> Optional[Bounds]:
+        aggregate = None
+        for child in node.iter_nodes():
+            if child.geometry is None:
+                continue
+            bounds = bounds_for_workplane(child.projected_geometry_to_ancestor(ancestor))
+            if bounds is None:
+                continue
+            aggregate = bounds if aggregate is None else aggregate.union(bounds)
+        return aggregate
+
+    @staticmethod
+    def _sash_stile_bounds_to_ancestor(node: SceneNode, ancestor: SceneNode) -> Optional[Bounds]:
+        aggregate = None
+        for child in node.iter_nodes():
+            if child.geometry is None or "stile" not in child.name:
+                continue
+            bounds = bounds_for_workplane(child.projected_geometry_to_ancestor(ancestor))
+            if bounds is None:
+                continue
+            aggregate = bounds if aggregate is None else aggregate.union(bounds)
+        return aggregate
+
+    @staticmethod
+    def _align_to_framing_targets(window_node: SceneNode) -> None:
+        placement = window_node.metadata.get("placement", {})
+        if "target_sill_z" not in placement and "target_wall_plane" not in placement:
+            return
+        sill_node = next((node for node in window_node.iter_nodes() if node.name == "bottom_frame_sill"), None)
+        if sill_node is None:
+            return
+        bounds = bounds_for_workplane(sill_node.projected_geometry())
+        if bounds is None:
+            return
+        wall = placement.get("wall")
+        dx = 0.0
+        dy = 0.0
+        dz = 0.0
+        if "target_wall_plane" in placement:
+            plane = float(placement["target_wall_plane"])
+            if wall == "front":
+                dy = plane - bounds.min[1]
+            elif wall == "rear":
+                dy = plane - bounds.max[1]
+            elif wall == "left":
+                dx = plane - bounds.max[0]
+            elif wall == "right":
+                dx = plane - bounds.min[0]
+        if "target_sill_z" in placement:
+            dz = float(placement["target_sill_z"]) - bounds.min[2]
+        if "target_station" in placement:
+            station_dx, station_dy = WindowsBuilder._station_alignment_delta(window_node, wall, float(placement["target_station"]))
+            dx += station_dx
+            dy += station_dy
+        if dx == 0.0 and dy == 0.0 and dz == 0.0:
+            return
+        tx, ty, tz = window_node.local_transform.translation
+        window_node.local_transform = Transform(
+            translation=(tx + dx, ty + dy, tz + dz),
+            rotations=window_node.local_transform.rotations,
+        )
+        placement["legacy_transform"] = window_node.local_transform.as_dict()
+
+    @staticmethod
+    def _station_alignment_delta(window_node: SceneNode, wall: str, target_station: float) -> tuple[float, float]:
+        lower_sash = next((child for child in window_node.children if child.name == "lower_sash"), None)
+        if lower_sash is None:
+            return 0.0, 0.0
+        bounds = WindowsBuilder._aggregate_world_bounds(lower_sash)
+        if bounds is None:
+            return 0.0, 0.0
+        if wall in ("front", "rear"):
+            current_center = (bounds.min[0] + bounds.max[0]) / 2.0
+            return target_station - current_center, 0.0
+        if wall in ("left", "right"):
+            current_center = (bounds.min[1] + bounds.max[1]) / 2.0
+            return 0.0, -target_station - current_center
+        return 0.0, 0.0
+
+    @staticmethod
+    def _aggregate_world_bounds(node: SceneNode) -> Optional[Bounds]:
+        aggregate = None
+        for child in node.iter_nodes():
+            if child.geometry is None:
+                continue
+            bounds = bounds_for_workplane(child.projected_geometry())
+            if bounds is None:
+                continue
+            aggregate = bounds if aggregate is None else aggregate.union(bounds)
+        return aggregate
 
     @staticmethod
     def _scene_group_for_component(name: str) -> str:
@@ -1019,10 +1140,17 @@ class WindowsBuilder:
                     continue
 
                 metrics = WindowsBuilder._window_metrics(window)
+                target_sill_z = WindowsBuilder._target_sill_z(
+                    datum_context,
+                    window.wall,
+                    window.position,
+                    window.floor,
+                    chair_rail_height_z,
+                )
                 wall_placement = WindowsBuilder._wall_placement(
                     window.wall,
                     window.position,
-                    chair_rail_height_z,
+                    target_sill_z,
                     metrics["opening_width"],
                     dimensions,
                     datum_context,
@@ -1031,6 +1159,7 @@ class WindowsBuilder:
                 component_prefix = f"window_{window.wall}_story{story_idx}_pos{window.position}"
                 placement_metadata = wall_placement.as_dict()
                 placement_metadata["source"] = placement_source
+                WindowsBuilder._add_framing_targets(placement_metadata, datum_context, window.wall, target_sill_z)
                 windows_root.add_child(
                     WindowsBuilder._window_scene(
                         window,
@@ -1062,10 +1191,11 @@ class WindowsBuilder:
                             # Place one window at each bay in the attic
                             for bay_idx, bay_position in enumerate(bays):
                                 metrics = WindowsBuilder._window_metrics(window)
+                                target_sill_z = attic_window_z
                                 wall_placement = WindowsBuilder._wall_placement(
                                     face,
                                     bay_position,
-                                    attic_window_z,
+                                    target_sill_z,
                                     metrics["opening_width"],
                                     dimensions,
                                     datum_context,
@@ -1074,6 +1204,7 @@ class WindowsBuilder:
                                 component_prefix = f"window_{face}_attic_bay{bay_position}"
                                 placement_metadata = wall_placement.as_dict()
                                 placement_metadata["source"] = placement_source
+                                WindowsBuilder._add_framing_targets(placement_metadata, datum_context, face, target_sill_z)
                                 windows_root.add_child(
                                     WindowsBuilder._window_scene(
                                         window,
@@ -1104,10 +1235,17 @@ class WindowsBuilder:
                             continue  # Skip this bay - it has a door
                         
                         metrics = WindowsBuilder._window_metrics(window)
+                        target_sill_z = WindowsBuilder._target_sill_z(
+                            datum_context,
+                            face,
+                            bay_position,
+                            floor_number,
+                            chair_rail_height_z,
+                        )
                         wall_placement = WindowsBuilder._wall_placement(
                             face,
                             bay_position,
-                            chair_rail_height_z,
+                            target_sill_z,
                             metrics["opening_width"],
                             dimensions,
                             datum_context,
@@ -1116,6 +1254,7 @@ class WindowsBuilder:
                         component_prefix = f"window_{face}_story{story_idx}_bay{bay_position}"
                         placement_metadata = wall_placement.as_dict()
                         placement_metadata["source"] = placement_source
+                        WindowsBuilder._add_framing_targets(placement_metadata, datum_context, face, target_sill_z)
                         windows_root.add_child(
                             WindowsBuilder._window_scene(
                                 window,
@@ -1148,3 +1287,28 @@ class WindowsBuilder:
         if datum_context:
             return datum_context.window_placement_for_wall(wall, position, sill_z, opening_width)
         return window_placement_for_wall(wall, position, sill_z, opening_width, dimensions)
+
+    @staticmethod
+    def _target_sill_z(
+        datum_context: BuildingDatumContext,
+        wall: str,
+        position: float,
+        floor: int,
+        fallback_sill_z: float,
+    ) -> float:
+        if datum_context and wall in ["front", "rear", "left", "right"]:
+            return datum_context.opening_sill_z(wall, position, floor, fallback_sill_z)
+        return fallback_sill_z
+
+    @staticmethod
+    def _add_framing_targets(
+        placement_metadata: Dict[str, Any],
+        datum_context: BuildingDatumContext,
+        wall: str,
+        target_sill_z: float,
+    ) -> None:
+        if not datum_context or wall not in ["front", "rear", "left", "right"]:
+            return
+        placement_metadata["target_sill_z"] = target_sill_z
+        placement_metadata["target_wall_plane"] = datum_context.wall_exterior_plane(wall)
+        placement_metadata["target_station"] = placement_metadata["position"]

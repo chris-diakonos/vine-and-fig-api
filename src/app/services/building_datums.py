@@ -38,6 +38,7 @@ class BuildingDatumContext:
     wall_exterior_planes: Dict[str, float]
     floor_surfaces: Dict[int, FloorSurfaceDatum]
     ceiling_joist_bounds: Optional[BoundsDict]
+    cripple_stud_tops: Dict[Tuple[str, int, float], float]
     source: str = "framing_datums"
 
     @staticmethod
@@ -59,6 +60,7 @@ class BuildingDatumContext:
             wall_exterior_planes=wall_planes,
             floor_surfaces=floor_surfaces,
             ceiling_joist_bounds=ceiling_bounds,
+            cripple_stud_tops=_cripple_stud_tops(components_list),
         )
 
     def wall_exterior_plane(self, face: str, fallback_stud_depth: float = 4.0) -> float:
@@ -132,6 +134,17 @@ class BuildingDatumContext:
         else:
             return placement
         return WindowPlacement(wall, position, opening_width, sill_z, origin, transform)
+
+    def opening_sill_z(self, wall: str, position: float, story: int, fallback_sill_z: float) -> float:
+        candidates = [
+            (abs(station - position), top_z)
+            for (face, candidate_story, station), top_z in self.cripple_stud_tops.items()
+            if face == wall and candidate_story == story
+        ]
+        if not candidates:
+            return fallback_sill_z
+        distance, top_z = min(candidates, key=lambda item: item[0])
+        return top_z if distance <= 1.0 else fallback_sill_z
 
     def door_transform(
         self,
@@ -236,6 +249,23 @@ def _floor_surfaces(
             ),
         )
     return surfaces
+
+
+def _cripple_stud_tops(components: List[Dict[str, Any]]) -> Dict[Tuple[str, int, float], float]:
+    tops: Dict[Tuple[str, int, float], float] = {}
+    for component in components:
+        metadata = component.get("metadata") or {}
+        datums = metadata.get("framing_datums") or {}
+        if _component_role(component) != "cripple_stud" or not component.get("world_bounds"):
+            continue
+        face = datums.get("face")
+        story = datums.get("story")
+        station = datums.get("station")
+        if face is None or story is None or station is None:
+            continue
+        key = (str(face), int(story), round(float(station), 6))
+        tops[key] = max(tops.get(key, float("-inf")), component["world_bounds"]["max"][2])
+    return tops
 
 
 def _aggregate_role_bounds(
