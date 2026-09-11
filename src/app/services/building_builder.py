@@ -212,7 +212,8 @@ class BuildingBuilder:
                     stories,
                     calculated_floor_heights,
                     structure.roof.roof_pitch,
-                    structure.roof.roof_overhang
+                    structure.roof.roof_overhang,
+                    datum_context=datum_context,
                 )
                 if hasattr(gable_sheathing_assembly, "scene_components"):
                     scene_components.extend(gable_sheathing_assembly.scene_components)

@@ -344,22 +344,33 @@ class SheathingBuilder:
                     elif face == "right":
                         board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees)
                     
-                    # Get the bounding box after rotation to find actual bottom position
+                    # Get the bounding box after rotation to align real faces, not the pre-rotation origin.
                     bbox = board.val().BoundingBox()
-                    current_bottom_z = bbox.zmin
+                    x_offset, y_offset = SheathingBuilder._wall_board_offset(face, bbox, board_x, board_y)
+                    z_offset = bottom_edge_z - bbox.zmin
                     
-                    # Calculate offset needed to position bottom edge at bottom_edge_z
-                    # Translate by the difference to move bottom edge to desired position
-                    z_offset = bottom_edge_z - current_bottom_z
-                    
-                    # Translate to final position (X, Y from board_x/board_y, Z offset to position bottom edge)
-                    board = board.translate((board_x, board_y, z_offset))
+                    board = board.translate((x_offset, y_offset, z_offset))
                     
                     # Add board to assembly as individual component with color
                     board_name = f"sheathing_{face}_board{face_quantity}"
                     sheathing_assembly.add(board, name=board_name, color=SheathingBuilder._color())  # Light sheathing
         
         return SheathingBuilder._with_scene(sheathing_assembly, "sheathing", placement_source)
+
+    @staticmethod
+    def _wall_board_offset(face: str, bbox, target_x: float, target_y: float) -> tuple[float, float]:
+        """Translate a rotated board so its inner face sits on the wall datum."""
+        center_x = (bbox.xmin + bbox.xmax) / 2.0
+        center_y = (bbox.ymin + bbox.ymax) / 2.0
+        if face == "front":
+            return target_x - center_x, target_y - bbox.ymin
+        if face == "rear":
+            return target_x - center_x, target_y - bbox.ymax
+        if face == "left":
+            return target_x - bbox.xmax, target_y - center_y
+        if face == "right":
+            return target_x - bbox.xmin, target_y - center_y
+        return target_x - center_x, target_y - center_y
     
     @staticmethod
     def build_gable_sheathing(
@@ -368,7 +379,8 @@ class SheathingBuilder:
         stories: int,
         floor_heights: List[float],
         roof_pitch_degrees: float,
-        roof_overhang: float
+        roof_overhang: float,
+        datum_context: BuildingDatumContext = None,
     ) -> cq.Assembly:
         """
         Build gable end sheathing for side-gable roofs.
@@ -416,9 +428,9 @@ class SheathingBuilder:
             
             # Determine X position with overhang
             if face == "left":
-                face_x = -roof_overhang - (stud_depth / 2)
+                face_x = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else -roof_overhang - (stud_depth / 2)
             else:  # right
-                face_x = dimensions.front + roof_overhang + (stud_depth / 2)
+                face_x = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else dimensions.front + roof_overhang + (stud_depth / 2)
             
             # Calculate number of horizontal courses of boards
             # We'll place boards horizontally, spanning the width at each height
@@ -474,18 +486,18 @@ class SheathingBuilder:
                     # Rotate to face outward (right wall)
                     board = board.rotateAboutCenter((1,0,0), 90).rotateAboutCenter((0,0,1), 0).rotateAboutCenter((0,1,0), -bevel_angle_degrees)
                 
-                # Position the board
                 bbox = board.val().BoundingBox()
-                current_bottom_z = bbox.zmin
-                z_offset = row_bottom_z - current_bottom_z
+                x_offset, y_offset = SheathingBuilder._wall_board_offset(face, bbox, face_x, board_y_center)
+                z_offset = row_bottom_z - bbox.zmin
                 
-                board = board.translate((face_x, board_y_center, z_offset))
+                board = board.translate((x_offset, y_offset, z_offset))
                 
                 # Add to assembly
                 board_name = f"gable_sheathing_{face}_board{face_quantity}"
                 gable_assembly.add(board, name=board_name, color=SheathingBuilder._color())
         
-        return SheathingBuilder._with_scene(gable_assembly, "gable_sheathing", "legacy_dimensions")
+        placement_source = "framing_datums" if datum_context else "legacy_dimensions"
+        return SheathingBuilder._with_scene(gable_assembly, "gable_sheathing", placement_source)
 
     @staticmethod
     def _with_scene(assembly: cq.Assembly, subsystem_name: str, placement_source: str) -> cq.Assembly:

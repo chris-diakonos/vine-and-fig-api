@@ -54,7 +54,21 @@ class NonFramingDatumContextTest(unittest.TestCase):
         )
 
         components = {component["semantic_path"]: component for component in model.scene_components}
+        by_name = {component["component_name"]: component for component in model.scene_components}
         self.assertEqual(components["building/sheathing"]["metadata"]["placement_source"], "framing_datums")
+        self.assertEqual(components["building/gable_sheathing"]["metadata"]["placement_source"], "framing_datums")
+        planes = {
+            "front": by_name["post_front_left"]["world_bounds"]["max"][1],
+            "rear": by_name["post_rear_left"]["world_bounds"]["min"][1],
+            "left": by_name["post_front_left"]["world_bounds"]["min"][0],
+            "right": by_name["post_front_right"]["world_bounds"]["max"][0],
+        }
+        self.assertAlmostEqual(by_name["sheathing_front_board1"]["world_bounds"]["min"][1], planes["front"], places=5)
+        self.assertAlmostEqual(by_name["sheathing_rear_board1"]["world_bounds"]["max"][1], planes["rear"], places=5)
+        self.assertAlmostEqual(by_name["sheathing_left_board1"]["world_bounds"]["max"][0], planes["left"], places=5)
+        self.assertAlmostEqual(by_name["sheathing_right_board1"]["world_bounds"]["min"][0], planes["right"], places=5)
+        self.assertAlmostEqual(by_name["gable_sheathing_left_board1"]["world_bounds"]["max"][0], planes["left"], places=5)
+        self.assertAlmostEqual(by_name["gable_sheathing_right_board1"]["world_bounds"]["min"][0], planes["right"], places=5)
 
     def test_windows_use_framing_wall_plane(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
