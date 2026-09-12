@@ -113,6 +113,7 @@ def collect_openings(structure: Structure, defaults: Dict[str, float]) -> List[D
     """Collect door and window openings in shared wall/floor terms."""
 
     openings: List[Dict[str, Any]] = []
+    window_sill_height = _window_sill_height()
     for door in structure.doors:
         if door.wall and door.position is not None:
             width, height = _parse_size(door.size, defaults["door_width"], defaults["door_height"])
@@ -146,6 +147,7 @@ def collect_openings(structure: Structure, defaults: Dict[str, float]) -> List[D
                         "type": "window",
                         "width": width,
                         "height": height,
+                        "sill_height": window_sill_height,
                     }
                 )
         return openings
@@ -174,9 +176,14 @@ def collect_openings(structure: Structure, defaults: Dict[str, float]) -> List[D
                         "type": "window",
                         "width": width,
                         "height": height,
+                        "sill_height": window_sill_height,
                     }
                 )
     return openings
+
+
+def _window_sill_height() -> float:
+    return float(load_json_config("windows", "WINDOWS_CONFIG_PATH")["defaults"]["sill_inside_height"])
 
 
 def _parse_size(size: str, default_width: float, default_height: float) -> tuple[float, float]:

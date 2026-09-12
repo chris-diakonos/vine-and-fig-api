@@ -11,8 +11,8 @@
       "hall_offset": 0.0,
       "hall_width": 96.0,
       "ceiling_heights": [
-        120.0,
-        108.0
+        132.0,
+        118.0
       ],
       "joist_heights": [
         10.0,
@@ -24,7 +24,7 @@
         "rear": 480.0,
         "left": 240.0,
         "right": 240.0,
-        "building_height": 255.0
+        "building_height": 277.0
       },
       "spacing": {
         "stud_spacing": 21.0,

@@ -84,8 +84,11 @@ class NonFramingDatumContextTest(unittest.TestCase):
         window = components["building/windows/front_wall/story_1/window_120"]
         sill = components["building/windows/front_wall/story_1/window_120/frame/bottom_frame_sill"]
         front_plane = by_name["post_front_left"]["world_bounds"]["max"][1]
+        cripple_top = by_name["cripple_stud_front_story1_bay1"]["metadata"]["framing_datums"]["max_corner"][2]
         self.assertEqual(window["metadata"]["placement"]["source"], "framing_datums")
         self.assertAlmostEqual(sill["world_bounds"]["min"][1], front_plane, places=5)
+        self.assertAlmostEqual(sill["world_bounds"]["min"][2], cripple_top, places=5)
+        self.assertAlmostEqual(sill["world_bounds"]["max"][2], 40.0, places=5)
 
     def test_second_story_window_uses_cripple_sill_and_centered_sashes(self):
         request = self._load_request(ROOT / "example_request.json")
@@ -100,7 +103,7 @@ class NonFramingDatumContextTest(unittest.TestCase):
         by_name = {component["component_name"]: component for component in model.scene_components}
         path = "building/windows/front_wall/story_2/window_80"
         front_plane = by_name["post_front_left"]["world_bounds"]["max"][1]
-        cripple_top = by_name["cripple_stud_front_story2_bay1"]["world_bounds"]["max"][2]
+        cripple_top = by_name["cripple_stud_front_story2_bay1"]["metadata"]["framing_datums"]["max_corner"][2]
         sill = components[f"{path}/frame/bottom_frame_sill"]
         lower_left = components[f"{path}/lower_sash/left_stile"]
         lower_right = components[f"{path}/lower_sash/right_stile"]

@@ -256,15 +256,22 @@ def _cripple_stud_tops(components: List[Dict[str, Any]]) -> Dict[Tuple[str, int,
     for component in components:
         metadata = component.get("metadata") or {}
         datums = metadata.get("framing_datums") or {}
-        if _component_role(component) != "cripple_stud" or not component.get("world_bounds"):
+        if _component_role(component) != "cripple_stud":
             continue
         face = datums.get("face")
         story = datums.get("story")
         station = datums.get("station")
         if face is None or story is None or station is None:
             continue
+        max_corner = datums.get("max_corner")
+        if isinstance(max_corner, list) and len(max_corner) >= 3:
+            top_z = float(max_corner[2])
+        elif component.get("world_bounds"):
+            top_z = float(component["world_bounds"]["max"][2])
+        else:
+            continue
         key = (str(face), int(story), round(float(station), 6))
-        tops[key] = max(tops.get(key, float("-inf")), component["world_bounds"]["max"][2])
+        tops[key] = max(tops.get(key, float("-inf")), top_z)
     return tops
 
 

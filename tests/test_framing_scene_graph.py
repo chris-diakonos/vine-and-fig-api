@@ -650,7 +650,7 @@ class FramingSceneGraphTest(unittest.TestCase):
         )
         self._assert_bounds_almost_equal(
             components["cripple_stud_front_story1_bay1"]["world_bounds"],
-            {"min": [118.5, 0.0, 10.0], "max": [121.5, 4.0, 40.0], "size": [3.0, 4.0, 30.0]},
+            {"min": [118.5, 0.0, 10.0], "max": [121.5, 4.0, 35.0], "size": [3.0, 4.0, 25.0]},
         )
         final_left_stud = self._scene_node(model.scene_root, "stud_left_story1_section6_wall1")
         self.assertAlmostEqual(final_left_stud.metadata["framing_datums"]["station"], 225.75)
@@ -678,7 +678,7 @@ class FramingSceneGraphTest(unittest.TestCase):
 
         self._assert_bounds_almost_equal(
             components["cripple_stud_front_story2_bay1"]["world_bounds"],
-            {"min": [118.5, 0.0, 106.0], "max": [121.5, 4.0, 136.0], "size": [3.0, 4.0, 30.0]},
+            {"min": [118.5, 0.0, 106.0], "max": [121.5, 4.0, 131.0], "size": [3.0, 4.0, 25.0]},
         )
         self._assert_bounds_almost_equal(
             components["bay_stud_front_story1_bay1_left"]["world_bounds"],

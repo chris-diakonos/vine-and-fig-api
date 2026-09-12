@@ -81,6 +81,7 @@ class FramingBuilder:
         self.bay_spacing = self.framing_defaults["bay_spacing"]
         self.lap = self.framing_defaults["lap"]
         self.chair_rail_height = self.framing_defaults["chair_rail_height"]
+        self.window_sill_height = float(load_json_config("windows", "WINDOWS_CONFIG_PATH")["defaults"]["sill_inside_height"])
         self.max_member_length = self.framing_defaults["max_member_length"]
         self.joist_spacing = self.floorplan.spacing.joist_spacing
         self.stud_spacing = self.floorplan.spacing.stud_spacing
@@ -802,13 +803,14 @@ class FramingBuilder:
                         bom_counts[("bay_stud", stud_length, bay_stud_width, bay_stud_depth)] += 1
 
                     if self._should_add_cripple(face, story, index, centerline):
+                        cripple_length = self._cripple_stud_length(face, story, centerline, stud_tenon_depth)
                         datum = datums.cripple_stud(
                             face,
                             story,
                             index,
                             centerline,
                             bottom_z,
-                            self.chair_rail_height,
+                            cripple_length,
                             cripple_stud_width,
                             cripple_stud_depth,
                         )
@@ -821,7 +823,7 @@ class FramingBuilder:
                         )
                         bom_counts[(
                             "cripple_stud",
-                            self.chair_rail_height,
+                            cripple_length,
                             cripple_stud_width,
                             cripple_stud_depth,
                         )] += 1
@@ -939,6 +941,19 @@ class FramingBuilder:
         if face in ("left", "right") and bay in (1, 2):
             return True
         return face in ("front", "rear")
+
+    def _cripple_stud_length(self, face: str, story: int, station: float, tenon_allowance: float = 0.0) -> float:
+        sill_height = self.window_sill_height
+        for opening in self.openings:
+            if (
+                opening.get("wall") == face
+                and opening.get("position") == station
+                and opening.get("floor") == story
+                and opening.get("type") == "window"
+            ):
+                sill_height = float(opening.get("sill_height") or sill_height)
+                break
+        return max(0.0, self.chair_rail_height - sill_height + tenon_allowance)
 
     def _record_door_opening_stations(
         self,
@@ -2229,11 +2244,11 @@ class FramingBuilder:
         bay_stud_height = 4
         cripple_stud_width = 3
         cripple_stud_height = 4
-        cripple_stud_length = self.chair_rail_height
+        stud_tenon_depth = 2
+        cripple_stud_length = self._cripple_stud_length("", story, 0.0, stud_tenon_depth)
         member_type = "bay_stud"
         total_quantity = 0
         cripple_quantity = 0
-        stud_tenon_depth = 2
         
         ceiling_heights = self.calculated_ceiling_heights
         floor_heights = self.calculated_floor_heights
