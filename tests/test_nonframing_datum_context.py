@@ -114,6 +114,7 @@ class NonFramingDatumContextTest(unittest.TestCase):
         self.assertAlmostEqual(sill["world_bounds"]["min"][2], cripple_top, places=5)
         self.assertAlmostEqual(sill["world_bounds"]["min"][1], front_plane, places=5)
         self.assertAlmostEqual(lower_sash_center, 80.0, places=5)
+        self.assertAlmostEqual(lower_left["world_bounds"]["min"][2], sill["world_bounds"]["max"][2], places=5)
         self.assertLessEqual(sash_gap, 0.25 + 1e-5)
 
     def test_doors_use_framing_wall_plane(self):

@@ -947,12 +947,35 @@ class WindowsBuilder:
         target_gap = float(WindowsBuilder._window_config()["defaults"].get("glazing_rabbet", 0.25))
         current_gap = upper_bounds.min[2] - lower_bounds.max[2]
         if current_gap <= target_gap:
+            gap_adjustment = 0.0
+        else:
+            gap_adjustment = current_gap - target_gap
+            tx, ty, tz = upper_sash.local_transform.translation
+            upper_sash.local_transform = Transform(
+                translation=(tx, ty, tz - gap_adjustment),
+                rotations=upper_sash.local_transform.rotations,
+            )
+
+        sill_node = next((node for node in window_node.iter_nodes() if node.name == "bottom_frame_sill"), None)
+        if sill_node is None:
             return
-        tx, ty, tz = upper_sash.local_transform.translation
-        upper_sash.local_transform = Transform(
-            translation=(tx, ty, tz - (current_gap - target_gap)),
-            rotations=upper_sash.local_transform.rotations,
+        sill_geometry = sill_node.projected_geometry_to_ancestor(window_node)
+        sill_bounds = bounds_for_workplane(sill_geometry)
+        lower_bounds = (
+            WindowsBuilder._sash_stile_bounds_to_ancestor(lower_sash, window_node)
+            or WindowsBuilder._aggregate_bounds_to_ancestor(lower_sash, window_node)
         )
+        if sill_bounds is None or lower_bounds is None:
+            return
+        sash_lift = sill_bounds.max[2] - lower_bounds.min[2]
+        if sash_lift == 0.0:
+            return
+        for sash_node in (lower_sash, upper_sash):
+            tx, ty, tz = sash_node.local_transform.translation
+            sash_node.local_transform = Transform(
+                translation=(tx, ty, tz + sash_lift),
+                rotations=sash_node.local_transform.rotations,
+            )
 
     @staticmethod
     def _aggregate_bounds_to_ancestor(node: SceneNode, ancestor: SceneNode) -> Optional[Bounds]:
