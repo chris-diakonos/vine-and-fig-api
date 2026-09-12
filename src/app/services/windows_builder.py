@@ -465,7 +465,7 @@ class WindowsBuilder:
             .wires().toPending().extrude(frame_width)
             .faces("<Z").workplane()
             .rect(tenon_size, tenon_size, forConstruction=True)
-            .wires().toPending().extrude(frame_width - 2)
+            .wires().toPending().extrude(max(frame_width - 2, 1.0))
         )
         frame.add(left_frame, name="left_frame", color=sash_color)
 
@@ -484,7 +484,7 @@ class WindowsBuilder:
             .wires().toPending().extrude(frame_width)
             .faces("<Z").workplane()
             .rect(tenon_size, tenon_size, forConstruction=True)
-            .wires().toPending().extrude(frame_width - 2)
+            .wires().toPending().extrude(max(frame_width - 2, 1.0))
         )
         frame.add(right_frame, name="right_frame", color=sash_color)
 
