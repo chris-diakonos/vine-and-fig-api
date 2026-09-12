@@ -113,7 +113,6 @@ def collect_openings(structure: Structure, defaults: Dict[str, float]) -> List[D
     """Collect door and window openings in shared wall/floor terms."""
 
     openings: List[Dict[str, Any]] = []
-    window_sill_height = _window_sill_height()
     for door in structure.doors:
         if door.wall and door.position is not None:
             width, height = _parse_size(door.size, defaults["door_width"], defaults["door_height"])
@@ -138,16 +137,16 @@ def collect_openings(structure: Structure, defaults: Dict[str, float]) -> List[D
     if has_explicit_locations:
         for window in structure.windows:
             if window.wall and window.position is not None and window.floor is not None:
-                width, height = _parse_size(window.size, defaults["window_width"], defaults["window_height"])
+                metrics = _window_opening_metrics(window)
                 openings.append(
                     {
                         "wall": window.wall,
                         "position": window.position,
                         "floor": window.floor,
                         "type": "window",
-                        "width": width,
-                        "height": height,
-                        "sill_height": window_sill_height,
+                        "width": metrics["width"],
+                        "height": metrics["height"],
+                        "sill_height": metrics["sill_height"],
                     }
                 )
         return openings
@@ -161,8 +160,8 @@ def collect_openings(structure: Structure, defaults: Dict[str, float]) -> List[D
         if story_idx >= len(structure.windows):
             break
         window = structure.windows[story_idx]
+        metrics = _window_opening_metrics(window)
         floor_number = story_idx + 1
-        width, height = _parse_size(window.size, defaults["window_width"], defaults["window_height"])
         for face in ["front", "rear", "left", "right"]:
             bays = getattr(structure.floorplan.bays, face, []) if structure.floorplan.bays else []
             for bay_position in bays:
@@ -174,16 +173,23 @@ def collect_openings(structure: Structure, defaults: Dict[str, float]) -> List[D
                         "position": bay_position,
                         "floor": floor_number,
                         "type": "window",
-                        "width": width,
-                        "height": height,
-                        "sill_height": window_sill_height,
+                        "width": metrics["width"],
+                        "height": metrics["height"],
+                        "sill_height": metrics["sill_height"],
                     }
                 )
     return openings
 
 
-def _window_sill_height() -> float:
-    return float(load_json_config("windows", "WINDOWS_CONFIG_PATH")["defaults"]["sill_inside_height"])
+def _window_opening_metrics(window) -> Dict[str, float]:
+    from app.services.windows_builder import WindowsBuilder
+
+    metrics = WindowsBuilder._window_metrics(window)
+    return {
+        "width": float(metrics["opening_width"]),
+        "height": float(metrics["opening_height"]),
+        "sill_height": float(metrics["sill_inside_height"]),
+    }
 
 
 def _parse_size(size: str, default_width: float, default_height: float) -> tuple[float, float]:

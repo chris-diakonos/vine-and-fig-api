@@ -70,6 +70,31 @@ class NonFramingDatumContextTest(unittest.TestCase):
         self.assertAlmostEqual(by_name["gable_sheathing_left_board1"]["world_bounds"]["max"][0], planes["left"], places=5)
         self.assertAlmostEqual(by_name["gable_sheathing_right_board1"]["world_bounds"]["min"][0], planes["right"], places=5)
 
+    def test_front_sheathing_cuts_only_actual_opening_courses(self):
+        request = self._load_request(ROOT / "example_request.json")
+
+        model, _ = BuildingBuilder.build(
+            request.structure,
+            "sheathing-opening-courses-test",
+            self._visibility(sheathing=True),
+        )
+
+        front_boards = [
+            component
+            for component in model.scene_components
+            if component["component_name"] and component["component_name"].startswith("sheathing_front_board")
+        ]
+
+        def covers(point_x: float, point_z: float) -> bool:
+            return any(
+                board["world_bounds"]["min"][0] <= point_x <= board["world_bounds"]["max"][0]
+                and board["world_bounds"]["min"][2] <= point_z <= board["world_bounds"]["max"][2]
+                for board in front_boards
+            )
+
+        self.assertTrue(covers(80.0, 25.0))
+        self.assertFalse(covers(80.0, 220.0))
+
     def test_windows_use_framing_wall_plane(self):
         request = self._load_request(ROOT / "tests" / "fixtures" / "minimal_window_request.json")
 

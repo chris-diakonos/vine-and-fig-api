@@ -255,51 +255,25 @@ class SheathingBuilder:
                 # Translate moves the geometric center, so calculate center position
                 board_z = bottom_edge_z + (board_height / 2)
                 
-                # Check if this board row intersects with any openings on this face
-                # Opening vertical range is approximately chair_rail to bay_height (simplified)
-                board_intersects_opening = False
-                board_intersects_door = False
-                openings_at_bays = {}  # Map bay position to True if it has an opening in this row
-                
+                # Cut only the actual openings that intersect this course.
                 floor_number = story_idx + 1
-                for opening in openings:
-                    if opening.get('wall') == face and opening.get('floor') == floor_number:
-                        # Check if this board's vertical range intersects the opening
-                        # Doors start at floor, windows start at chair rail
-                        opening_bottom = floor_heights[story_idx] if opening.get('type') == 'door' else chair_rail_height
-                        opening_top = opening_bottom + opening.get('height', 80)
-                        
-                        if bottom_edge_z < opening_top and current_board_height > opening_bottom:
-                            board_intersects_opening = True
-                            if opening.get('type') == 'door':
-                                board_intersects_door = True
-                            openings_at_bays[opening.get('position')] = True
+                opening_intervals = SheathingBuilder._opening_intervals_for_course(
+                    openings,
+                    face,
+                    floor_number,
+                    bottom_edge_z,
+                    current_board_height,
+                    floor_heights[story_idx],
+                    chair_rail_height,
+                    wall_length,
+                )
+                board_segments = SheathingBuilder._wall_segments_between_openings(wall_length, opening_intervals)
 
-                # Determine if the board is a single board or multiple boards
-                if len(board_lengths) == 1:
-                    horizontal_quantity = 1
-                elif not board_intersects_opening:
-                    # No openings in this row, use single board
-                    horizontal_quantity = 1
-                elif board_intersects_door:
-                    # Door opening - always use multiple boards to cut around it
-                    horizontal_quantity = len(board_lengths)
-                elif current_board_height < chair_rail_height:
-                    horizontal_quantity = 1
-                elif current_board_height > bay_height:
-                    horizontal_quantity = 1
-                else:
-                    horizontal_quantity = len(board_lengths)
-
-
-                for col in range(1, horizontal_quantity + 1):
-
-                    if horizontal_quantity == 1:
-                        board_length = wall_length
-                        board_x_position = wall_length / 2
-                    else:
-                        board_length = board_lengths[col - 1]
-                        board_x_position = board_x_positions[col - 1]
+                for board_start, board_end in board_segments:
+                    board_length = board_end - board_start
+                    if board_length <= 0:
+                        continue
+                    board_x_position = board_start + (board_length / 2)
 
                     face_quantity += 1
                     total_quantity += 1
@@ -356,6 +330,64 @@ class SheathingBuilder:
                     sheathing_assembly.add(board, name=board_name, color=SheathingBuilder._color())  # Light sheathing
         
         return SheathingBuilder._with_scene(sheathing_assembly, "sheathing", placement_source)
+
+    @staticmethod
+    def _opening_intervals_for_course(
+        openings: List[Dict[str, Any]],
+        face: str,
+        floor_number: int,
+        course_bottom_z: float,
+        course_top_z: float,
+        floor_height: float,
+        chair_rail_height: float,
+        wall_length: float,
+    ) -> List[tuple[float, float]]:
+        intervals = []
+        for opening in openings:
+            if opening.get("wall") != face or opening.get("floor") != floor_number:
+                continue
+            opening_type = opening.get("type")
+            if opening_type == "door":
+                opening_bottom = floor_height
+            else:
+                opening_bottom = chair_rail_height - float(opening.get("sill_height") or 0.0)
+            opening_top = opening_bottom + float(opening.get("height", 0.0))
+            if course_bottom_z >= opening_top or course_top_z <= opening_bottom:
+                continue
+            position = opening.get("position")
+            width = opening.get("width")
+            if position is None or width is None:
+                continue
+            half_width = float(width) / 2.0
+            intervals.append((
+                max(0.0, float(position) - half_width),
+                min(wall_length, float(position) + half_width),
+            ))
+        return intervals
+
+    @staticmethod
+    def _wall_segments_between_openings(wall_length: float, opening_intervals: List[tuple[float, float]]) -> List[tuple[float, float]]:
+        if not opening_intervals:
+            return [(0.0, wall_length)]
+
+        merged = []
+        for start, end in sorted(opening_intervals):
+            if end <= start:
+                continue
+            if not merged or start > merged[-1][1]:
+                merged.append([start, end])
+            else:
+                merged[-1][1] = max(merged[-1][1], end)
+
+        segments = []
+        cursor = 0.0
+        for start, end in merged:
+            if start > cursor:
+                segments.append((cursor, start))
+            cursor = max(cursor, end)
+        if cursor < wall_length:
+            segments.append((cursor, wall_length))
+        return segments
 
     @staticmethod
     def _wall_board_offset(face: str, bbox, target_x: float, target_y: float) -> tuple[float, float]:

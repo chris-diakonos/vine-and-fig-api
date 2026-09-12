@@ -111,7 +111,7 @@ def _validate_named_group_containment(
             )
         ]
 
-    group_bounds = aggregate_local_bounds(group)
+    group_bounds = _aggregate_bounds_to_ancestor(group, window_node)
     if group_bounds is None:
         return [
             ValidationResult(
@@ -187,6 +187,18 @@ def _validate_group_glazing_plane(sash_node: SceneNode, tolerance: float) -> Lis
             tolerance=tolerance,
         )
     ]
+
+
+def _aggregate_bounds_to_ancestor(node: SceneNode, ancestor: SceneNode) -> Optional[Bounds]:
+    aggregate = None
+    for child in node.iter_nodes():
+        if child.geometry is None:
+            continue
+        bounds = bounds_for_workplane(child.projected_geometry_to_ancestor(ancestor))
+        if bounds is None:
+            continue
+        aggregate = bounds if aggregate is None else aggregate.union(bounds)
+    return aggregate
 
 
 def _bounds_contained(inner: Bounds, outer: Bounds, tolerance: float) -> bool:
