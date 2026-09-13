@@ -59,6 +59,25 @@ class Sheathing(BaseModel):
     sheathing_type: Literal["beaded-weatherboard", "beveled-weatherboard"] = Field(
         ..., description="Type of sheathing profile"
     )
+    corner_treatment: Optional[Literal["pilaster", "plain", "beaded"]] = Field(
+        default=None, description="Corner board treatment"
+    )
+
+
+class Cornice(BaseModel):
+    """Cornice specification."""
+    cornice_type: Literal["single", "double"] = Field(
+        default="single", description="Cornice configuration"
+    )
+    has_modillions: bool = Field(
+        default=False, description="Whether the cornice includes modillions"
+    )
+    has_dentils: bool = Field(
+        default=False, description="Whether the cornice includes dentils"
+    )
+    eave_treatment: Literal["pediment", "hipped", "classical-return", "virginia-bargeboard"] = Field(
+        default="virginia-bargeboard", description="Eave treatment"
+    )
 
 
 class Flooring(BaseModel):

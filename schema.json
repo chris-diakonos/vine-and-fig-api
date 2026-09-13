@@ -85,7 +85,18 @@
             "sheathing_species": { "type": "string", "enum": ["pine", "cypress"] },
             "sheathing_exposure": { "type": "integer", "minimum": 5, "maximum": 8},
             "sheathing_height": { "type": "number", "minimum": 7.25, "maximum": 10},
-            "sheathing_type": { "type": "string", "enum": ["beaded-weatherboard", "beveled-weatherboard"] }
+            "sheathing_type": { "type": "string", "enum": ["beaded-weatherboard", "beveled-weatherboard"] },
+            "corner_treatment": { "type": "string", "enum": ["pilaster", "plain", "beaded"] } 
+        }
+    },
+    "cornice": {
+        "$anchor": "CorniceSchema",
+        "type": "object",
+        "properties": {
+            "cornice_type": { "type": "string", "enum": ["single", "double"] },
+            "has_modillions": { "type": "boolean", "default": false },
+            "has_dentils": { "type": "boolean", "default": false },
+            "eave_treatment": { "type": "string", "enum": ["pediment", "hipped", "classical-return", "virginia-bargeboard"] }
         }
     },
     "flooring": {
@@ -152,6 +163,7 @@
             "doors": { "type": "array", "items": { "$ref": "#DoorSchema" }},
             "sheathing": { "$ref": "#SheathingSchema" },
             "roof": { "$ref": "#RoofSchema" },
+            "cornice": { "$ref": "#CorniceSchema" },
             "flooring": { "$ref": "#FlooringSchema" }
         }
     },
@@ -165,7 +177,8 @@
             "sheathing": { "type": "boolean", "default": true, "description": "Render sheathing" },
             "roof": { "type": "boolean", "default": true, "description": "Render roof" },
             "windows": { "type": "boolean", "default": true, "description": "Render windows" },
-            "doors": { "type": "boolean", "default": true, "description": "Render doors" }
+            "doors": { "type": "boolean", "default": true, "description": "Render doors" },
+            "cornice": { "type": "boolean", "default": true, "description": "Render cornice" }
         }
     }
 }

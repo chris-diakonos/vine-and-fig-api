@@ -9,6 +9,7 @@ from app.models.building import Sheathing
 from app.models.floorplan import Dimensions, Floorplan
 from app.services.building_datums import BuildingDatumContext
 from app.services.config_loader import load_json_config
+from app.services.cornice_builder import CorniceBuilder
 from app.services.scene_graph import collect_component_metadata, project_scene_to_assembly, scene_from_assembly
 from app.services.sheathing_validation import validate_sheathing_scene
 
@@ -155,6 +156,7 @@ class SheathingBuilder:
         profile_config = SheathingBuilder._config()["profile"]
         top_width = profile_config["top_width"]
         bottom_width = profile_config["bottom_width"]
+        corner_board_width = SheathingBuilder._corner_board_width(sheathing.corner_treatment)
         
         # Calculate bevel angle for lapped siding
         # The bevel is the angle created by the difference between top and bottom width
@@ -268,6 +270,7 @@ class SheathingBuilder:
                     wall_length,
                 )
                 board_segments = SheathingBuilder._wall_segments_between_openings(wall_length, opening_intervals)
+                board_segments = SheathingBuilder._clip_segments(board_segments, corner_board_width, wall_length - corner_board_width)
 
                 for board_start, board_end in board_segments:
                     board_length = board_end - board_start
@@ -328,6 +331,16 @@ class SheathingBuilder:
                     # Add board to assembly as individual component with color
                     board_name = f"sheathing_{face}_board{face_quantity}"
                     sheathing_assembly.add(board, name=board_name, color=SheathingBuilder._color())  # Light sheathing
+
+        SheathingBuilder._add_corner_treatment(
+            sheathing_assembly,
+            sheathing.corner_treatment,
+            dimensions,
+            lowest_floor_height + board_exposure - board_height,
+            lowest_floor_height + vertical_quantity * board_exposure,
+            stud_depth,
+            datum_context,
+        )
         
         return SheathingBuilder._with_scene(sheathing_assembly, "sheathing", placement_source)
 
@@ -388,6 +401,246 @@ class SheathingBuilder:
         if cursor < wall_length:
             segments.append((cursor, wall_length))
         return segments
+
+    @staticmethod
+    def _clip_segments(segments: List[tuple[float, float]], min_station: float, max_station: float) -> List[tuple[float, float]]:
+        if min_station <= 0.0 and max_station >= 0.0:
+            return segments
+        clipped = []
+        for start, end in segments:
+            clipped_start = max(start, min_station)
+            clipped_end = min(end, max_station)
+            if clipped_end > clipped_start:
+                clipped.append((clipped_start, clipped_end))
+        return clipped
+
+    @staticmethod
+    def _corner_board_width(corner_treatment: Optional[str]) -> float:
+        if corner_treatment == "pilaster":
+            return 7.25
+        if corner_treatment in ("plain", "beaded"):
+            return 3.5
+        return 0.0
+
+    @staticmethod
+    def _add_corner_treatment(
+        assembly: cq.Assembly,
+        corner_treatment: Optional[str],
+        dimensions: Dimensions,
+        bottom_z: float,
+        top_z: float,
+        stud_depth: float,
+        datum_context: BuildingDatumContext = None,
+    ) -> None:
+        if corner_treatment is None:
+            return
+
+        board_width = SheathingBuilder._corner_board_width(corner_treatment)
+        if board_width <= 0.0:
+            return
+
+        board_thickness = 0.75
+        height = max(0.0, top_z - bottom_z)
+        if height <= 0.0:
+            return
+
+        planes = {
+            "front": datum_context.wall_exterior_plane("front", stud_depth) if datum_context else stud_depth,
+            "rear": datum_context.wall_exterior_plane("rear", stud_depth) if datum_context else -dimensions.right - stud_depth,
+            "left": datum_context.wall_exterior_plane("left", stud_depth) if datum_context else -stud_depth / 2.0,
+            "right": datum_context.wall_exterior_plane("right", stud_depth) if datum_context else dimensions.front + stud_depth / 2.0,
+        }
+
+        corners = {
+            "front_left": {
+                "front": (0.0, board_width, planes["front"], planes["front"] + board_thickness),
+                "side": (planes["left"] - board_thickness, planes["left"], -board_width, 0.0),
+                "bead": (0.0, planes["front"] + board_thickness / 2.0),
+            },
+            "front_right": {
+                "front": (dimensions.front - board_width, dimensions.front, planes["front"], planes["front"] + board_thickness),
+                "side": (planes["right"], planes["right"] + board_thickness, -board_width, 0.0),
+                "bead": (dimensions.front, planes["front"] + board_thickness / 2.0),
+            },
+            "rear_left": {
+                "front": (0.0, board_width, planes["rear"] - board_thickness, planes["rear"]),
+                "side": (planes["left"] - board_thickness, planes["left"], -dimensions.left, -dimensions.left + board_width),
+                "bead": (0.0, planes["rear"] - board_thickness / 2.0),
+            },
+            "rear_right": {
+                "front": (dimensions.front - board_width, dimensions.front, planes["rear"] - board_thickness, planes["rear"]),
+                "side": (planes["right"], planes["right"] + board_thickness, -dimensions.right, -dimensions.right + board_width),
+                "bead": (dimensions.front, planes["rear"] - board_thickness / 2.0),
+            },
+        }
+
+        for corner_name, corner in corners.items():
+            front_x_min, front_x_max, front_y_min, front_y_max = corner["front"]
+            side_x_min, side_x_max, side_y_min, side_y_max = corner["side"]
+            SheathingBuilder._add_box(
+                assembly,
+                f"corner_board_{corner_name}_cross",
+                front_x_min,
+                front_x_max,
+                front_y_min,
+                front_y_max,
+                bottom_z,
+                top_z,
+            )
+            SheathingBuilder._add_box(
+                assembly,
+                f"corner_board_{corner_name}_side",
+                side_x_min,
+                side_x_max,
+                side_y_min,
+                side_y_max,
+                bottom_z,
+                top_z,
+            )
+            if corner_treatment == "beaded":
+                bead_x, bead_y = corner["bead"]
+                bead = cq.Workplane("XY").circle(0.1875).extrude(height).translate((bead_x, bead_y, bottom_z))
+                assembly.add(bead, name=f"corner_bead_{corner_name}", color=SheathingBuilder._color())
+            elif corner_treatment == "pilaster":
+                SheathingBuilder._add_pilaster_capital(
+                    assembly,
+                    corner_name,
+                    corner,
+                    bottom_z,
+                    top_z,
+                )
+
+    @staticmethod
+    def _add_pilaster_capital(
+        assembly: cq.Assembly,
+        corner_name: str,
+        corner: Dict[str, tuple[float, float, float, float] | tuple[float, float]],
+        bottom_z: float,
+        top_z: float,
+    ) -> None:
+        fillet_height = 0.75
+        fillet_projection = 1.25
+        bed_height = 1.5
+        nose_drop = 5.5
+
+        for side_name in ("front", "side"):
+            x_min, x_max, y_min, y_max = corner[side_name]  # type: ignore[misc]
+            center_x = (x_min + x_max) / 2.0
+            center_y = (y_min + y_max) / 2.0
+            width_x = x_max - x_min
+            width_y = y_max - y_min
+            if width_x >= width_y:
+                x_min -= 0.5
+                x_max += 0.5
+                y_min -= fillet_projection / 2.0
+                y_max += fillet_projection / 2.0
+                length = x_max - x_min
+                face = "front" if center_y >= 0.0 else "rear"
+            else:
+                y_min -= 0.5
+                y_max += 0.5
+                x_min -= fillet_projection / 2.0
+                x_max += fillet_projection / 2.0
+                length = y_max - y_min
+                face = "right" if center_x >= 0.0 else "left"
+
+            SheathingBuilder._add_box(
+                assembly,
+                f"pilaster_fillet_{corner_name}_{side_name}",
+                x_min,
+                x_max,
+                y_min,
+                y_max,
+                top_z - fillet_height,
+                top_z,
+            )
+            bed = CorniceBuilder._bed_molding(0.75, bed_height).extrude(length)
+            bed = SheathingBuilder._place_profile_on_trim_face(bed, face, x_min, x_max, y_min, y_max, top_z - fillet_height)
+            assembly.add(bed, name=f"pilaster_bedmold_{corner_name}_{side_name}", color=SheathingBuilder._color())
+
+            nose = SheathingBuilder._nose_and_cove(length)
+            nose = SheathingBuilder._place_profile_on_trim_face(nose, face, x_min, x_max, y_min, y_max, top_z - nose_drop)
+            assembly.add(nose, name=f"pilaster_nose_and_cove_{corner_name}_{side_name}", color=SheathingBuilder._color())
+
+    @staticmethod
+    def _nose_and_cove(length: float) -> cq.Workplane:
+        profile_points = []
+        segments = 24
+
+        nose_radius = 0.375 / 2.0
+        cove_radius = 0.5
+        back_size = 0.125
+        nose_center_x = 1.0 - nose_radius
+        nose_center_y = -nose_radius
+        nose_increment = 180 / segments
+        increment = 90 / segments
+
+        profile_points.append((0, 0))
+        profile_points.append((nose_center_x, 0))
+
+        nose_x = nose_center_x
+        nose_y = 0.0
+        for segment in range(1, segments):
+            angle_degrees = 90 - (segment * nose_increment)
+            angle_radians = math.radians(angle_degrees)
+            nose_x = nose_center_x + (nose_radius * math.cos(angle_radians))
+            nose_y = nose_center_y + (nose_radius * math.sin(angle_radians))
+            profile_points.append((nose_x, nose_y))
+
+        profile_points.append((nose_x, nose_y - back_size))
+
+        cove_center_x = nose_x + 0.000001
+        cove_center_y = nose_y - back_size - cove_radius
+        cove_y = cove_center_y
+        for segment in range(segments):
+            angle_degrees = 90 + (segment * increment)
+            angle_radians = math.radians(angle_degrees)
+            cove_x = cove_center_x + (cove_radius * math.cos(angle_radians))
+            cove_y = cove_center_y + (cove_radius * math.sin(angle_radians))
+            profile_points.append((cove_x, cove_y))
+
+        profile_points.append((0, cove_y))
+        return cq.Workplane("XZ").polyline(profile_points).close().extrude(length)
+
+    @staticmethod
+    def _place_profile_on_trim_face(
+        profile: cq.Workplane,
+        face: str,
+        x_min: float,
+        x_max: float,
+        y_min: float,
+        y_max: float,
+        top_z: float,
+    ) -> cq.Workplane:
+        if face in ("front", "rear"):
+            profile = profile.rotate((0, 0, 0), (0, 0, 1), -90)
+        bbox = profile.val().BoundingBox()
+
+        if face == "front":
+            return profile.translate((x_min - bbox.xmin, y_min - bbox.ymin, top_z - bbox.zmax))
+        if face == "rear":
+            return profile.translate((x_min - bbox.xmin, y_max - bbox.ymax, top_z - bbox.zmax))
+        if face == "left":
+            return profile.translate((x_max - bbox.xmax, y_min - bbox.ymin, top_z - bbox.zmax))
+        return profile.translate((x_min - bbox.xmin, y_min - bbox.ymin, top_z - bbox.zmax))
+
+    @staticmethod
+    def _add_box(
+        assembly: cq.Assembly,
+        name: str,
+        x_min: float,
+        x_max: float,
+        y_min: float,
+        y_max: float,
+        z_min: float,
+        z_max: float,
+    ) -> None:
+        box = (
+            cq.Workplane("XY")
+            .box(x_max - x_min, y_max - y_min, z_max - z_min)
+            .translate(((x_min + x_max) / 2.0, (y_min + y_max) / 2.0, (z_min + z_max) / 2.0))
+        )
+        assembly.add(box, name=name, color=SheathingBuilder._color())
 
     @staticmethod
     def _wall_board_offset(face: str, bbox, target_x: float, target_y: float) -> tuple[float, float]:
@@ -539,7 +792,7 @@ class SheathingBuilder:
             subsystem_type="sheathing",
             subsystem_role=subsystem_name,
             group_name_for_component=SheathingBuilder._group_name_for_component,
-            role_for_component=lambda _name: "sheathing_board",
+            role_for_component=SheathingBuilder._role_for_component,
         )
         projected = cq.Assembly()
         subsystem = next((node for node in scene_root.iter_nodes() if node.name == subsystem_name), None)
@@ -554,9 +807,21 @@ class SheathingBuilder:
     @staticmethod
     def _group_name_for_component(component_name: str) -> str:
         parts = component_name.split("_")
+        if component_name.startswith(("corner_board_", "corner_bead_", "pilaster_")):
+            return "corner_trim"
         if component_name.startswith("gable_sheathing_") and len(parts) >= 3:
             return f"{parts[2]}_gable"
         if component_name.startswith("sheathing_") and len(parts) >= 2:
             return f"{parts[1]}_wall"
         return "sheathing"
+
+    @staticmethod
+    def _role_for_component(component_name: str) -> str:
+        if component_name.startswith("corner_board_"):
+            return "corner_board"
+        if component_name.startswith("corner_bead_"):
+            return "corner_bead"
+        if component_name.startswith("pilaster_"):
+            return "pilaster_molding"
+        return "sheathing_board"
 

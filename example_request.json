@@ -79,7 +79,8 @@
       "sheathing_species": "cypress",
       "sheathing_exposure": 6,
       "sheathing_height": 7.25,
-      "sheathing_type": "beveled-weatherboard"
+      "sheathing_type": "beaded-weatherboard",
+      "corner_treatment": "beaded"
     },
     "flooring": [
       {
@@ -183,7 +184,13 @@
         "position": 240.0,
         "floor": null
       }
-    ]
+    ],
+    "cornice": {
+      "cornice_type": "single",
+      "has_modillions": true,
+      "has_dentils": false,
+      "eave_treatment": "virginia-bargeboard"
+    }
   },
   "view_mode": "3d"
 }

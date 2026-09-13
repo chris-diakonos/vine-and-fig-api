@@ -303,22 +303,23 @@ class BuildingBuilder:
                         building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.5, 0.3, 0.2))
         
         # Build cornice at the top of the building
-        cornice_assembly = CorniceBuilder.build(
-            dimensions,
-            dimensions.building_height,
-            structure.roof.roof_type,
-            datum_context=datum_context,
-        )
-        if cornice_assembly is not None:
-            if hasattr(cornice_assembly, "scene_components"):
-                scene_components.extend(cornice_assembly.scene_components)
-            if hasattr(cornice_assembly, "validation_results"):
-                validation_results.append(cornice_assembly.validation_results)
-            # Add all cornice components to the main assembly (colors are already set in cornice_builder)
-            for name, obj_data in cornice_assembly.traverse():
-                if hasattr(obj_data, 'obj') and obj_data.obj is not None:
-                    component_name = name if name else f"cornice_{len(building_assembly.children)}"
-                    building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
+        if component_visibility.cornice:
+            cornice_assembly = CorniceBuilder.build(
+                dimensions,
+                dimensions.building_height,
+                structure.roof.roof_type,
+                datum_context=datum_context,
+            )
+            if cornice_assembly is not None:
+                if hasattr(cornice_assembly, "scene_components"):
+                    scene_components.extend(cornice_assembly.scene_components)
+                if hasattr(cornice_assembly, "validation_results"):
+                    validation_results.append(cornice_assembly.validation_results)
+                # Add all cornice components to the main assembly (colors are already set in cornice_builder)
+                for name, obj_data in cornice_assembly.traverse():
+                    if hasattr(obj_data, 'obj') and obj_data.obj is not None:
+                        component_name = name if name else f"cornice_{len(building_assembly.children)}"
+                        building_assembly.add(obj_data.obj, name=component_name, color=obj_data.color if hasattr(obj_data, 'color') else cq.Color(0.8, 0.7, 0.6))
         
         building_assembly.scene_components = scene_components
         building_assembly.validation_results = {
