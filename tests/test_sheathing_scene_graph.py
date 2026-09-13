@@ -60,6 +60,10 @@ class SheathingSceneGraphTest(unittest.TestCase):
         self.assertIn("building/sheathing/corner_trim/corner_board_front_left_cross", {
             component["semantic_path"] for component in corner_boards
         })
+        self.assertAlmostEqual(by_name["corner_board_front_left_cross"]["world_bounds"]["size"][0], 4.0, places=5)
+        self.assertAlmostEqual(by_name["corner_board_front_left_cross"]["world_bounds"]["size"][1], 1.0, places=5)
+        self.assertAlmostEqual(by_name["corner_board_front_left_side"]["world_bounds"]["size"][0], 1.0, places=5)
+        self.assertAlmostEqual(by_name["corner_board_front_left_side"]["world_bounds"]["size"][1], 4.0, places=5)
         self.assertAlmostEqual(
             by_name["sheathing_front_board1"]["world_bounds"]["min"][0],
             by_name["corner_board_front_left_cross"]["world_bounds"]["max"][0],

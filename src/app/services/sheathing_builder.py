@@ -435,8 +435,6 @@ class SheathingBuilder:
 
     @staticmethod
     def _clip_segments(segments: List[tuple[float, float]], min_station: float, max_station: float) -> List[tuple[float, float]]:
-        if min_station <= 0.0 and max_station >= 0.0:
-            return segments
         clipped = []
         for start, end in segments:
             clipped_start = max(start, min_station)
@@ -448,9 +446,9 @@ class SheathingBuilder:
     @staticmethod
     def _corner_board_width(corner_treatment: Optional[str]) -> float:
         if corner_treatment == "pilaster":
-            return 7.25
+            return 8.0
         if corner_treatment in ("plain", "beaded"):
-            return 3.5
+            return 4.0
         return 0.0
 
     @staticmethod
@@ -469,7 +467,7 @@ class SheathingBuilder:
         if board_width <= 0.0:
             return
 
-        board_thickness = 0.75
+        board_thickness = 1.0
         height = max(0.0, top_z - bottom_z)
         if height <= 0.0:
             return
