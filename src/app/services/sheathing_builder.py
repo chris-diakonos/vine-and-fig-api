@@ -166,6 +166,7 @@ class SheathingBuilder:
         # Stud dimensions (from framing)
         stud_depth = SheathingBuilder._config()["placement"]["stud_depth"]
         placement_source = "framing_datums" if datum_context else "legacy_dimensions"
+        wall_planes = SheathingBuilder._wall_planes(dimensions, stud_depth, datum_context)
         
         # Create assembly to hold individual boards
         sheathing_assembly = cq.Assembly()
@@ -181,6 +182,7 @@ class SheathingBuilder:
             current_board_height = lowest_floor_height
             bays = getattr(floorplan.bays, face, [])
             wall_length = getattr(dimensions, face)
+            station_start, station_end = SheathingBuilder._wall_station_limits(face, dimensions, wall_planes)
             bay_count = len(bays)
             board_lengths = []
             board_x_positions = []
@@ -267,10 +269,15 @@ class SheathingBuilder:
                     current_board_height,
                     floor_heights[story_idx],
                     chair_rail_height,
-                    wall_length,
+                    station_start,
+                    station_end,
                 )
-                board_segments = SheathingBuilder._wall_segments_between_openings(wall_length, opening_intervals)
-                board_segments = SheathingBuilder._clip_segments(board_segments, corner_board_width, wall_length - corner_board_width)
+                board_segments = SheathingBuilder._wall_segments_between_openings(station_start, station_end, opening_intervals)
+                board_segments = SheathingBuilder._clip_segments(
+                    board_segments,
+                    station_start + corner_board_width,
+                    station_end - corner_board_width,
+                )
 
                 for board_start, board_end in board_segments:
                     board_length = board_end - board_start
@@ -284,16 +291,16 @@ class SheathingBuilder:
 
                     if face == "front":
                         board_x = board_x_position
-                        board_y = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else 0 + stud_depth
+                        board_y = wall_planes["front"]
                     elif face == "rear":
                         board_x = board_x_position
-                        board_y = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else -dimensions.right - stud_depth
+                        board_y = wall_planes["rear"]
                     elif face == "left":
-                        board_x = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else 0 - (stud_depth / 2)
-                        board_y = -board_x_position
+                        board_x = wall_planes["left"]
+                        board_y = wall_planes["front"] - board_x_position
                     elif face == "right":
-                        board_x = datum_context.wall_exterior_plane(face, stud_depth) if datum_context else dimensions.front + (stud_depth / 2)
-                        board_y = -board_x_position
+                        board_x = wall_planes["right"]
+                        board_y = wall_planes["front"] - board_x_position
                     
                     # Create 2D profile based on sheathing type
                     # Profile functions create profiles in XZ plane: X = width, Z = height (negative)
@@ -338,8 +345,7 @@ class SheathingBuilder:
             dimensions,
             lowest_floor_height + board_exposure - board_height,
             lowest_floor_height + vertical_quantity * board_exposure,
-            stud_depth,
-            datum_context,
+            wall_planes,
         )
         
         return SheathingBuilder._with_scene(sheathing_assembly, "sheathing", placement_source)
@@ -353,7 +359,8 @@ class SheathingBuilder:
         course_top_z: float,
         floor_height: float,
         chair_rail_height: float,
-        wall_length: float,
+        station_start: float,
+        station_end: float,
     ) -> List[tuple[float, float]]:
         intervals = []
         for opening in openings:
@@ -373,15 +380,19 @@ class SheathingBuilder:
                 continue
             half_width = float(width) / 2.0
             intervals.append((
-                max(0.0, float(position) - half_width),
-                min(wall_length, float(position) + half_width),
+                max(station_start, float(position) - half_width),
+                min(station_end, float(position) + half_width),
             ))
         return intervals
 
     @staticmethod
-    def _wall_segments_between_openings(wall_length: float, opening_intervals: List[tuple[float, float]]) -> List[tuple[float, float]]:
+    def _wall_segments_between_openings(
+        station_start: float,
+        station_end: float,
+        opening_intervals: List[tuple[float, float]],
+    ) -> List[tuple[float, float]]:
         if not opening_intervals:
-            return [(0.0, wall_length)]
+            return [(station_start, station_end)]
 
         merged = []
         for start, end in sorted(opening_intervals):
@@ -393,14 +404,34 @@ class SheathingBuilder:
                 merged[-1][1] = max(merged[-1][1], end)
 
         segments = []
-        cursor = 0.0
+        cursor = station_start
         for start, end in merged:
             if start > cursor:
                 segments.append((cursor, start))
             cursor = max(cursor, end)
-        if cursor < wall_length:
-            segments.append((cursor, wall_length))
+        if cursor < station_end:
+            segments.append((cursor, station_end))
         return segments
+
+    @staticmethod
+    def _wall_planes(
+        dimensions: Dimensions,
+        stud_depth: float,
+        datum_context: BuildingDatumContext = None,
+    ) -> Dict[str, float]:
+        return {
+            "front": datum_context.wall_exterior_plane("front", stud_depth) if datum_context else stud_depth,
+            "rear": datum_context.wall_exterior_plane("rear", stud_depth) if datum_context else -dimensions.right - stud_depth,
+            "left": datum_context.wall_exterior_plane("left", stud_depth) if datum_context else -stud_depth / 2.0,
+            "right": datum_context.wall_exterior_plane("right", stud_depth) if datum_context else dimensions.front + stud_depth / 2.0,
+        }
+
+    @staticmethod
+    def _wall_station_limits(face: str, dimensions: Dimensions, wall_planes: Dict[str, float]) -> tuple[float, float]:
+        if face in ("front", "rear"):
+            return wall_planes["left"], wall_planes["right"]
+        depth = abs(wall_planes["front"] - wall_planes["rear"])
+        return 0.0, depth
 
     @staticmethod
     def _clip_segments(segments: List[tuple[float, float]], min_station: float, max_station: float) -> List[tuple[float, float]]:
@@ -429,8 +460,7 @@ class SheathingBuilder:
         dimensions: Dimensions,
         bottom_z: float,
         top_z: float,
-        stud_depth: float,
-        datum_context: BuildingDatumContext = None,
+        planes: Dict[str, float],
     ) -> None:
         if corner_treatment is None:
             return
@@ -444,33 +474,26 @@ class SheathingBuilder:
         if height <= 0.0:
             return
 
-        planes = {
-            "front": datum_context.wall_exterior_plane("front", stud_depth) if datum_context else stud_depth,
-            "rear": datum_context.wall_exterior_plane("rear", stud_depth) if datum_context else -dimensions.right - stud_depth,
-            "left": datum_context.wall_exterior_plane("left", stud_depth) if datum_context else -stud_depth / 2.0,
-            "right": datum_context.wall_exterior_plane("right", stud_depth) if datum_context else dimensions.front + stud_depth / 2.0,
-        }
-
         corners = {
             "front_left": {
-                "front": (0.0, board_width, planes["front"], planes["front"] + board_thickness),
-                "side": (planes["left"] - board_thickness, planes["left"], -board_width, 0.0),
-                "bead": (0.0, planes["front"] + board_thickness / 2.0),
+                "front": (planes["left"], planes["left"] + board_width, planes["front"], planes["front"] + board_thickness),
+                "side": (planes["left"] - board_thickness, planes["left"], planes["front"] - board_width, planes["front"]),
+                "bead": (planes["left"], planes["front"]),
             },
             "front_right": {
-                "front": (dimensions.front - board_width, dimensions.front, planes["front"], planes["front"] + board_thickness),
-                "side": (planes["right"], planes["right"] + board_thickness, -board_width, 0.0),
-                "bead": (dimensions.front, planes["front"] + board_thickness / 2.0),
+                "front": (planes["right"] - board_width, planes["right"], planes["front"], planes["front"] + board_thickness),
+                "side": (planes["right"], planes["right"] + board_thickness, planes["front"] - board_width, planes["front"]),
+                "bead": (planes["right"], planes["front"]),
             },
             "rear_left": {
-                "front": (0.0, board_width, planes["rear"] - board_thickness, planes["rear"]),
-                "side": (planes["left"] - board_thickness, planes["left"], -dimensions.left, -dimensions.left + board_width),
-                "bead": (0.0, planes["rear"] - board_thickness / 2.0),
+                "front": (planes["left"], planes["left"] + board_width, planes["rear"] - board_thickness, planes["rear"]),
+                "side": (planes["left"] - board_thickness, planes["left"], planes["rear"], planes["rear"] + board_width),
+                "bead": (planes["left"], planes["rear"]),
             },
             "rear_right": {
-                "front": (dimensions.front - board_width, dimensions.front, planes["rear"] - board_thickness, planes["rear"]),
-                "side": (planes["right"], planes["right"] + board_thickness, -dimensions.right, -dimensions.right + board_width),
-                "bead": (dimensions.front, planes["rear"] - board_thickness / 2.0),
+                "front": (planes["right"] - board_width, planes["right"], planes["rear"] - board_thickness, planes["rear"]),
+                "side": (planes["right"], planes["right"] + board_thickness, planes["rear"], planes["rear"] + board_width),
+                "bead": (planes["right"], planes["rear"]),
             },
         }
 

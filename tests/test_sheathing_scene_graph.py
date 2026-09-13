@@ -60,9 +60,17 @@ class SheathingSceneGraphTest(unittest.TestCase):
         self.assertIn("building/sheathing/corner_trim/corner_board_front_left_cross", {
             component["semantic_path"] for component in corner_boards
         })
-        self.assertAlmostEqual(by_name["sheathing_front_board1"]["world_bounds"]["min"][0], 3.5, places=5)
-        self.assertAlmostEqual(by_name["corner_board_front_left_cross"]["world_bounds"]["min"][0], 0.0, places=5)
-        self.assertAlmostEqual(by_name["corner_board_front_left_cross"]["world_bounds"]["max"][0], 3.5, places=5)
+        self.assertAlmostEqual(
+            by_name["sheathing_front_board1"]["world_bounds"]["min"][0],
+            by_name["corner_board_front_left_cross"]["world_bounds"]["max"][0],
+            places=5,
+        )
+        self.assertAlmostEqual(
+            by_name["sheathing_left_board1"]["world_bounds"]["max"][1],
+            by_name["corner_board_front_left_side"]["world_bounds"]["min"][1],
+            places=5,
+        )
+        self.assertLess(by_name["corner_board_front_left_cross"]["world_bounds"]["min"][0], 0.0)
 
 
 if __name__ == "__main__":
